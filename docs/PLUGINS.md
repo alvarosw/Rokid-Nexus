@@ -141,6 +141,24 @@ then the legacy plugin table/grid fallback. Custom arrays are capped at 8
 glyphs and 1024 path characters per glyph; malformed or unavailable resources
 are ignored without removing the plugin from the launcher.
 
+### Grid HUD tile sizes
+
+`META_PLUGIN_TILE_SIZES` declares which grid-HUD tile shapes a plugin
+supports, as a comma list of wire values: `1x1`, `2x1`, `1x2`, `2x2`.
+
+```xml
+<meta-data
+    android:name="com.anezium.rokidbus.plugin.TILE_SIZES"
+    android:value="1x1,2x1" />
+```
+
+Absent or empty is valid — it means "no declared sizes," the same way an
+unrecognized `ICON` degrades: the plugin still appears in the grid, rendered
+by the generic fallback tile (icon + name) at whatever size the wearer
+picks, never excluded from the launcher. A malformed token or a conflicting
+duplicate declaration is rejected like any other conflicting plugin
+metadata (`CONFLICTING_METADATA`), not silently accepted.
+
 ## 3. Service and runtime
 
 Extend `NexusPluginService` (bus-client) and keep the domain logic in a

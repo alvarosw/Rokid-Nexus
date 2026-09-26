@@ -31,6 +31,7 @@ import com.anezium.rokidbus.shared.GlassesKeyboardContract
 import com.anezium.rokidbus.shared.GlassesKeyboardReply
 import com.anezium.rokidbus.shared.GlassesRepairContract
 import com.anezium.rokidbus.shared.GlyphContract
+import com.anezium.rokidbus.shared.HudModeContract
 import com.anezium.rokidbus.shared.ImageSurfaceContract
 import com.anezium.rokidbus.ink.InkWire
 import com.anezium.rokidbus.shared.LinkStateBits
@@ -330,6 +331,17 @@ object GlassesHub {
             }
             SelfArmBootRepairStore.setAutoRepairEnabled(context, enabled)
             log("glassesRepairConfig autoRepair=$enabled")
+            return
+        }
+        if (envelope.path == BusPaths.HUD_MODE_CONFIG) {
+            val context = appContext
+            val gridEnabled = HudModeContract.gridModeFromConfig(envelope.payload)
+            if (context == null || gridEnabled == null) {
+                log("hudModeConfig ignored reason=invalid_payload_or_no_context")
+                return
+            }
+            HudModeStore.setGridModeEnabled(context, gridEnabled)
+            log("hudModeConfig gridEnabled=$gridEnabled")
             return
         }
         if (envelope.path == BusPaths.GLASSES_REPAIR_REQUEST) {
