@@ -42,7 +42,9 @@ internal class GridLauncherView(context: Context) : HudFrameLayout(context), Lau
 
     init {
         addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        addView(emptyView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        // MATCH_PARENT height, not WRAP_CONTENT: the TextView's own gravity=CENTER only centers
+        // within its own bounds, so it needs the full frame height to actually center in it.
+        addView(emptyView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
 
     override fun render(entries: List<GlassesHub.LauncherEntry>, selectedIndex: Int) {
