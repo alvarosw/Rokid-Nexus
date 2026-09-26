@@ -25,6 +25,17 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.anezium.rokidbus.client.ui.BusTheme
 
+/**
+ * What [LauncherOverlayRenderer] needs from either launcher rendering — today's list
+ * ([LauncherMenuView]) or the grid ([GridLauncherView]). Selection, key handling, and the
+ * open/close sequence live in [LauncherOverlayRenderer] only; a content view never reaches into
+ * the bus itself.
+ */
+internal interface LauncherContentView {
+    fun render(entries: List<GlassesHub.LauncherEntry>, selectedIndex: Int)
+    fun setHudTopInsetDp(value: Int)
+}
+
 object LauncherOverlayRenderer {
     private const val KEYCODE_PROG_BLUE = 186
     private const val RING_KEYCODE_TAP = 85
@@ -87,6 +98,9 @@ object LauncherOverlayRenderer {
             manager.addView(next, params)
             HudOverlayStack.reassert()
         }
+        // Picked at show() time, per the roadmap: a mode flipped while the overlay is hidden
+        // takes effect on the very next open, not mid-session.
+        currentRoot.setMode(HudModeStore.isGridModeEnabled(activeService.applicationContext))
         if (unsubscribeLauncher == null) {
             unsubscribeLauncher = GlassesHub.observeLauncher { entries ->
                 launcherEntries = entries
@@ -205,20 +219,38 @@ object LauncherOverlayRenderer {
     }
 
     private class LauncherOverlayRoot(context: Context) : FrameLayout(context) {
-        private val menu = LauncherMenuView(context)
+        private var content: View = LauncherMenuView(context)
+        private var gridMode = false
+        private var lastEntries: List<GlassesHub.LauncherEntry> = emptyList()
+        private var lastSelectedIndex = 0
+        private var hudTopInsetDp = 0
 
         init {
             isFocusable = true
             isFocusableInTouchMode = true
-            addView(menu, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+            addView(content, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        }
+
+        /** Both classes keep compiling and running; nothing is deleted, per the roadmap's §7. */
+        fun setMode(gridMode: Boolean) {
+            if (this.gridMode == gridMode) return
+            this.gridMode = gridMode
+            removeAllViews()
+            content = if (gridMode) GridLauncherView(context) else LauncherMenuView(context)
+            addView(content, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+            (content as LauncherContentView).setHudTopInsetDp(hudTopInsetDp)
+            (content as LauncherContentView).render(lastEntries, lastSelectedIndex)
         }
 
         fun render(entries: List<GlassesHub.LauncherEntry>, selectedIndex: Int) {
-            menu.render(entries, selectedIndex)
+            lastEntries = entries
+            lastSelectedIndex = selectedIndex
+            (content as LauncherContentView).render(entries, selectedIndex)
         }
 
         fun setHudTopInsetDp(value: Int) {
-            menu.setHudTopInsetDp(value)
+            hudTopInsetDp = value
+            (content as LauncherContentView).setHudTopInsetDp(value)
         }
 
         override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -228,7 +260,7 @@ object LauncherOverlayRenderer {
         }
     }
 
-    private class LauncherMenuView(context: Context) : LinearLayout(context) {
+    private class LauncherMenuView(context: Context) : LinearLayout(context), LauncherContentView {
         private val countView = monoText(10.5f, BusTheme.dim)
         private val listView = LinearLayout(context).apply {
             orientation = VERTICAL
@@ -277,7 +309,7 @@ object LauncherOverlayRenderer {
             addView(scroll, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         }
 
-        fun render(entries: List<GlassesHub.LauncherEntry>, selectedIndex: Int) {
+        override fun render(entries: List<GlassesHub.LauncherEntry>, selectedIndex: Int) {
             listView.removeAllViews()
             if (entries.isEmpty()) {
                 countView.text = "Waiting for phone"
@@ -304,7 +336,7 @@ object LauncherOverlayRenderer {
             }
         }
 
-        fun setHudTopInsetDp(value: Int) {
+        override fun setHudTopInsetDp(value: Int) {
             setPadding(dp(18), dp(16 + HudTopInset.sanitize(value)), dp(18), dp(12))
             requestLayout()
         }

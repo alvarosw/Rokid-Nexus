@@ -65,6 +65,18 @@ class GlassesDisplaySettingsActivity : Activity() {
                 },
                 NexusUi.block(),
             )
+            addView(BusTheme.gap(this@GlassesDisplaySettingsActivity, 10))
+            addView(
+                switchRow(
+                    title = "Grid launcher (beta)",
+                    subtitle = "Show installed plugins as a tile grid instead of a list",
+                    checked = HudModeSettingsStore(this@GlassesDisplaySettingsActivity).isGridModeEnabled(),
+                ) { enabled ->
+                    HudModeSettingsStore(this@GlassesDisplaySettingsActivity).setGridModeEnabled(enabled)
+                    BusHubService.onHudModeSettingChanged()
+                },
+                NexusUi.block(),
+            )
         }
 
         val scroll = ScrollView(this).apply {

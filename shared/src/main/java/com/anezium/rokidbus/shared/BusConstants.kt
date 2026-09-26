@@ -21,6 +21,14 @@ object BusConstants {
      * See [GlyphContract].
      */
     const val META_PLUGIN_GLYPHS = "com.anezium.rokidbus.plugin.GLYPHS"
+
+    /**
+     * A comma list of [com.anezium.rokidbus.shared.tile.TileSize] wire values (e.g. `"1x1,2x1"`):
+     * the sizes this plugin's tile can render at in the grid HUD. Absent or empty is valid and
+     * means "no declared sizes", which resolves to the generic fallback tile — same degrade-
+     * gracefully rule as an unrecognized [META_PLUGIN_ICON].
+     */
+    const val META_PLUGIN_TILE_SIZES = "com.anezium.rokidbus.plugin.TILE_SIZES"
     const val META_PLUGIN_API_VERSION = "com.anezium.rokidbus.plugin.API_VERSION"
     const val META_PLUGIN_CAPABILITIES = "com.anezium.rokidbus.plugin.CAPABILITIES"
     const val META_PLUGIN_RECEIVE_PREFIXES = "com.anezium.rokidbus.plugin.RECEIVE_PREFIXES"
@@ -127,6 +135,13 @@ object BusPaths {
     const val GLASSES_REPAIR_CONFIG = "/glasses/repair/config"
     const val GLASSES_REPAIR_REQUEST = "/glasses/repair/request"
     const val GLASSES_REPAIR_REPLY = "/glasses/repair/reply"
+
+    /**
+     * Phone hub to glasses hub only: the owner's switch between the list launcher and the grid
+     * launcher. Persisted on the glasses for the same reason [GLASSES_REPAIR_CONFIG] is — see
+     * [HudModeContract].
+     */
+    const val HUD_MODE_CONFIG = "/glasses/hud-mode/config"
 
     /**
      * Phone hub to glasses hub only: on-demand check for accessibility services other than

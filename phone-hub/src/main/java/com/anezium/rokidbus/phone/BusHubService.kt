@@ -41,6 +41,7 @@ import com.anezium.rokidbus.shared.FrameProtocol
 import com.anezium.rokidbus.shared.ForegroundSurfacePathPolicy
 import com.anezium.rokidbus.shared.GlassesHubCapabilitiesContract
 import com.anezium.rokidbus.shared.GlassesRepairContract
+import com.anezium.rokidbus.shared.HudModeContract
 import com.anezium.rokidbus.shared.ImageSurfaceContract
 import com.anezium.rokidbus.shared.SetupNoteContract
 import com.anezium.rokidbus.shared.ImageSurfaceMetadata
@@ -1334,6 +1335,9 @@ class BusHubService : Service() {
             // The glasses persist the boot-repair switch, but a reinstall or a toggle flipped
             // while the link was down leaves them stale; ride the same edge the consent does.
             executor.execute { pushGlassesRepairConfig() }
+            // The glasses persist the launcher mode too, for the same reason; re-push it on the
+            // same edge so a mode flipped while disconnected still lands on reconnect.
+            executor.execute { pushHudModeConfig() }
             return
         }
         if (envelope.path == RemoteInputContract.SESSION_PATH ||
@@ -3811,6 +3815,17 @@ class BusHubService : Service() {
         log("glassesRepairConfig push autoRepair=$enabled error=${error ?: "none"}")
     }
 
+    private fun pushHudModeConfig() {
+        val enabled = HudModeSettingsStore(applicationContext).isGridModeEnabled()
+        val error = sendRemote(
+            BusEnvelope(
+                path = BusPaths.HUD_MODE_CONFIG,
+                payload = HudModeContract.configToJson(enabled),
+            ),
+        )
+        log("hudModeConfig push gridEnabled=$enabled error=${error ?: "none"}")
+    }
+
     private fun sendManualSelfArmControl(
         requestId: String,
         action: GlassesManualControlAction,
@@ -5153,6 +5168,12 @@ class BusHubService : Service() {
         internal fun onGlassesRepairSettingChanged() {
             activeInstance?.let { service ->
                 service.executor.execute { service.pushGlassesRepairConfig() }
+            }
+        }
+
+        internal fun onHudModeSettingChanged() {
+            activeInstance?.let { service ->
+                service.executor.execute { service.pushHudModeConfig() }
             }
         }
 

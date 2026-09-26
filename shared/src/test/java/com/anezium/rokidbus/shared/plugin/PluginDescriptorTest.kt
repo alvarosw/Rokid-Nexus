@@ -1,6 +1,7 @@
 package com.anezium.rokidbus.shared.plugin
 
 import com.anezium.rokidbus.shared.BusConstants
+import com.anezium.rokidbus.shared.tile.TileSize
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -169,6 +170,45 @@ class PluginDescriptorTest {
             PluginDescriptorParser.parse(
                 withTts + (BusConstants.META_PLUGIN_CAPABILITIES to "surfaces"),
             ),
+        )
+    }
+
+    @Test
+    fun `tile sizes are optional and parsed as a comma list`() {
+        fun sizesFor(value: String?): Set<TileSize> {
+            val metadata = if (value == null) {
+                validMetadata()
+            } else {
+                validMetadata() + (BusConstants.META_PLUGIN_TILE_SIZES to value)
+            }
+            val result = PluginDescriptorParser.parse(metadata)
+            assertTrue(result is PluginDescriptorParseResult.Valid)
+            return (result as PluginDescriptorParseResult.Valid).descriptor.supportedTileSizes
+        }
+
+        assertEquals(emptySet<TileSize>(), sizesFor(null))
+        assertEquals(emptySet<TileSize>(), sizesFor("   "))
+        assertEquals(setOf(TileSize.SMALL, TileSize.WIDE), sizesFor("1x1,2x1"))
+        assertEquals(setOf(TileSize.LARGE), sizesFor("2x2"))
+    }
+
+    @Test
+    fun `malformed tile size token is rejected`() {
+        assertEquals(
+            PluginDescriptorParseResult.Invalid("INVALID_TILE_SIZE"),
+            PluginDescriptorParser.parse(validMetadata() + (BusConstants.META_PLUGIN_TILE_SIZES to "1x1,3x3")),
+        )
+    }
+
+    @Test
+    fun `conflicting tile size metadata is rejected`() {
+        val entries = validMetadata().entries.map { it.key to it.value } + listOf(
+            BusConstants.META_PLUGIN_TILE_SIZES to "1x1",
+            BusConstants.META_PLUGIN_TILE_SIZES to "2x2",
+        )
+        assertEquals(
+            PluginDescriptorParseResult.Invalid("CONFLICTING_METADATA"),
+            PluginDescriptorParser.parse(entries),
         )
     }
 

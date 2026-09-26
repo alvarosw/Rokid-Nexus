@@ -1,6 +1,8 @@
 package com.anezium.rokidbus.shared.plugin
 
 import com.anezium.rokidbus.shared.BusConstants
+import com.anezium.rokidbus.shared.tile.TileSize
+import com.anezium.rokidbus.shared.tile.TileSizeParseResult
 
 data class PluginDescriptor(
     val id: String,
@@ -18,6 +20,12 @@ data class PluginDescriptor(
      * plugin that declares none simply has no custom glyphs.
      */
     val glyphsResId: Int? = null,
+    /**
+     * The grid-HUD tile sizes this plugin supports, from `META_PLUGIN_TILE_SIZES`. Empty means
+     * "no declared sizes" — the launcher still renders the plugin, via the generic fallback tile
+     * at whatever size the wearer picks, exactly like an unrecognized icon key degrades.
+     */
+    val supportedTileSizes: Set<TileSize> = emptySet(),
 ) {
     companion object {
         private val idPattern = Regex("[a-z][a-z0-9._-]{2,63}")
@@ -38,6 +46,7 @@ object PluginDescriptorParser {
         BusConstants.META_PLUGIN_ICON,
         BusConstants.META_PLUGIN_ICON_DRAWABLE,
         BusConstants.META_PLUGIN_GLYPHS,
+        BusConstants.META_PLUGIN_TILE_SIZES,
         BusConstants.META_PLUGIN_API_VERSION,
         BusConstants.META_PLUGIN_CAPABILITIES,
         BusConstants.META_PLUGIN_RECEIVE_PREFIXES,
@@ -114,6 +123,11 @@ object PluginDescriptorParser {
             ?.trim()
             ?.toIntOrNull()
             ?.takeIf { it != 0 }
+        val tileSizesResult = TileSize.parseList(values[BusConstants.META_PLUGIN_TILE_SIZES].orEmpty())
+        val supportedTileSizes = when (tileSizesResult) {
+            is TileSizeParseResult.Valid -> tileSizesResult.sizes
+            is TileSizeParseResult.Invalid -> return PluginDescriptorParseResult.Invalid(tileSizesResult.reason)
+        }
         val launchable = when (values[BusConstants.META_PLUGIN_LAUNCHABLE]?.trim()?.lowercase()) {
             null, "", "true" -> true
             "false" -> false
@@ -131,6 +145,7 @@ object PluginDescriptorParser {
                 iconKey = iconKey,
                 iconDrawableResId = iconDrawableResId,
                 glyphsResId = glyphsResId,
+                supportedTileSizes = supportedTileSizes,
             ),
         )
     }
