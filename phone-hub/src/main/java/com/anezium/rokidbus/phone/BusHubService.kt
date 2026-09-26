@@ -42,6 +42,7 @@ import com.anezium.rokidbus.shared.ForegroundSurfacePathPolicy
 import com.anezium.rokidbus.shared.GlassesHubCapabilitiesContract
 import com.anezium.rokidbus.shared.GlassesRepairContract
 import com.anezium.rokidbus.shared.HudModeContract
+import com.anezium.rokidbus.shared.TileLayoutContract
 import com.anezium.rokidbus.shared.ImageSurfaceContract
 import com.anezium.rokidbus.shared.SetupNoteContract
 import com.anezium.rokidbus.shared.ImageSurfaceMetadata
@@ -1338,6 +1339,9 @@ class BusHubService : Service() {
             // The glasses persist the launcher mode too, for the same reason; re-push it on the
             // same edge so a mode flipped while disconnected still lands on reconnect.
             executor.execute { pushHudModeConfig() }
+            // Same reasoning again for the tile layout: an edit made while disconnected must
+            // still land on reconnect.
+            executor.execute { pushTileLayoutConfig() }
             return
         }
         if (envelope.path == RemoteInputContract.SESSION_PATH ||
@@ -3826,6 +3830,17 @@ class BusHubService : Service() {
         log("hudModeConfig push gridEnabled=$enabled error=${error ?: "none"}")
     }
 
+    private fun pushTileLayoutConfig() {
+        val entries = TileLayoutSettingsStore(applicationContext).getEntries()
+        val error = sendRemote(
+            BusEnvelope(
+                path = BusPaths.TILE_LAYOUT_CONFIG,
+                payload = TileLayoutContract.configToJson(entries),
+            ),
+        )
+        log("tileLayoutConfig push entries=${entries.size} error=${error ?: "none"}")
+    }
+
     private fun sendManualSelfArmControl(
         requestId: String,
         action: GlassesManualControlAction,
@@ -5174,6 +5189,12 @@ class BusHubService : Service() {
         internal fun onHudModeSettingChanged() {
             activeInstance?.let { service ->
                 service.executor.execute { service.pushHudModeConfig() }
+            }
+        }
+
+        internal fun onTileLayoutSettingChanged() {
+            activeInstance?.let { service ->
+                service.executor.execute { service.pushTileLayoutConfig() }
             }
         }
 
