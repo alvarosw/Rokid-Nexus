@@ -70,6 +70,9 @@ internal class GridLauncherView(context: Context) : HudFrameLayout(context), Lau
         grid.iconLoader = loader
     }
 
+    /** Test-only: the packer output actually used for the last [render] — order, size and position. */
+    internal fun placementsForTest(): List<TilePlacement> = grid.placementsForTest()
+
     companion object {
         const val COLUMNS = TileGridPacker.DEFAULT_COLUMNS
         const val TILE_UNIT_DP = 96
@@ -85,6 +88,8 @@ internal class GridLauncherView(context: Context) : HudFrameLayout(context), Lau
 private class TileGridContainer(context: Context) : FrameLayout(context) {
     private var placements: List<TilePlacement> = emptyList()
     var iconLoader: (Context, GlassesHub.LauncherEntry) -> Drawable = GlassesHub::launcherDrawable
+
+    fun placementsForTest(): List<TilePlacement> = placements
 
     fun render(entries: List<GlassesHub.LauncherEntry>, selectedIndex: Int) {
         removeAllViews()
