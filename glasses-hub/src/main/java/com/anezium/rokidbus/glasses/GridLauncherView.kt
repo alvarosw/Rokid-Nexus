@@ -9,7 +9,6 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.os.SystemClock
-import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ScrollView

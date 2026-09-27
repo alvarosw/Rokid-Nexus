@@ -21,12 +21,14 @@ import com.anezium.rokidbus.shared.tile.TileSize
  * `tone` renders via the `Status` component's icon + border-shape combination — never a distinct
  * color, per the design system's single-hue rule. `CRITICAL`'s static parts (2px `critical`
  * border, alert glyph, full-intensity text) are spec-compliant on their own; [criticalEmphasis]
- * is a strict visual enhancement Delivery 2's blink-then-settle helper can hook into later without
- * this delivery depending on it being present.
+ * defaults to [CriticalBlink] (Delivery 2) as a strict visual enhancement on top of that static
+ * treatment. Nulling it out falls back to the static-only rendering, so this delivery stays
+ * correct even if Delivery 2's helper is ever absent or rolled back.
  */
 internal class LiveTileView(context: Context, private val size: TileSize) : FrameLayout(context) {
-    /** Delivery 2's blink-then-settle enhancement hook; absent = static critical treatment. */
-    var criticalEmphasis: ((LiveTileView) -> Unit)? = null
+    /** Delivery 2's blink-then-settle enhancement hook; null = static critical treatment only. */
+    var criticalEmphasis: ((LiveTileView) -> Unit)? = { view -> view.criticalBlink = CriticalBlink.animate(view) }
+    private var criticalBlink: CriticalBlink.Handle? = null
 
     private val titleView = TextView(context).apply {
         setTextColor(RokidHudTokens.TEXT_PRIMARY)
@@ -137,7 +139,13 @@ internal class LiveTileView(context: Context, private val size: TileSize) : Fram
         }
 
         applyTone(snapshot.tone, stale)
-        if (snapshot.tone == TileTone.CRITICAL) criticalEmphasis?.invoke(this)
+        criticalBlink?.cancel()
+        criticalBlink = null
+        if (snapshot.tone == TileTone.CRITICAL) {
+            criticalEmphasis?.invoke(this)
+        } else {
+            alpha = 1f
+        }
     }
 
     private fun applyTone(tone: TileTone, stale: Boolean) {
