@@ -9,6 +9,12 @@
             android:screenOrientation="portrait"
             android:theme="@style/Theme.RokidBus.Surface" />
 
+        <activity
+            android:name=".GridLauncherScreenshotHostActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="standard" />
+
         <receiver
             android:name=".ProbeBroadcastReceiver"
             android:exported="true">

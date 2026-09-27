@@ -47,6 +47,21 @@ class TileGridPackerTest {
     }
 
     @Test
+    fun `a wearer-chosen order changes placement without any new packer logic`() {
+        // Delivery 4's ordered-list editor feeds a different input order into the same packer —
+        // reordering "b" ahead of "a" moves it to the first cell, nothing else about packing changes.
+        val installOrder = listOf("a" to TileSize.SMALL, "b" to TileSize.SMALL, "c" to TileSize.SMALL)
+        val customOrder = listOf("b" to TileSize.SMALL, "a" to TileSize.SMALL, "c" to TileSize.SMALL)
+
+        val installPlacements = TileGridPacker.pack(installOrder, columns = 2)
+        val customPlacements = TileGridPacker.pack(customOrder, columns = 2)
+
+        assertEquals(TilePlacement("a", TileSize.SMALL, col = 0, row = 0), installPlacements[0])
+        assertEquals(TilePlacement("b", TileSize.SMALL, col = 0, row = 0), customPlacements[0])
+        assertEquals(TilePlacement("a", TileSize.SMALL, col = 1, row = 0), customPlacements[1])
+    }
+
+    @Test
     fun `mixed sizes do not overlap`() {
         val entries = listOf(
             "wide" to TileSize.WIDE,

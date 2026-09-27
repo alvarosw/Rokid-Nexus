@@ -149,6 +149,7 @@ object BusPaths {
      * [HudModeContract].
      */
     const val HUD_MODE_CONFIG = "/glasses/hud-mode/config"
+    const val TILE_LAYOUT_CONFIG = "/glasses/tile-layout/config"
 
     /**
      * Phone hub to glasses hub only: on-demand check for accessibility services other than

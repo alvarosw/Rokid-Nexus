@@ -16,7 +16,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(manifest = Config.NONE, sdk = [28])
+@Config(manifest = Config.NONE, sdk = [31])
 class SppIngressTest {
     private val hub = GlassesHub
     private val received = mutableListOf<String>()

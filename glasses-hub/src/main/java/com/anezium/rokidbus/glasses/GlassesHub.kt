@@ -47,6 +47,7 @@ import com.anezium.rokidbus.shared.SetupNoteContract
 import com.anezium.rokidbus.shared.SetupNoteMessage
 import com.anezium.rokidbus.shared.SetupPairingOfferContract
 import com.anezium.rokidbus.shared.SetupStage
+import com.anezium.rokidbus.shared.TileLayoutContract
 import com.anezium.rokidbus.shared.TtsContract
 import com.anezium.rokidbus.shared.WirelessAdbAction
 import com.anezium.rokidbus.shared.WirelessAdbContract
@@ -353,6 +354,18 @@ object GlassesHub {
             HudModeStore.setGridModeEnabled(context, gridEnabled)
             applyTileSubsystemMode(context, gridEnabled)
             log("hudModeConfig gridEnabled=$gridEnabled")
+            return
+        }
+        if (envelope.path == BusPaths.TILE_LAYOUT_CONFIG) {
+            val context = appContext
+            val entries = TileLayoutContract.entriesFromConfig(envelope.payload)
+            if (context == null || entries == null) {
+                log("tileLayoutConfig ignored reason=invalid_payload_or_no_context")
+                return
+            }
+            TileLayoutStore.setEntries(context, entries)
+            notifyLauncherEntries()
+            log("tileLayoutConfig entries=${entries.size}")
             return
         }
         if (envelope.path == BusPaths.GLASSES_REPAIR_REQUEST) {
@@ -1372,9 +1385,11 @@ object GlassesHub {
         if (cameraLauncherEntry(next) != cameraLauncherEntry(previous)) notifyLauncherEntries()
     }
 
-    private fun allLauncherEntries(): List<LauncherEntry> =
-        listOfNotNull(cameraLauncherEntry(remotePhoneCapabilities)) +
-            launcherEntries.filterNot { it.id == CAMERA_LAUNCHER_ID }
+    private fun allLauncherEntries(): List<LauncherEntry> {
+        val nonCamera = launcherEntries.filterNot { it.id == CAMERA_LAUNCHER_ID }
+        val ordered = appContext?.let { context -> TileLayoutStore.applyOrder(context, nonCamera) } ?: nonCamera
+        return listOfNotNull(cameraLauncherEntry(remotePhoneCapabilities)) + ordered
+    }
 
     private fun cameraLauncherEntry(capabilities: PhoneHubCapabilities): LauncherEntry? {
         val ready = capabilities.features and BusCapabilityBits.CAMERA_CONSUMER_READY != 0

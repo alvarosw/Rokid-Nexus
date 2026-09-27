@@ -19,10 +19,10 @@ import com.anezium.rokidbus.shared.tile.TileGridPacker
 import com.anezium.rokidbus.shared.tile.TilePlacement
 
 /**
- * Grid-mode rendering of today's launcher entries: every plugin auto-packed at
- * [com.anezium.rokidbus.shared.tile.TileSize.SMALL] — Delivery 4 is what lets the wearer pick a
- * size and a manual layout instead, and Delivery 1 has no size-picker UI to feed anything else
- * into the packer. Selection, open, and close are entirely owned by [LauncherOverlayRenderer];
+ * Grid-mode rendering of today's launcher entries: packed per [TileLayoutStore] when the wearer
+ * has chosen a layout from the phone app, falling back to Delivery 1's auto-pack default (install
+ * order, every plugin at [com.anezium.rokidbus.shared.tile.TileSize.SMALL]) for anything not yet
+ * placed. Selection, open, and close are entirely owned by [LauncherOverlayRenderer];
  * this view only renders whatever `(entries, selectedIndex)` it is given and never touches the
  * bus itself — exactly the same split [LauncherOverlayRenderer]'s existing list view already
  * uses, per §6 of the roadmap ("no new gesture, no new key handling code path").
@@ -97,6 +97,9 @@ internal class GridLauncherView(context: Context) : HudFrameLayout(context), Lau
         grid.iconLoader = loader
     }
 
+    /** Test-only: the packer output actually used for the last [render] — order, size and position. */
+    internal fun placementsForTest(): List<TilePlacement> = grid.placementsForTest()
+
     companion object {
         const val COLUMNS = TileGridPacker.DEFAULT_COLUMNS
         const val TILE_UNIT_DP = 96
@@ -115,10 +118,15 @@ private class TileGridContainer(context: Context) : FrameLayout(context) {
     private var ghost: View? = null
     private val blurOverlays = mutableMapOf<View, View>()
 
+    fun placementsForTest(): List<TilePlacement> = placements
+
     fun render(entries: List<GlassesHub.LauncherEntry>, selectedIndex: Int) {
         removeAllViews()
         blurOverlays.clear()
-        placements = TileGridPacker.pack(entries.map { it.id to null }, columns = GridLauncherView.COLUMNS)
+        placements = TileGridPacker.pack(
+            entries.map { it.id to TileLayoutStore.sizeFor(context, it.id) },
+            columns = GridLauncherView.COLUMNS,
+        )
         val unit = RokidHudTokens.dp(context, GridLauncherView.TILE_UNIT_DP)
         val gap = RokidHudTokens.dp(context, RokidHudTokens.SPACE_2)
         entries.forEachIndexed { index, entry ->

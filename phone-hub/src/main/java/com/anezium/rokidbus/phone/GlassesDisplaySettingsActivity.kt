@@ -1,6 +1,7 @@
 package com.anezium.rokidbus.phone
 
 import android.app.Activity
+import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Bundle
@@ -74,6 +75,19 @@ class GlassesDisplaySettingsActivity : Activity() {
                 ) { enabled ->
                     HudModeSettingsStore(this@GlassesDisplaySettingsActivity).setGridModeEnabled(enabled)
                     BusHubService.onHudModeSettingChanged()
+                },
+                NexusUi.block(),
+            )
+            addView(BusTheme.gap(this@GlassesDisplaySettingsActivity, 10))
+            addView(
+                NexusUi.navCard(
+                    this@GlassesDisplaySettingsActivity,
+                    "Tile layout",
+                    "Order and size grid tiles per plugin",
+                ) {
+                    startActivity(
+                        Intent(this@GlassesDisplaySettingsActivity, TileLayoutSettingsActivity::class.java),
+                    )
                 },
                 NexusUi.block(),
             )
