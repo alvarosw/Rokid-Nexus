@@ -104,6 +104,7 @@ object PathRules {
         -> PluginCapability.SURFACES
         BusPaths.INK_SHOW, BusPaths.INK_UPDATE, BusPaths.INK_HIDE ->
             PluginCapability.INK_SURFACE
+        BusPaths.TILE_PUBLISH -> PluginCapability.WIDGET_TILE
         "/audio/lease/acquire", "/audio/lease/release" -> PluginCapability.MICROPHONE
         "/stt/session/start", "/stt/session/stop" -> PluginCapability.STT
         BusPaths.TTS_SPEAK, BusPaths.TTS_STOP -> PluginCapability.TTS

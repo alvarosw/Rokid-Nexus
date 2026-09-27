@@ -53,6 +53,13 @@ object BusPaths {
     const val SURFACE_HIDE = "/surface/hide"
     const val SURFACE_INPUT = "/surface/input"
     const val SURFACE_TEXT_COMMITTED = "/surface/text-committed"
+    /**
+     * Plugin to glasses hub, `widget_tile` capability: publish this plugin's closed-state grid
+     * tile. See [com.anezium.rokidbus.shared.tile.WidgetTileContract]. Not foreground-exclusive —
+     * unlike `/surface/show`, every plugin owns its own tile slot, so this never triggers
+     * `SURFACE_BUSY` arbitration.
+     */
+    const val TILE_PUBLISH = "/tile/publish"
     const val INK_SHOW = "/ink/show"
     const val INK_UPDATE = "/ink/update"
     const val INK_HIDE = "/ink/hide"

@@ -68,6 +68,19 @@ class PluginGrantStoreTest {
     }
 
     @Test
+    fun `adding widget_tile to an approved plugin returns it to pending`() {
+        val store = PluginGrantStore(MemoryStorage())
+        val original = principal(capabilities = setOf(PluginCapability.SURFACES))
+        store.approve(original, setOf(PluginCapability.SURFACES))
+        assertEquals(
+            PluginGrantState.Pending,
+            store.stateFor(
+                principal(capabilities = setOf(PluginCapability.SURFACES, PluginCapability.WIDGET_TILE)),
+            ),
+        )
+    }
+
+    @Test
     fun `deny disable and revoke fail closed`() {
         val store = PluginGrantStore(MemoryStorage())
         val principal = principal()

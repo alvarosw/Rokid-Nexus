@@ -49,6 +49,8 @@ import com.anezium.rokidbus.shared.NoticeSurfaceContract
 import com.anezium.rokidbus.shared.plugin.NexusInputEvent
 import com.anezium.rokidbus.shared.plugin.PluginCapability
 import com.anezium.rokidbus.shared.plugin.PluginOpenTypes
+import com.anezium.rokidbus.shared.tile.TileSnapshot
+import com.anezium.rokidbus.shared.tile.TileTone
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -271,6 +273,25 @@ class HelloPluginService : NexusPluginService() {
         surface = nexusSurfaceSession(SURFACE_ID)
         showingImage = showBundledImage()
         if (!showingImage) render(show = true)
+        publishDemoTile()
+    }
+
+    /**
+     * Synthetic publisher for the grid HUD tile pipeline (Delivery 3): a real plugin would
+     * publish here or from any other legitimate wake — never on a timer of its own. This is the
+     * fake publisher the pipeline's own tests exercise; it carries no meaning for Hello's demo
+     * beyond proving `publish → cache → render → expire → throttle` end to end.
+     */
+    private fun publishDemoTile() {
+        nexusWidgetTileSession("demo")?.publish(
+            TileSnapshot(
+                pluginId = "hello",
+                contentKey = "demo-tile",
+                title = "Hello",
+                subtitle = "Sample tile",
+                tone = TileTone.INFO,
+            ),
+        )
     }
 
     override fun onNexusBackground() {

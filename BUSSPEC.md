@@ -834,6 +834,45 @@ the DPAD_CENTER confirmation alias) and BACK only. DPAD directions and
 MEDIA_NEXT/MEDIA_PREVIOUS scroll by a renderer-defined viewport step and are
 consumed on the glasses instead of producing `/surface/input` events.
 
+## Widget tile protocol v1
+
+`/tile/publish` (plugin → phone hub → glasses hub, `widget_tile` capability): the
+closed-state grid-HUD tile pipeline from `docs/grid-hud-roadmap/
+03-delivery-3-tile-data-pipeline.md`. Unlike surface/pin/notice/activity, it is not
+foreground-exclusive and never triggers `SURFACE_BUSY` — every plugin's tile is its
+own slot, keyed by `pluginId`. The phone hub overwrites `pluginId` with the sender's
+authenticated plugin id before forwarding; a plugin's own claimed value in the
+payload is not trusted.
+
+```json
+{
+  "pluginId": "transit",
+  "contentKey": "eta-42",
+  "title": "12",
+  "subtitle": "Downtown bus",
+  "badge": "",
+  "progress": null,
+  "unit": "min",
+  "tone": "warn",
+  "rows": ["Downtown 12m", "Uptown 4m"]
+}
+```
+
+`tone` is one of `ok`/`info`/`warn`/`critical`/`off` — the design system's `Status`
+component's five states, never a color. See
+[`WidgetTileContract`](shared/src/main/java/com/anezium/rokidbus/shared/tile/WidgetTileContract.kt)
+for the exact bounds (mirroring `SurfaceModels`' `contentKey <= 128` discipline) and
+[`docs/PLUGIN_SDK.md`](docs/PLUGIN_SDK.md#widget-tiles) for the typed SDK surface.
+
+The glasses hub caches the last snapshot per `pluginId` on disk (`TileCache`), so a
+hub restart shows the last-known tile immediately, marked with its real age. A
+publish is rate-limited per plugin by a token bucket (`TileRateLimiter`); publishes
+past the ceiling are dropped silently, with no error reply — the same "give up
+quietly" handling as `SURFACE_BUSY` elsewhere. The tile subsystem
+(`TileController`/`TileCache`/`TileRateLimiter`) only runs while the wearer's
+launcher is in grid mode (`HudModeContract.MODE_GRID`); in list mode it does not
+start at all.
+
 ## Notice protocol v1
 
 A notice is a transient band across the top of the wearer's view: one
@@ -2038,6 +2077,17 @@ val supportsActivitySurface: Boolean
 `onActivityClosed(reason: String)`. `NexusPluginService` exposes them as
 `onNexusActivityAction(id: String)` and
 `onNexusActivityClosed(reason: String)`.
+
+The widget-tile wrapper is likewise session-scoped, but the session holds no
+state of its own — the local id only namespaces the client-side handle, since the
+hub keys the actual tile by the authenticated `pluginId`, not by this id:
+
+```kotlin
+fun NexusPluginClient.widgetTileSession(localSessionId: String): NexusWidgetTileSession
+interface WidgetTileSession { fun publish(snapshot: TileSnapshot): NexusSdkResult }
+```
+
+`NexusPluginService` exposes it as `nexusWidgetTileSession(id): WidgetTileSession?`.
 
 The typed Ink wrapper is session-scoped because the phone retains compiled
 state between data patches:

@@ -44,6 +44,9 @@ abstract class NexusPluginService : Service(), NexusPluginCallbacks {
     protected fun nexusInkSurfaceSession(localSurfaceId: String): NexusInkSurfaceSession? =
         client?.inkSurfaceSession(localSurfaceId)
 
+    protected fun nexusWidgetTileSession(id: String): WidgetTileSession? =
+        client?.widgetTileSession(id)
+
     protected fun nexusAudioSession(callbacks: NexusAudioCallbacks): NexusAudioSession? =
         client?.audioSession(
             object : NexusAudioCallbacks {

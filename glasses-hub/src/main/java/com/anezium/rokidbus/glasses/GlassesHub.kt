@@ -219,6 +219,16 @@ object GlassesHub {
             MediaSyncEngine.start(context.applicationContext)
             requestWifiOwnershipReconciliation(applicationContext, "hub_start")
         }
+        applyTileSubsystemMode(applicationContext, HudModeStore.isGridModeEnabled(applicationContext))
+    }
+
+    /**
+     * Starts or stops the tile-data pipeline (`TileController`/`TileCache`/`TileRateLimiter`) to
+     * match the wearer's launcher mode — the actual battery win from grid mode's mode-toggle: in
+     * list mode the subsystem is genuinely absent, not just hidden behind a `false` render check.
+     */
+    private fun applyTileSubsystemMode(context: Context, gridModeEnabled: Boolean) {
+        if (gridModeEnabled) TileController.start(context) else TileController.stop()
     }
 
     fun binder(context: Context): IBinder {
@@ -341,6 +351,7 @@ object GlassesHub {
                 return
             }
             HudModeStore.setGridModeEnabled(context, gridEnabled)
+            applyTileSubsystemMode(context, gridEnabled)
             log("hudModeConfig gridEnabled=$gridEnabled")
             return
         }
@@ -410,6 +421,7 @@ object GlassesHub {
             if (NoticeController.handleNoticeEnvelope(context, envelope)) return
             if (ActivityController.handleActivityEnvelope(context, envelope)) return
             if (SurfaceController.handleSurfaceEnvelope(context, envelope)) return
+            if (TileController.handleTileEnvelope(context, envelope)) return
         }
         if (envelope.path == BusPaths.LAUNCHER_LIST) {
             updateLauncherEntries(envelope.payload)
