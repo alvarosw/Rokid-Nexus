@@ -308,6 +308,7 @@ class PluginPermissionsActivity : Activity() {
             PluginCapability.ASSISTANT -> "Replace the glasses assistant"
             PluginCapability.WIRELESS_DEBUGGING -> "Wireless debugging"
             PluginCapability.INK_SURFACE -> "Ink pages on your glasses"
+            PluginCapability.WIDGET_TILE -> "Grid HUD tile"
         }
         val note = when (capability) {
             PluginCapability.SURFACES -> "Render cards and images on the HUD"
@@ -320,6 +321,7 @@ class PluginPermissionsActivity : Activity() {
             PluginCapability.ASSISTANT -> "Close Rokid's assistant while this plugin is open"
             PluginCapability.WIRELESS_DEBUGGING -> "Enable ADB and create temporary pairing codes"
             PluginCapability.INK_SURFACE -> "Render compiled interactive Ink pages on the HUD"
+            PluginCapability.WIDGET_TILE -> "Show a live tile on the grid launcher"
         }
         return LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
