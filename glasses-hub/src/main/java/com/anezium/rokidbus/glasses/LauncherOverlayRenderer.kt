@@ -49,6 +49,7 @@ object LauncherOverlayRenderer {
     private var insetUnsubscribe: (() -> Unit)? = null
     private var launcherEntries: List<GlassesHub.LauncherEntry> = emptyList()
     private var selectedIndex = 0
+    private var lastOpenedEntryId: String? = null
     private val swipeDedupe = DpadPairDedupe()
     private val main = Handler(Looper.getMainLooper())
     private val ringTapPolicy = RingTapPolicy()
@@ -110,6 +111,19 @@ object LauncherOverlayRenderer {
         }
         currentRoot.render(launcherEntries, selectedIndex)
         currentRoot.requestFocus()
+
+        // Returning to the grid from the plugin we just opened: collapse the panel back down to
+        // its tile instead of the launcher just reappearing whole. List mode never sets
+        // lastOpenedEntryId's index here since currentRoot.contentView() is a GridLauncherView
+        // only in grid mode, so this is a no-op for list.
+        val returningEntryId = lastOpenedEntryId
+        lastOpenedEntryId = null
+        val returningIndex = returningEntryId?.let { id -> launcherEntries.indexOfFirst { it.id == id } }?.takeIf { it >= 0 }
+        val gridContent = currentRoot.contentView() as? GridLauncherView
+        if (returningIndex != null && gridContent != null) {
+            currentRoot.post { gridContent.beginCloseTransition(returningIndex) {} }
+        }
+
         log("Launcher overlay opened")
         RingFocusBroadcastCoordinator.setLauncherShown(activeService.applicationContext, shown = true)
         ActivityController.onLauncherVisibilityChanged()
@@ -207,9 +221,19 @@ object LauncherOverlayRenderer {
 
     private fun openSelected() {
         val entry = launcherEntries.getOrNull(selectedIndex) ?: return
+        val gridContent = root?.contentView() as? GridLauncherView
+        if (gridContent != null) {
+            gridContent.beginOpenTransition(selectedIndex) { completeOpen(entry) }
+        } else {
+            completeOpen(entry)
+        }
+    }
+
+    private fun completeOpen(entry: GlassesHub.LauncherEntry) {
         val result = GlassesHub.openLauncherEntry(entry.id)
         log("Launcher overlay open result: $result")
         if (result.startsWith("launcherOpen=true")) {
+            lastOpenedEntryId = entry.id
             launcherReturnCoordinator.recordLauncherOpen(entry.id)
             if (GlassesHub.launcherEntryOpensSurface(entry.id)) {
                 service?.applicationContext?.let(RingFocusBroadcastCoordinator::beginSurfaceHandoff)
@@ -252,6 +276,8 @@ object LauncherOverlayRenderer {
             hudTopInsetDp = value
             (content as LauncherContentView).setHudTopInsetDp(value)
         }
+
+        fun contentView(): View = content
 
         override fun dispatchKeyEvent(event: KeyEvent): Boolean {
             if (NoticeKeyDispatcher.handleKeyEvent(event)) return true

@@ -1147,6 +1147,16 @@ class BusHubService : Service() {
             deliverError(sender.replyBinder, envelope.id, invalidHud)
             return
         }
+        val envelope = if (
+            sender.principal != null &&
+            envelope.path == BusPaths.TILE_PUBLISH
+        ) {
+            // The hub stamps the authenticated plugin id server-side; a plugin's own claimed
+            // `pluginId` in the payload is never trusted.
+            envelope.copy(payload = JSONObject(envelope.payload.toString()).put("pluginId", sender.principal.descriptor.id))
+        } else {
+            envelope
+        }
         val ownedEnvelope = if (
             sender.principal != null &&
             PathRules.requiredCapability(envelope.path) in setOf(
@@ -1615,6 +1625,7 @@ class BusHubService : Service() {
         BusPaths.PIN_SHOW, BusPaths.PIN_HIDE,
         BusPaths.NOTICE_SHOW, BusPaths.NOTICE_UPDATE, BusPaths.NOTICE_HIDE,
         BusPaths.ACTIVITY_START, BusPaths.ACTIVITY_UPDATE, BusPaths.ACTIVITY_END,
+        BusPaths.TILE_PUBLISH,
         -> PluginBusJournal.Category.SURFACE
         BusPaths.SURFACE_INPUT, BusPaths.PLUGIN_INPUT,
         BusPaths.NOTICE_INPUT, BusPaths.NOTICE_ACTION, BusPaths.NOTICE_CLOSED,

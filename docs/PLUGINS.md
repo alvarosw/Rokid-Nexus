@@ -235,6 +235,16 @@ a general background-work permission. A pin can indicate listening without
 keeping the display awake; use a short TTL renewed by audio frames so it expires
 after a crash. See [the SDK example](PLUGIN_SDK.md#let-the-display-sleep-while-listening).
 
+**Grid tile publishing is the fourth**, and it grants no plugin new background time
+at all: it adds a side effect to a wake that already exists. From inside any of the
+first three exceptions above — Transit's location-driven wake, Relay's
+notification-listener wake, Media Deck's `MediaSession` callback — a plugin holding
+`widget_tile` may call `nexusWidgetTileSession(id).publish(snapshot)` to update its
+closed-state grid tile. As with Pins, this buys you one push, not a foothold: it does
+not open a surface, does not adopt foreground, and does not license a new wake of its
+own — only a plugin already awake for a legitimate reason may publish. See
+[the Widget tiles section of the SDK reference](PLUGIN_SDK.md#widget-tiles).
+
 The SDK always constructs the notification object required for the session
 foreground service. Do **not** declare or request `POST_NOTIFICATIONS`: on
 Android 13+ the SDK notification stays suppressed, and the Rokid Nexus hub
@@ -315,10 +325,10 @@ NexusUi.uninstallCard(this, "My Plugin") {
   approves the requested capabilities in **Rokid Nexus → Settings → Plugin
   access** (or the Store flow). Pending/denied/disabled plugins are not
   launchable.
-- Updating a descriptor's requested capability set — adding `stt` or `tts` to a
-  plugin that already had `surfaces`, say — returns the existing grant to
-  Pending by design. The user must review and approve the new set before the
-  plugin is launchable again.
+- Updating a descriptor's requested capability set — adding `stt`, `tts`, or
+  `widget_tile` to a plugin that already had `surfaces`, say — returns the existing
+  grant to Pending by design. The user must review and approve the new set before
+  the plugin is launchable again.
 - SharedPreferences live in the plugin's own package; name the main file
   `nexus_plugin_<id>`.
 - Uninstalling removes the plugin and all its state; the hub's grant becomes

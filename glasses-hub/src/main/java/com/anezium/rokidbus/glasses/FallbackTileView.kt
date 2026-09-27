@@ -6,7 +6,6 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.text.TextUtils
 import android.view.Gravity
-import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -15,11 +14,12 @@ import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.shared.tile.TileSize
 
 /**
- * The generic closed-state tile: centered icon + name, laid out per [TileSize]. This is the only
- * renderer Delivery 1 ships — every plugin gets it regardless of what it declares in
- * `TILE_SIZES` — and it stays the permanent fallback in Delivery 3 for any plugin that never
- * adopts the tile-data contract, so building it now means that delivery inherits this renderer
- * instead of building its own.
+ * The generic closed-state tile: an icon + `label`-styled, uppercase plugin name pinned to the
+ * top-left corner, matching the reference design's header row on every declared [TileSize] — a
+ * 1x1 tile is not exempted from it. This is the only renderer Delivery 1 ships — every plugin
+ * gets it regardless of what it declares in `TILE_SIZES` — and it stays the permanent fallback
+ * in Delivery 3 for any plugin that never adopts the tile-data contract, which is also what fills
+ * the remaining box below the header with real content; Delivery 1 leaves that area empty.
  *
  * Every color here comes from [RokidHudTokens] — never [com.anezium.rokidbus.client.ui.BusTheme]
  * and never a literal, per the design system's single-hue rule.
@@ -31,45 +31,32 @@ internal class FallbackTileView(context: Context, size: TileSize) : FrameLayout(
 
     private val icon = ImageView(context)
     private val label = TextView(context).apply {
-        setTextColor(RokidHudTokens.TEXT_PRIMARY)
-        typeface = RokidHudTokens.bodyTypeface()
-        textSize = RokidHudTokens.BODY_TEXT_SIZE_SP
-        gravity = Gravity.CENTER
-        maxLines = 2
+        // typography.label — panel-title style: uppercase, text-secondary, 0.06em tracking.
+        setTextColor(RokidHudTokens.TEXT_SECONDARY)
+        typeface = RokidHudTokens.labelTypeface()
+        textSize = RokidHudTokens.LABEL_TEXT_SIZE_SP
+        letterSpacing = RokidHudTokens.LABEL_LETTER_SPACING_EM
+        maxLines = 1
         ellipsize = TextUtils.TruncateAt.END
     }
 
     init {
-        val content = LinearLayout(context).apply {
-            orientation = if (size == TileSize.WIDE) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
+        val header = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
-        val iconSizeDp = if (size == TileSize.SMALL) RokidHudTokens.ICON_MD else RokidHudTokens.ICON_LG
-        content.addView(
-            icon,
-            LinearLayout.LayoutParams(
-                RokidHudTokens.dp(context, iconSizeDp),
-                RokidHudTokens.dp(context, iconSizeDp),
-            ),
+        val iconSizeDp = RokidHudTokens.dp(context, RokidHudTokens.ICON_SM)
+        header.addView(icon, LinearLayout.LayoutParams(iconSizeDp, iconSizeDp))
+        header.addView(
+            label,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = RokidHudTokens.dp(context, RokidHudTokens.SPACE_1)
+            },
         )
-        // SMALL shows icon only, per the roadmap's "icon only at SMALL, icon + two-line name at
-        // LARGE" split; every other declared size gets the name too.
-        if (size != TileSize.SMALL) {
-            content.addView(
-                label,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ).apply {
-                    if (size == TileSize.WIDE) {
-                        marginStart = RokidHudTokens.dp(context, RokidHudTokens.SPACE_1)
-                    } else {
-                        topMargin = RokidHudTokens.dp(context, RokidHudTokens.SPACE_1)
-                    }
-                },
-            )
-        }
-        addView(content, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(
+            header,
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START),
+        )
         val pad = RokidHudTokens.dp(context, RokidHudTokens.SPACE_2)
         setPadding(pad, pad, pad, pad)
     }
@@ -85,7 +72,7 @@ internal class FallbackTileView(context: Context, size: TileSize) : FrameLayout(
         iconLoader: (Context, GlassesHub.LauncherEntry) -> Drawable = GlassesHub::launcherDrawable,
     ) {
         icon.setImageDrawable(iconLoader(context, entry))
-        label.text = entry.displayName
+        label.text = entry.displayName.uppercase()
     }
 
     /** Selected = surface-selected fill + text-primary border; focused adds the 2px focus border. */

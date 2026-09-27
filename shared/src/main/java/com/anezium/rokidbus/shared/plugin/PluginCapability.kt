@@ -11,6 +11,7 @@ enum class PluginCapability(val wireValue: String) {
     ASSISTANT("assistant"),
     WIRELESS_DEBUGGING("wireless_debugging"),
     INK_SURFACE("ink_surface"),
+    WIDGET_TILE("widget_tile"),
     ;
 
     companion object {
