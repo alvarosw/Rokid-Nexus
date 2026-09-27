@@ -102,7 +102,7 @@ Copy `plugins/sample` as the canonical template. The hard rules:
 | Plugin id | 3–64 chars, `[a-z][a-z0-9._-]{2,63}` (lowercase start), unique on the device |
 | Display name | ≤ 80 chars |
 | API version | exactly **3** |
-| Capabilities | subset of `surfaces`, `ink_surface`, `http_proxy`, `microphone`, `stt`, `tts`, `camera`, `mediasync`, `assistant`, `wireless_debugging` (`ink_surface` is the separate grant for compiled interactive Ink pages; `stt` grants hub-produced text without raw PCM; microphone needs no Android `RECORD_AUDIO` because PCM arrives over the hub; `tts` speaks text out of the glasses; `mediasync` moves the wearer's captures to the phone gallery; `wireless_debugging` can expose ADB on the current LAN and mint temporary pairing codes) |
+| Capabilities | subset of `surfaces`, `ink_surface`, `http_proxy`, `microphone`, `stt`, `tts`, `camera`, `mediasync`, `assistant`, `wireless_debugging`, `widget_tile` (`ink_surface` is the separate grant for compiled interactive Ink pages; `stt` grants hub-produced text without raw PCM; microphone needs no Android `RECORD_AUDIO` because PCM arrives over the hub; `tts` speaks text out of the glasses; `mediasync` moves the wearer's captures to the phone gallery; `wireless_debugging` can expose ADB on the current LAN and mint temporary pairing codes; `widget_tile` publishes this plugin's closed-state grid HUD tile, callable only from an existing legitimate wake, never a new one) |
 | Receive prefixes | non-empty, normalized, within your authorized namespace `/plugin/<id>/…` |
 | Signer | exactly one current signing certificate |
 | UID | not shared with another discovered plugin |
@@ -163,6 +163,7 @@ Paths a plugin can **send to** (gated by capability):
 | `/camera/freeze/result`, `/camera/overlay`, `/camera/link/offer` | `camera` | Camera platform sends (signer/grant-bound). `/camera/link/offer` is bidirectional so an approved camera plugin can advertise a reverse transport role. `/camera/session/state` and `/camera/freeze/image/chunk` remain **receive-only** (declare them in RECEIVE_PREFIXES); sending them is rejected |
 | `/mediasync/settings`, `/mediasync/now` | `mediasync` | Photo sync control: partial settings updates (`autoSyncOnCharge`, `deleteAfterSync`; an empty request is a refresh) and a manual "sync now". `/mediasync/status` is **receive-only** (declare it in RECEIVE_PREFIXES); every other `/mediasync/…` path is hub-to-hub and rejected if you send it |
 | `/debug/adb/request` → `/debug/adb/reply` | `wireless_debugging` | High-risk wireless ADB control. Actions are `status`, `enable`, `start_pairing`, `cancel_pairing`, and `disable`. Replies are owner-scoped direct replies and need no receive prefix. The phone hub stamps the authenticated plugin id; plugins must not add or trust one themselves. Pairing codes expire after two minutes and must not be persisted or logged; code-bearing windows use `FLAG_SECURE`, and only an explicit user action may copy a sensitive-marked command to the Android clipboard. |
+| `/tile/publish` | `widget_tile` | Publish this plugin's closed-state grid HUD tile (`TileSnapshot`). Use `nexusWidgetTileSession(id).publish(snapshot)`. Not foreground-exclusive — every plugin owns its own tile slot, so it never returns `SURFACE_BUSY` — and callable only from an existing legitimate wake (see the Background policy §4th exception in `docs/PLUGINS.md`). The hub stamps the authenticated plugin id server-side and may drop a publish silently past its rate ceiling; there is no error reply for that. |
 | `/plugin/<yourId>/…` | — | Your private namespace (must match your declared receive prefixes) |
 
 Wireless ADB requires both phone and glasses hubs 1.3.0 or newer and the
@@ -207,6 +208,7 @@ binary frame is dropped, not retried.
 | Timed lines | ≤ 2 000 entries, non-negative times |
 | Image surface | JPEG/PNG ≤ 64 KiB compressed, edges ≤ 512 px, ≤ 512² total px, ≥ 150 ms between updates |
 | Mono artwork | 16–192 px per edge (the glasses renderer floor is 16 even though the SDK accepts 1) |
+| Tile snapshot | pluginId/contentKey ≤ 128; title/subtitle ≤ 120; badge ≤ 24; unit ≤ 16; progress 0f..1f; ≤ 4 rows of ≤ 120 chars; payload ≤ 8 KiB |
 | Media artwork (binary) | image rules with 256 px edge cap |
 | Local binder binary | 512 KiB per frame |
 | SPP frame | 2 MiB body; binary metadata header ≤ 64 KiB |

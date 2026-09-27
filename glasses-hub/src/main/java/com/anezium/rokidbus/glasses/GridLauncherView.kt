@@ -8,6 +8,7 @@ import android.graphics.drawable.Drawable
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.os.SystemClock
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ScrollView
@@ -122,10 +123,16 @@ private class TileGridContainer(context: Context) : FrameLayout(context) {
         val gap = RokidHudTokens.dp(context, RokidHudTokens.SPACE_2)
         entries.forEachIndexed { index, entry ->
             val placement = placements.getOrNull(index) ?: return@forEachIndexed
-            val tile = FallbackTileView(context, placement.size)
-            tile.bind(entry, iconLoader)
+            val cached = if (TileController.isActive) TileCache.get(context, entry.id) else null
+            val tile: View = if (cached != null) {
+                LiveTileView(context, placement.size).apply {
+                    bind(cached.snapshot, TileCache.isStale(cached, SystemClock.elapsedRealtime()))
+                }
+            } else {
+                FallbackTileView(context, placement.size).apply { bind(entry, iconLoader) }
+            }
             val isSelected = index == selectedIndex
-            tile.setSelected(selected = isSelected, focused = isSelected)
+            if (tile is FallbackTileView) tile.setSelected(selected = isSelected, focused = isSelected)
             val width = placement.size.cols * unit + (placement.size.cols - 1) * gap
             val height = placement.size.rows * unit + (placement.size.rows - 1) * gap
             addView(

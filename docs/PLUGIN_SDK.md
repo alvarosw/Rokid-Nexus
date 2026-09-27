@@ -1224,6 +1224,46 @@ are `USER`, `PLUGIN`, `REPLACED`, `LINK_LOST`, and `RENDERER_ERROR`. The canonic
 working page and data-patch flow are in
 [`plugins/sample`](../plugins/sample/src/main/java/com/anezium/rokidbus/plugin/sample/HelloPluginService.kt).
 
+### Widget tiles
+
+Requires the `widget_tile` capability. Adding it to an already-approved plugin
+resets its grant to Pending like any other capability change (§4). Publishing your
+tile is deliberately *not* tied to a surface session — you may have no surface open
+at all — and is only ever a side effect of a wake you already have for another
+reason: see the fourth Background policy exception in
+[PLUGINS.md](PLUGINS.md#background-policy). This delivery grants no plugin new
+background time.
+
+```kotlin
+val result = nexusWidgetTileSession("main")?.publish(
+    TileSnapshot(
+        pluginId = "transit",     // stamped server-side; your own value is ignored
+        contentKey = "eta-42",    // dedupe key, same 128-char cap as surfaces
+        title = "12",             // a bare number renders via DataReadout (mono, + unit)
+        subtitle = "Downtown bus",
+        unit = "min",
+        tone = TileTone.WARN,     // one of the five Status states — never a color
+        rows = listOf("Downtown 12m", "Uptown 4m"), // LARGE tiles only, capped at 4
+    ),
+)
+```
+
+`TileSnapshot` is bounded the same way `SurfaceModels` is (see
+[`WidgetTileContract`](../shared/src/main/java/com/anezium/rokidbus/shared/tile/WidgetTileContract.kt)):
+`pluginId`/`contentKey` ≤ 128 chars, `title`/`subtitle` ≤ 120, `badge` ≤ 24, `unit` ≤
+16, `progress` in `0f..1f`, at most 4 `rows` of ≤ 120 chars each, whole payload ≤ 8
+KiB. Violating a bound throws `IllegalArgumentException` in your process at
+construction time, exactly like an oversized `NexusCard`.
+
+The hub decides how much of the snapshot to show at each declared `TileSize`
+(`SMALL`/`WIDE`/`TALL`/`LARGE`) — you publish one snapshot and the renderer adapts
+it, it is not something you lay out yourself. A tile is not foreground-exclusive:
+unlike an ordinary surface, publishing never returns `SURFACE_BUSY`, since every
+plugin owns its own tile slot. The hub may instead drop a publish silently past its
+rate ceiling — there is no error callback for that, matching the "give up quietly"
+handling of `SURFACE_BUSY` elsewhere. A plugin that never calls `publish()` keeps
+rendering through the generic fallback tile (icon + name) with zero code required.
+
 ### 3.1 Microphone (audio lease)
 
 Request the `microphone` capability and add `/audio` to the plugin's receive
