@@ -1,8 +1,35 @@
 # Changelog
 
+## 0.2.0
+
+- OsmAnd and OsmAnd+: the turn in words, its distance, the street and the
+  arrival time, with the close-turn warning. Checked on a phone and glasses.
+- Yandex Maps: driving distance, street and arrival time, in English or
+  Russian. Checked on a phone and glasses, the distance counting down.
+- Organic Maps: distance and street, updated while the app is in the
+  background. Checked on a phone and glasses. Its arrows are pictures, so the
+  glyph stays neutral.
+- maps.me is read too, but maps.me itself does not keep guiding in the
+  background on Android 11 and later: in picture-in-picture it posts nothing,
+  and without it the distance freezes because Android denies its navigation
+  service the location. Organic Maps, built from the same code, works.
+- Each new app has its own switch.
+
+## 0.1.1
+
+- Korean: Citymapper GO and Google Maps public transport are read in Korean
+  (walk, wait, board, stops left, get off soon, arrival), so Navigation works
+  in South Korea, where Google Maps has no turn-by-turn. Korean times keep
+  their 오전/오후. Built from the apps' own Korean strings; not yet checked on a
+  real trip in Korea.
+
 ## 0.1.0
 
-- First release: Google Maps turn-by-turn and Citymapper GO as a live activity
-  on the glasses, read from their notifications.
+- First release: Google Maps turn-by-turn and public transport, and
+  Citymapper GO, as one live activity on the glasses, read from their
+  notifications. A new step flares; a turn a few metres away or the stop to get
+  off at beats once. Needs both Nexus hubs 1.5.0.
+- Opening Navigation on the glasses shows the whole current instruction, or
+  how to start one.
 - A main switch and one switch per app, so Google Maps or Citymapper can be
   kept off the glasses without uninstalling anything.
