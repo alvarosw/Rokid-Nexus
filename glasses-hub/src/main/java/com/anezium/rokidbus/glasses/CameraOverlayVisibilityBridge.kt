@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.os.IBinder
+import com.anezium.rokidbus.glasses.hud.AmbientStack
 import com.anezium.rokidbus.glasses.hud.HudController
 
 /**
@@ -99,7 +100,7 @@ internal class CameraOverlayVisibilityReceiver : BroadcastReceiver() {
 
     private companion object {
         val registry = CameraOverlayVisibilityRegistry { active ->
-            ActivityController.setCameraOverlayActive(active)
+            AmbientStack.setCameraOverlayActive(active)
             // The camera leaving the display is what ends the HUD's external camera state.
             HudController.onCameraOverlayVisibility(active)
         }
