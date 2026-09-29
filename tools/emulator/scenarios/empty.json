@@ -1,0 +1,12 @@
+{
+  "description": "Empty launcher list and no open rules.",
+  "envelopes": [
+    {
+      "path": "/launcher/list",
+      "payload": {
+        "plugins": []
+      }
+    }
+  ],
+  "onOpen": {}
+}

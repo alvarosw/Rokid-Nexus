@@ -1250,7 +1250,14 @@ object GlassesHub {
         }
     }
 
+    /**
+     * Debug-only seam: lets the emulation fake phone consume outbound envelopes that would
+     * otherwise fail with NO_LINK. It is null unless the debug receiver installs it.
+     */
+    @Volatile internal var outboundInterceptor: ((BusEnvelope) -> Boolean)? = null
+
     private fun sendRemote(envelope: BusEnvelope): String? {
+        if (outboundInterceptor?.invoke(envelope) == true) return null
         // Everything that is not our own bulk transfer buys the link a quiet window.
         MediaSyncEngine.trafficMonitor.note(envelope.path)
         if (envelope.binary != null) {
