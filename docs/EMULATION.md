@@ -41,7 +41,15 @@ the hub never sees it. `ring.sh` therefore writes raw evdev events to the emulat
 (`/dev/input/event4`, override with `KBD_DEV`): fwd = DPAD down, back = DPAD up, tap = ENTER,
 dismiss = BACK. That is the touchpad/keyboard path of the hub; the real R08 media keycodes
 (87/88/85) are only routed for an input device named `R08`, which the emulator cannot create.
-`INPUT_MODE=inject` restores `input keyevent`. `launcher` broadcasts `OPEN_LAUNCHER` (it toggles).
+`INPUT_MODE=inject` restores `input keyevent`. `INPUT_MODE=hud` instead broadcasts each key to the
+debug-only `DebugHudInputReceiver` (`DEBUG_HUD_INPUT`, `android.permission.DUMP`-protected; extras
+`key`, `device` = `R08` (default) | `TOUCHPAD` | `KEYBOARD_DPAD` | `OTHER`, `action` = `press`
+(default) | `down` | `up`, `repeat`), which hands a `RawKeyEvent` tagged with that device class to
+`HudInputSeam.sink`, i.e. to the live `HudInput`. That is the only way to run the real R08 pipeline
+(keycodes 85/87/88, the 350 ms tap window) in emulation. The service connects the seam in delivery U3;
+until then the receiver only logs `HUD_INPUT dropped ... no HudInput is wired`, so this mode has no
+visible effect before U3. Tap timing in this mode is wall-clock between broadcasts (each event is
+stamped with the uptime clock on delivery). `launcher` broadcasts `OPEN_LAUNCHER` (it toggles).
 `overlay` runs the debug `probe=surface-overlay` demo card.
 
 The hubs link the vendor CXR library: build without `-PskipCxrGlobal=true` (the script does).
