@@ -55,4 +55,22 @@ class RokidHudTokensTest {
         assertEquals(RokidHudTokens.CANVAS_WIDTH - 2 * RokidHudTokens.SAFE_X, RokidHudTokens.CONTENT_WIDTH)
         assertEquals(32, RokidHudTokens.LIST_ITEM_HEIGHT)
     }
+
+    @Test
+    fun `motion durations are the documented ones with structural at 220`() {
+        assertEquals(120L, RokidHudTokens.DURATION_FEEDBACK_MS)
+        assertEquals(200L, RokidHudTokens.DURATION_DEFAULT_MS)
+        assertEquals(220L, RokidHudTokens.DURATION_STRUCTURAL_MS)
+        assertEquals(1_200L, RokidHudTokens.DURATION_SCAN_MS)
+    }
+
+    @Test
+    fun `scaleAlpha fades a token without changing its hue`() {
+        val half = RokidHudTokens.scaleAlpha(RokidHudTokens.GREEN_100, 0.5f)
+        assertEquals(0x7F, half ushr 24)
+        assertEquals(0x40FF5E, half and 0xFFFFFF)
+        assertEquals(RokidHudTokens.GREEN_100, RokidHudTokens.scaleAlpha(RokidHudTokens.GREEN_100, 1f))
+        assertEquals(0x40FF5E, RokidHudTokens.scaleAlpha(RokidHudTokens.GREEN_100, 0f))
+        assertEquals(RokidHudTokens.GREEN_48, RokidHudTokens.scaleAlpha(RokidHudTokens.GREEN_48, 2f))
+    }
 }

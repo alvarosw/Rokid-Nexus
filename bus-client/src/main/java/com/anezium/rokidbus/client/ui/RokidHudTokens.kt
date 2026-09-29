@@ -92,10 +92,11 @@ object RokidHudTokens {
     const val ICON_LG = 24
 
     // motion.duration-feedback / duration-default / duration-structural / duration-ambient /
-    // duration-scan, all in milliseconds.
+    // duration-scan, all in milliseconds. Structural is 220, not the 320 of the source tokens: the
+    // owner settled it watching the loop on the glasses (docs/ui-rewrite/00-architecture.md §2.6).
     const val DURATION_FEEDBACK_MS = 120L
     const val DURATION_DEFAULT_MS = 200L
-    const val DURATION_STRUCTURAL_MS = 320L
+    const val DURATION_STRUCTURAL_MS = 220L
     const val DURATION_AMBIENT_MS = 6_000L
     const val DURATION_SCAN_MS = 1_200L
 
@@ -136,6 +137,12 @@ object RokidHudTokens {
 
     // typography.body-small — supporting text. 12 / 16 / 400.
     const val BODY_SMALL_TEXT_SIZE = 12f
+
+    /** [color] with its alpha multiplied by [factor] (0..1); a token color faded, never re-hued. */
+    fun scaleAlpha(color: Int, factor: Float): Int {
+        val alpha = ((color ushr 24) * factor.coerceIn(0f, 1f)).toInt().coerceIn(0, 255)
+        return (alpha shl 24) or (color and 0xFFFFFF)
+    }
 
     /** Sets a token text size, which is in pixels (see the unit note above), never scaled. */
     fun applyTextSize(view: TextView, sizePx: Float) {
