@@ -211,7 +211,12 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
             val id = sc.selectedId ?: return
             val token = newToken()
             val opening = Opening(id, token, now + config.openTimeoutMs, sc)
-            s = s.copy(screen = opening, lastSelectedId = id)
+            // Opening the plugin again makes its next show that open's answer, not a late one.
+            s = s.copy(
+                screen = opening,
+                lastSelectedId = id,
+                cancelledOpen = s.cancelledOpen?.takeUnless { it.pluginId == id },
+            )
             fx += ShowOpening(id)
             fx += if (id == CAMERA_ENTRY_ID) StartCamera(token) else SendLauncherOpen(id, token)
             fx += ScheduleDeadline(token, opening.deadline)
@@ -232,8 +237,13 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
             when {
                 intent == HudIntent.Dismiss -> {
                     // Cancel the pending open and stay on the launcher the wearer is looking at, so the
-                    // next BACK is still ours (B1). A late surface is then unsolicited (F-3, F-9).
-                    s = s.copy(screen = sc.home, lastDismissAt = now)
+                    // next BACK is still ours (B1). The plugin's late answer is closed unseen until the
+                    // open's own deadline (F-3, F-9).
+                    s = s.copy(
+                        screen = sc.home,
+                        lastDismissAt = now,
+                        cancelledOpen = CancelledOpen(sc.pluginId, sc.deadline),
+                    )
                     fx += ShowHome(sc.home.mode, sc.home.selectedId, s.entries)
                 }
                 intent is HudIntent.OpenLauncher && intent.trigger == LauncherTrigger.BROADCAST_TOGGLE ->
@@ -279,6 +289,10 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
 
         fun onSurfaceShown(e: HudEvent.SurfaceShown) {
             val info = e.info()
+            if (answersCancelledOpen(info)) {
+                fx += CloseApp(info.surfaceId, CloseReason.OPEN_CANCELLED)
+                return
+            }
             when (val sc = s.screen) {
                 Hidden -> showSurface(info, e.displayPath, Origin.HIDDEN)
                 is Home -> {
@@ -299,6 +313,26 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
                     if (sc.kind == ExternalKind.ACTIVITY_SURFACE) replaceOrUpdate(sc, info, e.displayPath)
                     else showSurface(info, e.displayPath, Origin.HIDDEN)
             }
+        }
+
+        /**
+         * A show from the plugin of an open the wearer cancelled, inside that open's deadline, and not
+         * an update of a surface already on screen. Past the deadline the record is dropped and the
+         * show is unsolicited like any other.
+         */
+        fun answersCancelledOpen(info: SurfaceInfo): Boolean {
+            val cancelled = s.cancelledOpen ?: return false
+            if (now >= cancelled.until) {
+                s = s.copy(cancelledOpen = null)
+                return false
+            }
+            if (!matchesOpen(cancelled.pluginId, info)) return false
+            val visible = when (val sc = s.screen) {
+                is Home -> sc.beneath
+                is Opening -> sc.home.beneath
+                else -> sc
+            }
+            return surfaceInfo(visible)?.surfaceId != info.surfaceId
         }
 
         fun replaceOrUpdate(sc: HudScreen, info: SurfaceInfo, path: DisplayPath) {

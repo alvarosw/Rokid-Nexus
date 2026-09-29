@@ -9,6 +9,12 @@ enum class CloseReason {
 
     /** Something else took the display (a native app). */
     SUPERSEDED,
+
+    /**
+     * The surface answers an open the wearer had already cancelled. It was never drawn; the plugin
+     * hears the same BACK a dismissal sends, so no new wire value exists for it.
+     */
+    OPEN_CANCELLED,
 }
 
 sealed interface HudStatus {

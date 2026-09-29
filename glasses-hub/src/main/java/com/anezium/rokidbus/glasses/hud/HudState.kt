@@ -80,6 +80,12 @@ sealed interface HudScreen {
 }
 
 /**
+ * An open the wearer dismissed while it was in flight. The plugin may still answer it: until
+ * [until] (the open's own deadline) a show from [pluginId] is that answer and is closed unseen.
+ */
+data class CancelledOpen(val pluginId: String, val until: Long)
+
+/**
  * The whole machine state. [screen] is the one owner of the display and of input; the other fields
  * are the context the rules need and are only ever changed inside `reduce`.
  */
@@ -101,6 +107,7 @@ data class HudState(
     /** A surface that was active when the service died; re-shown on reconnect, the launcher is not. */
     val suspended: HudScreen? = null,
     val lastDismissAt: Long? = null,
+    val cancelledOpen: CancelledOpen? = null,
 ) {
     /**
      * Derived, never stored independently. External CAMERA and NATIVE_APP do not hold focus

@@ -43,7 +43,7 @@ internal class Harness(
     fun open(trigger: LauncherTrigger = LauncherTrigger.TRIPLE_TAP) = intent(HudIntent.OpenLauncher(trigger))
     fun next() = intent(HudIntent.Next)
     fun prev() = intent(HudIntent.Prev)
-    fun select() = intent(HudIntent.Select)
+    fun select(at: Long = now) = intent(HudIntent.Select, at)
     fun dismiss(at: Long = now) = intent(HudIntent.Dismiss, at)
     fun raw(code: Int) = intent(HudIntent.Raw(RawKey(code)))
 
@@ -53,7 +53,8 @@ internal class Harness(
         path: DisplayPath = DisplayPath.OVERLAY,
         handlesBack: Boolean = false,
         editable: Boolean = false,
-    ) = send(HudEvent.SurfaceShown(id, owner, path, handlesBack, editable))
+        at: Long = now,
+    ) = send(HudEvent.SurfaceShown(id, owner, path, handlesBack, editable), at)
 
     fun hidden(id: String) = send(HudEvent.SurfaceHidden(id))
 
@@ -789,15 +790,95 @@ class HudStateMachineTest {
     }
 
     @Test
-    fun item_69_F3_a_late_show_for_a_cancelled_open_is_unsolicited() {
+    fun item_69_F3_a_late_show_for_a_cancelled_open_is_closed_unseen() {
         val h = Harness()
         val t = h.openEntry("b")
-        h.dismiss()
-        assertTrue(h.send(HudEvent.DeadlineElapsed(t)).isEmpty())
-        h.shown("b")
-        assertEquals(Origin.HIDDEN, h.app().origin)
-        h.hidden("b")
+        h.dismiss(at = 500)
+        assertTrue(h.send(HudEvent.DeadlineElapsed(t), at = 600).isEmpty())
+        val fx = h.shown("b")
+        assertEquals(listOf<HudEffect>(CloseApp("b", CloseReason.OPEN_CANCELLED)), fx)
+        // The launcher the wearer went back to is untouched and the ring stays ours.
+        assertEquals(Home(HomeMode.LIST, "b"), h.screen)
+        assertTrue(fx.none { it is AttachHost || it is ShowApp || it is ShowActivitySurface })
+        assertTrue(h.state.ringFocus())
+    }
+
+    @Test
+    fun a_late_show_is_closed_after_the_wearer_left_the_launcher_too() {
+        val h = Harness()
+        h.openEntry("b")
+        h.dismiss(at = 500)
+        h.dismiss(at = 900)
         assertEquals(Hidden, h.screen)
+        val fx = h.shown("b:late", owner = "b", at = 2_500)
+        assertEquals(listOf<HudEffect>(CloseApp("b:late", CloseReason.OPEN_CANCELLED)), fx)
+        assertEquals(Hidden, h.screen)
+        assertFalse(AttachHost in fx)
+    }
+
+    @Test
+    fun a_cancelled_open_also_closes_an_activity_path_show() {
+        val h = Harness()
+        h.openEntry("b")
+        h.dismiss(at = 500)
+        val fx = h.shown("b", path = DisplayPath.ACTIVITY, at = 2_500)
+        assertEquals(listOf<HudEffect>(CloseApp("b", CloseReason.OPEN_CANCELLED)), fx)
+    }
+
+    @Test
+    fun a_show_of_another_plugin_is_not_swallowed_by_a_cancelled_open() {
+        val h = Harness()
+        h.openEntry("b")
+        h.dismiss(at = 500)
+        h.shown("x", owner = "x", at = 2_500)
+        assertEquals(Origin.HIDDEN, h.app().origin)
+    }
+
+    @Test
+    fun item_69_F3_a_show_after_the_original_deadline_is_unsolicited_as_before() {
+        val h = Harness()
+        h.openEntry("b")
+        h.dismiss(at = 500)
+        h.dismiss(at = 900)
+        h.shown("b", at = 10_000)
+        assertEquals(Origin.HIDDEN, h.app().origin)
+        assertNull(h.state.cancelledOpen)
+    }
+
+    @Test
+    fun opening_the_plugin_again_makes_its_show_the_answer_not_a_late_one() {
+        val h = Harness()
+        h.openEntry("b")
+        h.dismiss(at = 500)
+        h.select(at = 700)
+        assertNull(h.state.cancelledOpen)
+        h.shown("b", at = 900)
+        assertEquals(Origin.HOME, h.app().origin)
+    }
+
+    @Test
+    fun a_late_show_of_the_surface_already_beneath_the_launcher_is_an_update_not_a_close() {
+        val h = Harness()
+        h.shown("b")
+        h.open()
+        h.next()
+        h.select()
+        h.dismiss(at = 500)
+        val fx = h.shown("b", at = 900)
+        assertTrue(fx.none { it is CloseApp })
+        assertEquals(Home(HomeMode.LIST, "b", App(SurfaceInfo("b", "b"), Origin.HIDDEN)), h.screen)
+    }
+
+    @Test
+    fun a_late_show_is_closed_while_another_plugin_is_opening() {
+        val h = Harness()
+        h.openEntry("b")
+        h.dismiss(at = 500)
+        h.next()
+        h.select(at = 700)
+        val fx = h.shown("b", at = 900)
+        assertEquals(listOf<HudEffect>(CloseApp("b", CloseReason.OPEN_CANCELLED)), fx)
+        assertTrue(h.screen is Opening)
     }
 
     @Test
