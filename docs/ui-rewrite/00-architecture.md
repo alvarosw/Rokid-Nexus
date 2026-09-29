@@ -89,7 +89,7 @@ staying awake (P1/P2) — wake is requested through the existing `DisplayWakePol
 
 Geometry comes from one `HudGeometry` object (visible viewport, safe area, content width) derived
 from `RokidHudTokens`; nothing else reads `displayMetrics` for layout. The visible-viewport origin
-inside the Android window is a single value, pending HARDWARE Q1 (see §5).
+inside the Android window is a single value; the OS screen is 480×352 and the viewport is all of it (HARDWARE D1).
 
 ### 2.4 `HomeLayer` — list and grid, one design system
 
@@ -157,9 +157,41 @@ U1 and U2 are independent. U3 needs both. U4–U6 need U3. U7 last.
 
 ## 5. Open questions blocking specific work
 
-- HARDWARE Q1/Q2 (window 480×640 @1.5 vs lit 480×352; where the lit rows sit; density). Blocks
-  only the value of `HudGeometry`'s viewport origin; code is written against the abstraction.
+- HARDWARE Q1/Q2 display size: resolved (panel 480×400, OS screen 480×352, no offset); density
+  (1.5) is still unconfirmed.
 - HARDWARE B1/Q5: whether a BACK arriving in `Hidden` shortly after a dismissal should be
   swallowed. One rule in the machine, default off until decided.
 - Emulator is API 37; the device is API 32. An API 32 Cuttlefish is feasible (docs/EMULATION.md)
   and will be set up before U3 is declared done if API-specific window behavior shows up.
+
+## 6. Delivery notes
+
+### U3a (structural wiring, no redesign)
+
+Implemented in `glasses-hub/.../glasses/hud/`:
+
+- `HudRunner` drives `HudStateMachine` one event at a time, queues events raised by effects, owns
+  the single deadline through a `HudTimer` and reports a swallowed BACK to its caller. It is pure
+  Kotlin and JVM-tested with a fake clock, timer and sink.
+- `HudController` (main thread) is the effects runner and the only place that decides what is on
+  screen: entry points (`onRawKey`, `openLauncher`, `toggleLauncherFromBroadcast`,
+  `onSurfacePresented`/`onSurfaceHidden`, `onNativeAppLaunched`, camera edge, service
+  connect/destroy) feed it, and its effects drive `HudHost`, the bus, `SurfaceController`, the
+  ring-focus broadcast and the ambient controllers. It also adapts `HudInput`'s `InputTarget`s: the
+  machine gets `HUD` intents, `NoticeController` and `ActivityController` get theirs directly.
+- `HudHost` is the persistent window with `HomeLayer` (existing list or grid content view plus one
+  status line for "Opening..." and the failure) and `AppLayer` (`SurfaceHudView`). The app layer stays
+  visible under a launcher opened over a surface, as that surface's own window used to.
+- `HudGeometry` holds the visible viewport (default 0,0,480x352, the whole OS screen) as one value.
+
+Deviations from §2, with the reason:
+
+- A show or update of the surface a forwarded BACK went to now disarms the machine's failsafe (the
+  old code cancelled it on any update of that surface id); U2 only disarmed it on hide, which would
+  have closed a `handlesBack` plugin that answered BACK by navigating inside itself.
+- `NativeApp` external state has no end signal: it is left by an open-launcher, a surface or the
+  camera, and until then keys pass as in Hidden.
+- `ExternalEnded(CAMERA)` comes from the `:camera` overlay-visibility edge, the only main-process
+  signal that the camera activity left the display.
+- With the accessibility service not connected an overlay-path surface still falls back to its
+  activity as before, but it is not moved back onto the overlay when the service returns.

@@ -5,7 +5,7 @@ The tooling lives in `tools/emulator/` and targets a Cuttlefish instance, but an
 
 ## Canvas and density
 
-- Display: **480 x 352 px**. This is the AIUI reference viewport (`RokidHudTokens.CANVAS_WIDTH/HEIGHT`,
+- Display: **480 x 352 px**: the OS screen of the glasses, whose panel hardware is 480x400 (owner, 2026-09-29). This is the AIUI reference viewport (`RokidHudTokens.CANVAS_WIDTH/HEIGHT`,
   `docs/grid-hud-roadmap/00-overview.md`). Older notes mention 480x400 or 480x640; those are not
   the canvas to design for.
 - Density: **240 dpi (hdpi, 1.5x)**, i.e. 320 x 234.67 dp. Evidence in the repo:
@@ -20,7 +20,7 @@ The tooling lives in `tools/emulator/` and targets a Cuttlefish instance, but an
 - Portrait-locked activities (`MainActivity`, `SurfaceActivity`) rotate a 480x352 display to
   352x480 while they are in front. Overlays (launcher, surface overlay, notices) are windows and
   render at 480x352. `install-and-arm.sh` goes HOME and pins rotation so captures are 480x352.
-  Whether the real panel is a 480x352 landscape window or a 480-wide portrait panel is unverified.
+  The 480x640 window seen on earlier firmware is superseded (HARDWARE D1).
 
 ## Scripts
 
@@ -31,7 +31,7 @@ All honor `ADB_BIN` (default `/opt/cuttlefish/cf/bin/adb`), `SERIAL` (default `0
 tools/emulator/setup-display.sh            # wm size 480x352, wm density 240 ("reset" restores)
 tools/emulator/install-and-arm.sh          # build, repack, install, enable a11y service, start hub
 SKIP_BUILD=1 tools/emulator/install-and-arm.sh
-tools/emulator/ring.sh fwd|back|tap|dismiss|launcher|overlay|state
+tools/emulator/ring.sh fwd|back|tap|double|dismiss|launcher|overlay|state
 tools/emulator/capture.sh <name>           # PNG in $OUT_DIR
 tools/emulator/capture.sh <name> 8         # 8 s screenrecord MP4
 ```
@@ -46,9 +46,10 @@ debug-only `DebugHudInputReceiver` (`DEBUG_HUD_INPUT`, `android.permission.DUMP`
 `key`, `device` = `R08` (default) | `TOUCHPAD` | `KEYBOARD_DPAD` | `OTHER`, `action` = `press`
 (default) | `down` | `up`, `repeat`), which hands a `RawKeyEvent` tagged with that device class to
 `HudInputSeam.sink`, i.e. to the live `HudInput`. That is the only way to run the real R08 pipeline
-(keycodes 85/87/88, the 350 ms tap window) in emulation. The service connects the seam in delivery U3;
-until then the receiver only logs `HUD_INPUT dropped ... no HudInput is wired`, so this mode has no
-visible effect before U3. Tap timing in this mode is wall-clock between broadcasts (each event is
+(keycodes 85/87/88, the 350 ms tap window) in emulation. The service connects the seam when it connects
+and clears it when it is destroyed. `ring.sh double` sends a ring double tap: two taps need two
+broadcasts inside one 350 ms window, which two `adb` invocations cannot meet, so both leave one
+device shell. Tap timing in this mode is wall-clock between broadcasts (each event is
 stamped with the uptime clock on delivery). `launcher` broadcasts `OPEN_LAUNCHER` (it toggles).
 `overlay` runs the debug `probe=surface-overlay` demo card.
 

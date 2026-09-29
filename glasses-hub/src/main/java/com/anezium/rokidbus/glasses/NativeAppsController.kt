@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import com.anezium.rokidbus.glasses.hud.HudController
 import com.anezium.rokidbus.shared.NativeAppContract
 import com.anezium.rokidbus.shared.NativeAppEntry
 import com.anezium.rokidbus.shared.NativeAppErrorCode
@@ -107,7 +108,14 @@ internal object NativeAppsController {
         val component = ComponentName(resolved.activityInfo.packageName, resolved.activityInfo.name)
         val intent = Intent.makeMainActivity(component).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return runCatching { context.startActivity(intent) }
-            .fold(onSuccess = { null }, onFailure = { NativeAppErrorCode.INTERNAL })
+            .fold(
+                onSuccess = {
+                    // Nexus steps aside for the app the phone launched.
+                    HudController.onNativeAppLaunched()
+                    null
+                },
+                onFailure = { NativeAppErrorCode.INTERNAL },
+            )
     }
 
     private fun launcherActivities(packageManager: PackageManager) =

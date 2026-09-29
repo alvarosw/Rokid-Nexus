@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Simulate R08 ring input: fwd | back | tap | dismiss | launcher | overlay | state
+# Simulate R08 ring input: fwd | back | tap | double | dismiss | launcher | overlay | state
 set -euo pipefail
 . "$(dirname "$0")/env.sh"
 
@@ -10,8 +10,8 @@ set -euo pipefail
 # keycodes (87/88/85) are only routed for a device named R08, which the emulator cannot create.
 # INPUT_MODE=inject falls back to `input keyevent` with the old media keycodes.
 # INPUT_MODE=hud broadcasts the raw keys to DebugHudInputReceiver tagged as device R08, so the ring
-# pipeline of HudInput runs with the real 85/87/88 keycodes. It only takes effect once the service
-# wires HudInputSeam (delivery U3); before that the receiver logs "no HudInput is wired".
+# pipeline of HudInput runs with the real 85/87/88 keycodes. The receiver logs "no HudInput is wired"
+# while the accessibility service is not connected.
 KBD_DEV="${KBD_DEV:-/dev/input/event4}"   # "Cuttlefish Vhost User Keyboard 0"; see `getevent -il`
 key() {  # <inject keycode> <linux evdev code>
   if [ "${INPUT_MODE:-evdev}" = "hud" ]; then
@@ -29,9 +29,12 @@ case "${1:-}" in
   fwd)      key 87 108 ;;   # KEY_DOWN  (inject: MEDIA_NEXT)
   back)     key 88 103 ;;   # KEY_UP    (inject: MEDIA_PREVIOUS)
   tap)      key 85 28 ;;    # KEY_ENTER (inject: MEDIA_PLAY_PAUSE)
+  double)   # ring double tap: INPUT_MODE=hud only; both taps leave one device shell, inside one 350 ms window
+    [ "${INPUT_MODE:-evdev}" = "hud" ] || { echo "double needs INPUT_MODE=hud" >&2; exit 2; }
+    adb_ shell "am broadcast -a $PKG.DEBUG_HUD_INPUT -n $PKG/.DebugHudInputReceiver --es device R08 --ei key 85 >/dev/null & am broadcast -a $PKG.DEBUG_HUD_INPUT -n $PKG/.DebugHudInputReceiver --es device R08 --ei key 85 >/dev/null; wait" ;;
   dismiss)  key 4 158 ;;    # KEY_BACK
   launcher) adb_ shell am broadcast -a "$PKG.action.OPEN_LAUNCHER" -n "$PKG/.OpenLauncherReceiver" ;;  # toggles
   overlay)  adb_ shell am broadcast -a "$PKG.PROBE" -n "$PKG/.ProbeBroadcastReceiver" --es probe surface-overlay ;;
   state)    adb_ shell am broadcast -a "$PKG.PROBE" -n "$PKG/.ProbeBroadcastReceiver" --es probe state ;;
-  *) echo "usage: $0 fwd|back|tap|dismiss|launcher|overlay|state" >&2; exit 2 ;;
+  *) echo "usage: $0 fwd|back|tap|double|dismiss|launcher|overlay|state" >&2; exit 2 ;;
 esac
