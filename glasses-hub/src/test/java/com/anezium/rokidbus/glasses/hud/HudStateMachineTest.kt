@@ -743,10 +743,37 @@ class HudStateMachineTest {
         assertTrue(h.next().isEmpty())
         assertEquals("b", (h.screen as Opening).home.selectedId)
         val fx = h.dismiss()
-        assertEquals(Hidden, h.screen)
+        assertEquals(Home(HomeMode.LIST, "b"), h.screen)
         assertTrue(fx.none { it is SendLauncherOpen })
         assertTrue(CancelDeadline in fx)
         assertFalse(PassToSystem in fx)
+        assertTrue(h.state.ringFocus())
+        // The next BACK closes the launcher, still ours.
+        assertFalse(PassToSystem in h.dismiss())
+        assertEquals(Hidden, h.screen)
+    }
+
+    @Test
+    fun F9_dismiss_during_opening_returns_to_the_same_home_over_the_same_surface() {
+        val h = Harness()
+        h.shown("s")
+        h.open()
+        h.next()
+        h.select()
+        h.dismiss()
+        assertEquals(Home(HomeMode.LIST, "b", App(SurfaceInfo("s", "s"), Origin.HIDDEN)), h.screen)
+    }
+
+    @Test
+    fun item_69_F3_a_late_show_for_a_cancelled_open_is_unsolicited() {
+        val h = Harness()
+        val t = h.openEntry("b")
+        h.dismiss()
+        assertTrue(h.send(HudEvent.DeadlineElapsed(t)).isEmpty())
+        h.shown("b")
+        assertEquals(Origin.HIDDEN, h.app().origin)
+        h.hidden("b")
+        assertEquals(Hidden, h.screen)
     }
 
     @Test

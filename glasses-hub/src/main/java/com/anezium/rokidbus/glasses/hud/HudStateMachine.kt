@@ -231,9 +231,10 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
         fun onOpeningIntent(sc: Opening, intent: HudIntent) {
             when {
                 intent == HudIntent.Dismiss -> {
-                    // Abandon the pending open; a late surface is then unsolicited (F-3, F-9).
-                    s = s.copy(lastDismissAt = now)
-                    leaveHome(sc.home.beneath)
+                    // Cancel the pending open and stay on the launcher the wearer is looking at, so the
+                    // next BACK is still ours (B1). A late surface is then unsolicited (F-3, F-9).
+                    s = s.copy(screen = sc.home, lastDismissAt = now)
+                    fx += ShowHome(sc.home.mode, sc.home.selectedId, s.entries)
                 }
                 intent is HudIntent.OpenLauncher && intent.trigger == LauncherTrigger.BROADCAST_TOGGLE ->
                     leaveHome(sc.home.beneath)
