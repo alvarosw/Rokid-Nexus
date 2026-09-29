@@ -14,6 +14,9 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.anezium.rokidbus.client.ui.BusTheme
+import com.anezium.rokidbus.glasses.hud.AmbientLayer
+import com.anezium.rokidbus.glasses.hud.AmbientStack
+import com.anezium.rokidbus.glasses.hud.AmbientWindow
 import com.anezium.rokidbus.shared.PinSurfaceEmphasis
 import com.anezium.rokidbus.shared.PinSurfacePosition
 import com.anezium.rokidbus.shared.PinSurfaceSize
@@ -48,14 +51,18 @@ object PinOverlayRenderer {
         windowManager = null
     }
 
-    fun ensureOnTop() {
-        val manager = windowManager ?: return
-        val currentRoot = root ?: return
-        val currentParams = params ?: return
-        runCatching {
-            manager.removeView(currentRoot)
-            manager.addView(currentRoot, currentParams)
-        }.onFailure { logError("Pin overlay z-order refresh failed", it) }
+    private val ambientWindow = object : AmbientWindow {
+        override val layer = AmbientLayer.PIN
+
+        override fun readd(): Boolean {
+            val manager = windowManager ?: return false
+            val currentRoot = root ?: return false
+            val currentParams = params ?: return false
+            return runCatching {
+                manager.removeView(currentRoot)
+                manager.addView(currentRoot, currentParams)
+            }.onFailure { logError("Pin overlay z-order refresh failed", it) }.isSuccess
+        }
     }
 
     private fun render(pin: NexusPinSurface?) {
@@ -81,6 +88,7 @@ object PinOverlayRenderer {
             if (runCatching { manager.addView(next, nextParams) }.isFailure) return
             root = next
             params = nextParams
+            AmbientStack.main.added(ambientWindow)
         }
         currentRoot.render(pin)
         params?.let { layout ->
@@ -98,6 +106,7 @@ object PinOverlayRenderer {
         root = null
         params = null
         position = null
+        if (currentRoot != null) AmbientStack.main.removed(AmbientLayer.PIN)
     }
 
     private fun applyHudTopInset(value: Int) {

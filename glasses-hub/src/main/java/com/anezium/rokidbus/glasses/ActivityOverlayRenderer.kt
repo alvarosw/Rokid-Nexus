@@ -20,6 +20,9 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import com.anezium.rokidbus.client.ui.BusTheme
+import com.anezium.rokidbus.glasses.hud.AmbientLayer
+import com.anezium.rokidbus.glasses.hud.AmbientStack
+import com.anezium.rokidbus.glasses.hud.AmbientWindow
 import com.anezium.rokidbus.shared.ActivityProgress
 import com.anezium.rokidbus.shared.ActivitySurfaceContent
 import com.anezium.rokidbus.shared.PinSurfaceLine
@@ -74,14 +77,23 @@ internal object ActivityOverlayRenderer {
         windowManager = null
     }
 
-    /** Ambient stack order is pin, activity, notice. */
-    fun ensureOnTop() {
-        val manager = windowManager ?: return
-        val currentRoot = root ?: return
-        runCatching {
-            manager.removeView(currentRoot)
-            manager.addView(currentRoot, params())
-        }.onFailure { logError("Activity overlay z-order refresh failed", it) }
+    private val ambientWindow = object : AmbientWindow {
+        override val layer = AmbientLayer.ACTIVITY
+
+        // Leaving islands are still children of the window, so they count too.
+        override val isAnimating: Boolean
+            get() = root?.let { container ->
+                (0 until container.childCount).any { (container.getChildAt(it) as? HudIslandView)?.isAnimating == true }
+            } == true
+
+        override fun readd(): Boolean {
+            val manager = windowManager ?: return false
+            val currentRoot = root ?: return false
+            return runCatching {
+                manager.removeView(currentRoot)
+                manager.addView(currentRoot, params())
+            }.onFailure { logError("Activity overlay z-order refresh failed", it) }.isSuccess
+        }
     }
 
     private fun render(state: ActivityRenderState) {
@@ -126,6 +138,7 @@ internal object ActivityOverlayRenderer {
         var pendingFlare: Pair<ActivityRenderItem, ActivityIsland>? = null
         visible.forEach { item ->
             val island = nodes[item.activity.surfaceId] ?: ActivityIsland(activeService).also {
+                it.onIdle = { AmbientStack.main.animationEnded() }
                 nodes[item.activity.surfaceId] = it
                 container.addView(it, FrameLayout.LayoutParams(MATCH, MATCH))
             }
@@ -171,7 +184,7 @@ internal object ActivityOverlayRenderer {
             return null
         }
         root = nextRoot
-        HudOverlayStack.reassert()
+        AmbientStack.main.added(ambientWindow)
         return nextRoot
     }
 
@@ -252,6 +265,7 @@ internal object ActivityOverlayRenderer {
         root = null
         nodes.clear()
         if (!keepMotionTokens) processedMotionTokens.clear()
+        if (currentRoot != null) AmbientStack.main.removed(AmbientLayer.ACTIVITY)
     }
 
     private fun params() = WindowManager.LayoutParams(

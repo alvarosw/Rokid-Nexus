@@ -114,6 +114,13 @@ internal open class HudIslandView(context: Context) : FrameLayout(context) {
     private var running = false
     private val frame = Runnable { onFrame() }
 
+    /** True while the spring or a cross-fade still moves the island. */
+    val isAnimating: Boolean
+        get() = running
+
+    /** Called when the island has come to rest, after a dismissal has finished. */
+    var onIdle: (() -> Unit)? = null
+
     init {
         setWillNotDraw(false)
         setOutline(BusTheme.hairline, BusTheme.dp(context, 1).toFloat())
@@ -307,6 +314,7 @@ internal open class HudIslandView(context: Context) : FrameLayout(context) {
         running = false
         edges.forEach { it.snap() }
         if (leaving) finishDismissal()
+        onIdle?.invoke()
     }
 
     private fun settleNow() {

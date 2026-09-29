@@ -72,6 +72,9 @@ class HudMotionValue(
     val isRunning: Boolean
         get() = animator?.isRunning == true
 
+    /** Called when the value comes to rest: an animation ended, or was stopped without a successor. */
+    var onIdle: (() -> Unit)? = null
+
     fun animateTo(
         target: Float,
         durationMs: Long = HudMotion.STANDARD_MS,
@@ -83,6 +86,7 @@ class HudMotionValue(
         if (!HudMotion.enabled || current == target || durationMs <= 0L) {
             apply(target)
             onEnd?.invoke()
+            onIdle?.invoke()
             return
         }
         animator = ValueAnimator.ofFloat(current, target).apply {
@@ -92,35 +96,39 @@ class HudMotionValue(
             // Deliberately on the update listener rather than an end listener:
             // a cancelled animation must not fire the continuation of a
             // sequence that has already been superseded.
-            if (onEnd != null) {
-                addListener(
-                    object : android.animation.AnimatorListenerAdapter() {
-                        private var cancelled = false
+            addListener(
+                object : android.animation.AnimatorListenerAdapter() {
+                    private var cancelled = false
 
-                        override fun onAnimationCancel(animation: android.animation.Animator) {
-                            cancelled = true
-                        }
+                    override fun onAnimationCancel(animation: android.animation.Animator) {
+                        cancelled = true
+                    }
 
-                        override fun onAnimationEnd(animation: android.animation.Animator) {
-                            if (!cancelled) onEnd()
-                        }
-                    },
-                )
-            }
+                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                        if (cancelled) return
+                        onEnd?.invoke()
+                        onIdle?.invoke()
+                    }
+                },
+            )
             start()
         }
     }
 
     /** Jump straight there, cancelling anything in flight. */
     fun snapTo(target: Float) {
+        val wasRunning = isRunning
         animator?.cancel()
         animator = null
         apply(target)
+        if (wasRunning) onIdle?.invoke()
     }
 
     fun cancel() {
+        val wasRunning = isRunning
         animator?.cancel()
         animator = null
+        if (wasRunning) onIdle?.invoke()
     }
 
     private fun apply(value: Float) {

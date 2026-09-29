@@ -6,7 +6,6 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import com.anezium.rokidbus.client.ui.RokidHudTokens
-import com.anezium.rokidbus.glasses.HudOverlayStack
 import com.anezium.rokidbus.glasses.logError
 
 /**
@@ -26,6 +25,7 @@ internal class HudHost(
     val geometry: HudGeometry = HudGeometry.DEFAULT,
     motion: HudMotionDriver = HudMotionDriver.forContext(context),
     val home: HomeLayer = HomeLayer(context, motion = motion),
+    private val stack: AmbientStack = AmbientStack.main,
 ) {
     val app = AppLayer(context)
     private val panel = MorphPanelView(context)
@@ -41,6 +41,20 @@ internal class HudHost(
 
     var isAttached = false
         private set
+
+    private var windowParams: WindowManager.LayoutParams? = null
+
+    private val ambientWindow = object : AmbientWindow {
+        override val layer = AmbientLayer.HOST
+
+        override fun readd(): Boolean {
+            val params = windowParams ?: return false
+            return runCatching {
+                windowManager.removeView(root)
+                windowManager.addView(root, params)
+            }.isSuccess
+        }
+    }
 
     init {
         val frame = FrameLayout(context)
@@ -67,9 +81,10 @@ internal class HudHost(
             .isSuccess
         if (!added) return false
         isAttached = true
-        // Accessibility overlays stack in the order they were added, so the ambient layers that
-        // were already up have to be re-added above this window.
-        HudOverlayStack.reassert()
+        windowParams = params
+        // Overlays stack in the order they were added: the stack puts the ambient layers that were
+        // already up back above this window.
+        stack.added(ambientWindow)
         return true
     }
 
@@ -77,6 +92,8 @@ internal class HudHost(
         if (!isAttached) return
         isAttached = false
         runCatching { windowManager.removeView(root) }
+        windowParams = null
+        stack.removed(AmbientLayer.HOST)
         morph.snap()
         shown = HudScreen.Hidden
         app.clear()

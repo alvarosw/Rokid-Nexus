@@ -9,6 +9,9 @@ import android.graphics.PixelFormat
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import com.anezium.rokidbus.glasses.hud.AmbientLayer
+import com.anezium.rokidbus.glasses.hud.AmbientStack
+import com.anezium.rokidbus.glasses.hud.AmbientWindow
 import kotlin.math.roundToInt
 
 internal data class GlassesPointerPosition(val x: Double, val y: Double)
@@ -82,6 +85,7 @@ internal object RemotePointerOverlayRenderer {
             }
             root = next
             params = layout
+            AmbientStack.main.added(ambientWindow)
         }
         currentRoot.render(point, radius)
         return point
@@ -93,17 +97,22 @@ internal object RemotePointerOverlayRenderer {
             .onFailure { logError("Pointer overlay removal failed", it) }
         root = null
         params = null
+        AmbientStack.main.removed(AmbientLayer.POINTER)
     }
 
     /** Pointer is the final HUD layer so its click position remains visible over every surface. */
-    fun ensureOnTop() {
-        val manager = windowManager ?: return
-        val currentRoot = root ?: return
-        val layout = params ?: return
-        runCatching {
-            manager.removeView(currentRoot)
-            manager.addView(currentRoot, layout)
-        }.onFailure { logError("Pointer overlay z-order refresh failed", it) }
+    private val ambientWindow = object : AmbientWindow {
+        override val layer = AmbientLayer.POINTER
+
+        override fun readd(): Boolean {
+            val manager = windowManager ?: return false
+            val currentRoot = root ?: return false
+            val layout = params ?: return false
+            return runCatching {
+                manager.removeView(currentRoot)
+                manager.addView(currentRoot, layout)
+            }.onFailure { logError("Pointer overlay z-order refresh failed", it) }.isSuccess
+        }
     }
 
     private fun pointerParams() = WindowManager.LayoutParams(

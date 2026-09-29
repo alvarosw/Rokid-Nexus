@@ -19,6 +19,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.anezium.rokidbus.client.ui.NexusGlyphs
 import com.anezium.rokidbus.client.ui.NexusUi
+import com.anezium.rokidbus.glasses.hud.AmbientLayer
+import com.anezium.rokidbus.glasses.hud.AmbientStack
+import com.anezium.rokidbus.glasses.hud.AmbientWindow
 import com.anezium.rokidbus.shared.PhoneBatteryContract
 
 /**
@@ -235,6 +238,7 @@ internal object StatusBadgeOverlayRenderer {
             if (runCatching { manager.addView(next, nextParams) }.isFailure) return
             root = next
             params = nextParams
+            AmbientStack.main.added(ambientWindow)
         }
         currentRoot.render(phone)
         params?.let { layout ->
@@ -250,6 +254,21 @@ internal object StatusBadgeOverlayRenderer {
         runCatching { windowManager?.removeView(currentRoot) }
         root = null
         params = null
+        AmbientStack.main.removed(AmbientLayer.BADGE)
+    }
+
+    private val ambientWindow = object : AmbientWindow {
+        override val layer = AmbientLayer.BADGE
+
+        override fun readd(): Boolean {
+            val manager = windowManager ?: return false
+            val currentRoot = root ?: return false
+            val layout = params ?: return false
+            return runCatching {
+                manager.removeView(currentRoot)
+                manager.addView(currentRoot, layout)
+            }.isSuccess
+        }
     }
 
     internal data class LauncherRead(

@@ -26,6 +26,9 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.anezium.rokidbus.client.ui.BusTheme
+import com.anezium.rokidbus.glasses.hud.AmbientLayer
+import com.anezium.rokidbus.glasses.hud.AmbientStack
+import com.anezium.rokidbus.glasses.hud.AmbientWindow
 import com.anezium.rokidbus.shared.ActivityTrack
 /**
  * The ROM sleeps the display five seconds after the last input (vendor-set
@@ -117,9 +120,14 @@ object NoticeOverlayRenderer {
     private var composeUnsubscribe: (() -> Unit)? = null
 
     private val slide = HudMotionValue(0f) { offset -> band?.translationY = offset }
+        .also { it.onIdle = ::motionIdle }
     private val fade = HudMotionValue(0f) { alpha ->
         band?.alpha = alpha
         scrim?.alpha = noticeBackdropAlpha(alpha, backdrop)
+    }.also { it.onIdle = ::motionIdle }
+
+    private fun motionIdle() {
+        if (!ambientWindow.isAnimating) AmbientStack.main.animationEnded()
     }
 
     fun onServiceConnected(service: AccessibilityService) {
@@ -146,14 +154,21 @@ object NoticeOverlayRenderer {
         windowManager = null
     }
 
-    /** Re-add above the pin when the surface window is recreated; notice goes last. */
-    fun ensureOnTop() {
-        val manager = windowManager ?: return
-        val root = container ?: return
-        runCatching {
-            manager.removeView(root)
-            manager.addView(root, params(root.context))
-        }.onFailure { logError("Notice overlay z-order refresh failed", it) }
+    private val ambientWindow = object : AmbientWindow {
+        override val layer = AmbientLayer.NOTICE
+
+        // The band slides and fades in and out inside this window; re-adding would cut it short.
+        override val isAnimating: Boolean
+            get() = slide.isRunning || fade.isRunning
+
+        override fun readd(): Boolean {
+            val manager = windowManager ?: return false
+            val root = container ?: return false
+            return runCatching {
+                manager.removeView(root)
+                manager.addView(root, params(root.context))
+            }.onFailure { logError("Notice overlay z-order refresh failed", it) }.isSuccess
+        }
     }
 
     fun isShown(): Boolean = container != null
@@ -312,6 +327,7 @@ object NoticeOverlayRenderer {
         band = view
         view.alpha = 0f
         fade.snapTo(0f)
+        AmbientStack.main.added(ambientWindow)
         return view
     }
 
@@ -347,6 +363,7 @@ object NoticeOverlayRenderer {
         container = null
         scrim = null
         band = null
+        AmbientStack.main.removed(AmbientLayer.NOTICE)
         inkMorph = null
         backdrop = false
         exitRunning = false
