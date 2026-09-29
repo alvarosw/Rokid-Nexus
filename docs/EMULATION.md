@@ -55,6 +55,18 @@ stamped with the uptime clock on delivery). `launcher` broadcasts `OPEN_LAUNCHER
 
 The hubs link the vendor CXR library: build without `-PskipCxrGlobal=true` (the script does).
 
+## Slowing motion down and reduced motion
+
+The host's animations honor `animator_duration_scale`: `0` is reduced motion (every transition lands on
+its end state with no intermediate frame) and any other value multiplies the durations. A raw
+`screencap` loop sees about one frame per 150 ms, so read a 220 ms morph at scale 6:
+
+```
+adb shell settings put global animator_duration_scale 6   # slow motion
+adb shell settings put global animator_duration_scale 0   # reduced motion
+adb shell settings put global animator_duration_scale 1   # normal; restore it when done
+```
+
 ## The x86_64 CXR stub
 
 The vendor `libcxr-bridge-jni.so` ships only for arm64/armv7 and the Cuttlefish image has

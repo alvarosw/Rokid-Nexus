@@ -236,3 +236,62 @@ selectedId, mode, status, tileData)` and draws it with `ListHome` or `GridHome`,
   app layer. The row and tile views are stable per id, so the morph can animate the real view or a
   ghost of its rect without rebinding anything. `HudLoaderView` is the loader to reuse inside the
   morphing panel. `TileExpansionAnimator`/`DownscaleBlur` are untouched and unused by the home layer.
+
+### U5 (motion, and two live-tile fixes)
+
+Implemented in `glasses-hub/.../glasses/hud/`: `HudMotionDriver`, `HudMorph` (with `MorphPlan` and
+`MorphPanelView`), focus and scroll motion in `HomeScreenView`/`ListHome`/`GridHome`, and the item
+views. `TileExpansionAnimator` and `DownscaleBlur` are deleted; `shared/.../motion/TileRectTween`
+stays and is the morph's rect interpolation.
+
+- One driver. `HudMotionDriver` owns the frame source (`Choreographer`, or a hand-stepped clock in
+  tests), the one easing (fast-out-slow-in 0.4/0/0.2/1) and the reduced-motion check, which is read
+  when an animation starts. `animator_duration_scale == 0` lands every value on its target inside
+  the call; any other scale multiplies the durations, which is how the emulator runs read a 220 ms
+  morph frame by frame. Durations are `RokidHudTokens` only: structural (morph), default (focus
+  ring, scroll offset), feedback (surface cross-fade), scan (`Loader`). `DURATION_STRUCTURAL_MS` is
+  now 220, as this document has always said; the 320 in the source tokens was never used by a
+  shipped animation. `HudMotion`/`HudMotionValue` stay for the notice, Ink and chart animations
+  until U6/U7.
+- What triggers what. `HudHost.sync(screen)` compares the previous and the new machine screen and
+  `HudMorphPlan.of` (pure, JVM-tested) says what to animate: Home to Opening = **open** (panel grows
+  from `HomeLayer.itemBounds(id)` to the app safe area, `Loader` inside); Opening to App with
+  origin HOME = **reveal** (the surface appears clipped to the panel and cross-fades in, 120 ms);
+  Opening to Home (deadline, failure, Dismiss) and App(origin HOME) to Home = **collapse** onto the
+  item; everything else, including every Hidden and External transition and a launcher opened over
+  a surface, is **instant**. A selection move also animates the scroll offset and the focus ring at
+  `duration-default`; every other change (show, update, tile data) lands at once.
+- Interruptibility. Every visual is a function of two values, `progress` (panel at the item = 0,
+  at the safe area = 1) and `reveal`. A new plan retargets from the current values, at the speed a
+  full tween would have; `Instant`, and a selection move during a close, snap them and lay the
+  layers out statically. The driver's callbacks only move views: no animation callback emits a
+  `HudEvent`, sends on the bus or reads the machine. Bounds are read after `settleMotion()` ends
+  the scroll and focus animations, so a morph never starts from a moving item.
+- The panel is `Panel` style (1 px `line`, `radius-panel`, transparent). It starts as the item it
+  replaces (fill, 2 px `focus` border, and the item's content as a bitmap) and cross-fades to the
+  panel style over the first third of the morph, so no frame has an item frame and a panel frame at
+  once. The home is not drawn inside the panel's rect (`clipOutRect`) and is dimmed with a plain
+  alpha of 0.48: `text-secondary`'s step, which puts 72 % text at 34.6 %, the design's 0.35. A
+  `ground` backdrop sits under both layers while the morph runs (an emulator artifact: `ground` is
+  unlit on the optic, but a dimmed layer over the emulator's opaque black would show the wallpaper).
+- Live tiles name their plugin: the same `TileHeaderView` as fallback tiles (16 px icon over the
+  `label` uppercase name, top-left) on every size, above the live value.
+- One critical per screen, one 2 px frame. Focus owns the only 2 px `focus` frame. A live tile
+  never draws a 2 px critical frame: `CRITICAL` is the alert icon at 100 % on a solid 1 px
+  `text-primary` border and the icon alone blinks 3 times at `duration-default` (then steady, and
+  not at all under reduced motion); `WARN` is the alert icon at 72 % on the dashed border. The
+  icon carries "critical" because border thickness is the focus vocabulary. When several tiles are
+  critical only one is (`GridHome.assignCriticalRoles`): the focused one if it is critical, else
+  the first in packer order; the others read as `WARN`. A focused critical tile shows the focus
+  chrome and keeps its 100 % icon.
+
+Deviations, with the reason: the settled critical tile is not the Status contract's 2 px border (it
+would put a second 2 px frame on screen beside the focus ring); `WARN` live tiles gained the
+contract's alert icon (needed so a demoted critical still reads as an alert); the surface content
+itself is not restyled and its layer has no frame after a reveal (U7).
+
+For U6 (ambient z-order): the host window is still the single window; nothing in U5 touches the
+ambient windows. For U7 (surface content): a reveal clips and fades the whole `AppLayer`, so any
+surface content that draws outside the 16/12+inset/448 safe area is clipped while it appears, and a
+see-through card (Ink) pops from the `ground` backdrop to the real world when the morph ends on the
+emulator only.
