@@ -1,0 +1,165 @@
+# Glasses UI rewrite: architecture and delivery plan
+
+Status: approved direction (product owner, 2026-09-29). Replaces the incremental grid-HUD
+approach in `docs/grid-hud-roadmap/` for everything on the glasses side; the phone-side layout
+editor, `TileSize`, `TileGridPacker`, `TileLayoutStore`, the tile data pipeline and all wire
+contracts stay.
+
+Inputs this plan is built on:
+
+- `docs/HARDWARE.md` — every hardware/ROM fact (IDs such as D1, P1, R3, B1 are cited below).
+- `docs/ui-rewrite/01-current-behavior.md` — current behavior, bugs (F-n) and the 186-item parity
+  checklist (§7). The checklist is the acceptance suite of this rewrite.
+- `docs/EMULATION.md` — Cuttlefish at the glasses canvas, fake phone, capture scripts.
+
+## 1. Goals and non-goals
+
+Goals: one predictable UI where exactly one owner decides what is on screen and who receives each
+key; no moment in which a Nexus flow is in progress but no Nexus window owns input; motion that is
+real (one view hierarchy) and always interruptible; one design system (`RokidHudTokens`) for list
+and grid; everything validated in emulation before it counts as done.
+
+Non-goals: changing any bus path, payload, capability or the public SDK (`BUSSPEC.md`,
+`docs/PLUGIN_SDK.md`); changing the Ink compiler; the camera pipeline; SelfArm/onboarding flows.
+The trusted `/core/native-apps/*`, `/core/remote-input/*`, `/core/navigation/*`, `/core/pointer/*`
+routes stay hub-only.
+
+## 2. Architecture
+
+```
+ raw KeyEvents ──► HudInput ──► HudIntent ─┐
+ bus envelopes ──► controllers ─► HudEvent ─┼─► HudStateMachine (pure) ──► HudState + [HudEffect]
+ timers (injected clock) ───────────────────┘                                 │
+                                                                              ▼
+                                              HudHost (1 persistent window) ◄─ effects runner
+                                                ├─ HomeLayer  (ListHome | GridHome)
+                                                └─ AppLayer   (existing surface views, re-hosted)
+                                              AmbientStack (notice, pin, activity, badge, pointer)
+```
+
+All new code lives in `glasses-hub/.../glasses/hud/`. Old classes are deleted when the delivery
+that replaces them lands; nothing runs two implementations side by side behind a flag.
+
+### 2.1 `HudStateMachine` — the single owner
+
+Pure Kotlin, no Android types, driven by an injected clock/scheduler; 100% JVM-testable.
+
+State (one value, not a union of booleans):
+
+- `Hidden` — no Nexus foreground. Keys pass to the system.
+- `Home(mode, selectedId)` — launcher visible. Selection is by plugin id, not index (F-30).
+- `Opening(pluginId, openToken, deadline)` — the home stays on screen and owns input until the
+  plugin's surface arrives or the deadline passes (fixes F-1/F-3, HARDWARE X3).
+- `App(surfaceId, origin)` — a surface is open in the `AppLayer`; `origin` says whether dismiss
+  returns to `Home` or to `Hidden`.
+- `External(kind, origin)` — content outside our window (ACTIVITY display path, Camera, native
+  app). Our window is detached or non-focusable; returning is explicit.
+
+Rules:
+
+- Every transition emits effects (`SendLauncherOpen`, `ShowHost`, `HideHost`, `PublishRingFocus`,
+  `Animate…`, `ForwardKeyToSurface`, …). Views never call controllers and controllers never call
+  views; both talk only to the machine.
+- A surface show is matched to an open by `openToken` + plugin id; unsolicited shows never claim a
+  launcher return. Pending opens expire (F-3).
+- Ring focus (`NEXUS_RING_FOCUS`) is derived: focused ⇔ state ≠ `Hidden` or a notice owns the ring.
+  `RingFocusCoordinator`'s handoff timer and `LauncherReturnCoordinator` are deleted.
+- BACK/dismiss is always answered by the state it lands in. `Hidden` is the only state that lets
+  BACK reach the ROM (HARDWARE B1 — whether to add a guard there is an open product question, kept
+  as one explicit rule in the machine, not a timestamp heuristic in the service).
+
+### 2.2 `HudInput` — one normalizer for every key source
+
+Converts ring (R08), touchpad and DPAD/keyboard events into `HudIntent`s (`Next`, `Prev`,
+`Select`, `Dismiss`, `OpenLauncher`, `Raw(key)` for surfaces that need raw keys). It owns, once:
+DOWN/UP pairing and orphan-UP consumption (R3), tap/double/triple-tap windows with a single clock
+(R10), touchpad first-contact KEYCODE 83 handling (T1/T2/T4), device classification (R1).
+
+Debug seam: a debug-source-set receiver injects raw events *tagged as a given device class*
+(e.g. R08), so the real ring pipeline runs in emulation — `adb input keyevent` alone never reaches
+it (HARDWARE §13).
+
+### 2.3 `HudHost` — one window for home and app
+
+A single `TYPE_ACCESSIBILITY_OVERLAY` window. It is attached on `Hidden → *` and detached only on
+`* → Hidden` or `* → External`; it is never removed between `Home`, `Opening` and `App`. Layers are
+switched by visibility inside one hierarchy. Constraints from HARDWARE §6: never animate
+`updateViewLayout`; chrome windows stay non-focusable; `FLAG_KEEP_SCREEN_ON` is not trusted for
+staying awake (P1/P2) — wake is requested through the existing `DisplayWakePolicy`.
+
+Geometry comes from one `HudGeometry` object (visible viewport, safe area, content width) derived
+from `RokidHudTokens`; nothing else reads `displayMetrics` for layout. The visible-viewport origin
+inside the Android window is a single value, pending HARDWARE Q1 (see §5).
+
+### 2.4 `HomeLayer` — list and grid, one design system
+
+Both modes render the same model `(entries, selectedId, tileData)` and use only `RokidHudTokens`
+(`BusTheme` is retired from the glasses launcher). Views are keyed by plugin id and updated in
+place; a selection move changes focus state only, never rebuilds the tree (F-8). Live-data tiles
+show selection/focus like fallback tiles (F-10). No `ScrollView` grain (S5): scrolling is our own
+offset. List follows `ListItem` (32 px rows, 3–4 visible at a time is the design rule — to be
+checked against 352 px).
+
+### 2.5 `AppLayer` — existing content, new host
+
+`SurfaceHudView`, `InkHudView`, `ImageHudView`, `MediaHudView`, `ReaderSurfaceView` are re-hosted
+unchanged at first (their contracts and the Ink first-frame gate, I1–I3, are preserved). Restyling
+their content to the design system is a later, separate delivery.
+
+### 2.6 Motion
+
+State changes are immediate; views animate toward the current state. One `HudMotion` driver,
+durations from `RokidHudTokens` (structural 220 ms), reduced-motion → instant end state. Any new
+event cancels an in-flight animation and snaps it; no callback of an animation ever triggers a
+state transition or a bus send (F-12: tween sending `/launcher/open` after BACK).
+
+Open morph: the tile's panel grows to the safe area inside `HudHost`, shows a `Loader` while
+`Opening`, and the real surface view appears inside it on `App`. Close is the reverse onto a live
+tile. `External` transitions are instant (no morph across windows).
+
+### 2.7 `AmbientStack`
+
+Notice, pin, activity, status badge and pointer keep their own windows (they must float over
+foreign apps too) but z-order is declared once and re-asserted by one owner whenever any window
+is added (F-17: pin below notice).
+
+## 3. Decisions taken for the "decision needed" parity items
+
+Recorded here so they can be reviewed; each becomes a test.
+
+| Item (01 §7) | Decision |
+|---|---|
+| 10 pin vs notice | Pin always below notice (documented intent). |
+| 34 selection identity | By plugin id; survives list updates. |
+| 56 live tile focus | Live tiles show selection and focus exactly like fallback tiles. |
+| 62 open/close motion | Real morph inside `HudHost`, 220 ms, siblings dimmed, instant under reduced motion. |
+| 69 pending open expiry | Token-matched, expires at the `Opening` deadline; unsolicited shows never claim a return. |
+| 87 phone link loss | Keep HEAD behavior (surface stays) for now; flagged for product review. |
+| 119 input with launcher over surface | The launcher gets exclusive input; nothing leaks to the surface below. |
+
+## 4. Deliveries
+
+Each delivery is one agent task on branch `ui-rewrite`, one commit (or a few), and is done only
+when: its JVM tests pass, the relevant parity items are ticked, the four hub/shared suites pass,
+and it was exercised on the Cuttlefish with the fake phone, with captures attached.
+
+| # | Delivery | Replaces / deletes |
+|---|---|---|
+| U1 | `HudInput` + debug raw-event injection seam | input parts of `RokidBusAccessibilityService`, `RingTapPolicy`, `DpadPairDedupe` usage |
+| U2 | `HudStateMachine` + full [JVM] test suite for launcher/app/handoff items | — (not wired yet) |
+| U3 | `HudHost` + `HomeLayer` list (new design) + `AppLayer` re-hosting; wire U1+U2; `MainActivity`/`OpenLauncherReceiver`/triple-tap all go through the machine | `LauncherOverlayRenderer`, `SurfaceOverlayRenderer`, `LauncherReturnCoordinator`, ring handoff in `RingFocusCoordinator`, `MainActivity` list |
+| U4 | Grid home (keyed tiles, live + fallback) | `GridLauncherView`, `TileGridContainer` |
+| U5 | Motion (morph, loader, focus) | `TileExpansionAnimator`, ghost/blur code |
+| U6 | `AmbientStack` z-order owner | `HudOverlayStack` |
+| U7 | Restyle surface content to `RokidHudTokens` | `BusTheme` use on glasses |
+
+U1 and U2 are independent. U3 needs both. U4–U6 need U3. U7 last.
+
+## 5. Open questions blocking specific work
+
+- HARDWARE Q1/Q2 (window 480×640 @1.5 vs lit 480×352; where the lit rows sit; density). Blocks
+  only the value of `HudGeometry`'s viewport origin; code is written against the abstraction.
+- HARDWARE B1/Q5: whether a BACK arriving in `Hidden` shortly after a dismissal should be
+  swallowed. One rule in the machine, default off until decided.
+- Emulator is API 37; the device is API 32. An API 32 Cuttlefish is feasible (docs/EMULATION.md)
+  and will be set up before U3 is declared done if API-specific window behavior shows up.
