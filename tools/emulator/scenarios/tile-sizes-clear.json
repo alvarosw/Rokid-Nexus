@@ -1,0 +1,12 @@
+{
+  "description": "Clears the custom tile layout.",
+  "envelopes": [
+    {
+      "path": "/glasses/tile-layout/config",
+      "payload": {
+        "version": 1,
+        "entries": []
+      }
+    }
+  ]
+}

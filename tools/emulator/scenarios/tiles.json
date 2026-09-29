@@ -1,0 +1,61 @@
+{
+  "description": "Live tile snapshots for media, transit, tasker and nav (grid mode only; the hub drops them in list mode).",
+  "envelopes": [
+    {
+      "path": "/tile/publish",
+      "payload": {
+        "pluginId": "media",
+        "contentKey": "k-media",
+        "title": "12",
+        "subtitle": "",
+        "badge": "",
+        "progress": null,
+        "unit": "min",
+        "tone": "ok",
+        "rows": []
+      }
+    },
+    {
+      "path": "/tile/publish",
+      "payload": {
+        "pluginId": "transit",
+        "contentKey": "k-transit",
+        "title": "Late",
+        "subtitle": "Line 4",
+        "badge": "",
+        "progress": null,
+        "unit": "",
+        "tone": "warn",
+        "rows": []
+      }
+    },
+    {
+      "path": "/tile/publish",
+      "payload": {
+        "pluginId": "tasker",
+        "contentKey": "k-tasker",
+        "title": "3",
+        "subtitle": "",
+        "badge": "",
+        "progress": null,
+        "unit": "new",
+        "tone": "critical",
+        "rows": []
+      }
+    },
+    {
+      "path": "/tile/publish",
+      "payload": {
+        "pluginId": "nav",
+        "contentKey": "k-nav",
+        "title": "4.2",
+        "subtitle": "",
+        "badge": "",
+        "progress": null,
+        "unit": "km",
+        "tone": "info",
+        "rows": []
+      }
+    }
+  ]
+}
