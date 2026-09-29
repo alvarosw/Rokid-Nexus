@@ -1,0 +1,6 @@
+{
+  "description": "Hides the pin from ambient-pin.json.",
+  "envelopes": [
+    {"path": "/pin/hide", "payload": {"surfaceId": "nav:pin"}}
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "description": "Hides the pointer of ambient-pointer.json.",
+  "envelopes": [
+    {"path": "/core/pointer/command", "payload": {"version": 1, "type": "pointer_command", "streamId": "emulator-pointer-stream-01", "sequence": 2, "action": "hide"}}
+  ]
+}

@@ -124,7 +124,7 @@ internal class FakePhone(
     private fun parseStep(json: JSONObject): FakeStep {
         val path = json.getString("path")
         val payload = json.optJSONObject("payload") ?: JSONObject()
-        val stampSeq = path.startsWith("/surface/") && !payload.has("seq")
+        val stampSeq = STAMPED_PREFIXES.any(path::startsWith) && !payload.has("seq")
         val binary = json.optString("binaryBase64").takeIf { it.isNotEmpty() }
             ?.let { Base64.decode(it, Base64.DEFAULT) }
         val envelope = if (json.has("id")) {
@@ -133,5 +133,10 @@ internal class FakePhone(
             BusEnvelope(path = path, payload = payload, binary = binary)
         }
         return FakeStep(json.optLong("delayMs", 0L), envelope, stampSeq)
+    }
+
+    private companion object {
+        /** Paths whose payload carries the phone hub's own `seq`. */
+        val STAMPED_PREFIXES = listOf("/surface/", "/notice/", "/pin/", "/activity/")
     }
 }

@@ -162,5 +162,21 @@ debug-only classes.
 
 - The receiver reads files under `/data/local/tmp`, like the Ink harness.
 - `/surface/input` and other outbound traffic go nowhere; add rules only for `/launcher/open`.
-- Camera, media sync, self-arm and tiles are not scripted; tile/notice/activity envelopes can still be
-  sent as plain envelopes.
+- Camera, media sync, self-arm and tiles are not scripted; tile envelopes can still be sent as plain
+  envelopes.
+
+### Ambient layers
+
+`/notice/*`, `/pin/*` and `/activity/*` envelopes without a `seq` get a fresh one, like `/surface/*`.
+The `ambient-*` scenarios put one layer up or take it down:
+
+```
+tools/emulator/fake-phone.sh ambient-notice ambient-pin ambient-activity   # 45 s notice, top-right pin, top-left chip
+tools/emulator/fake-phone.sh ambient-pointer                                # cursor; hides itself after 8 s
+tools/emulator/fake-phone.sh ambient-notice-hide ambient-pin-hide ambient-activity-end ambient-pointer-hide
+```
+
+The pointer stream id needs 16+ characters and a rising `sequence`; change `streamId` to replay it.
+`adb shell dumpsys window windows` lists the overlays top to bottom (all named after the package); tell
+them apart by frame and `fl=` flags: the host has no `NOT_FOCUSABLE`, the pointer has
+`LAYOUT_NO_LIMITS`, the notice `KEEP_SCREEN_ON`, the pin is a small frame.

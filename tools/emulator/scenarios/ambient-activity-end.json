@@ -1,0 +1,6 @@
+{
+  "description": "Ends the activity from ambient-activity.json.",
+  "envelopes": [
+    {"path": "/activity/end", "payload": {"surfaceId": "media:activity", "ownerPluginId": "media"}}
+  ]
+}

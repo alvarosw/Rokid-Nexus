@@ -52,6 +52,20 @@ class FakePhoneTest {
     }
 
     @Test
+    fun `notice pin and activity envelopes get monotonic seq too`() {
+        phone.play(
+            phone.parse(
+                """[{"path":"/notice/show","payload":{"surfaceId":"a:n"}},
+                    {"path":"/pin/show","payload":{"surfaceId":"a:p"}},
+                    {"path":"/activity/start","payload":{"surfaceId":"a:local"}},
+                    {"path":"/pin/hide","payload":{"seq":9}}]""",
+            ),
+        )
+
+        assertEquals(listOf(101L, 102L, 103L, 9L), delivered.map { it.payload.getLong("seq") })
+    }
+
+    @Test
     fun `step delays accumulate and defer delivery`() {
         phone.play(
             phone.parse(

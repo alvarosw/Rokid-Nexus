@@ -295,3 +295,55 @@ ambient windows. For U7 (surface content): a reveal clips and fades the whole `A
 surface content that draws outside the 16/12+inset/448 safe area is clipped while it appears, and a
 see-through card (Ink) pops from the `ground` backdrop to the real world when the morph ends on the
 emulator only.
+
+### U6 (AmbientStack, and the late show of a cancelled open)
+
+Implemented in `glasses-hub/.../glasses/hud/AmbientStack.kt`. `HudOverlayStack` is deleted and the
+five `ensureOnTop()` functions with it.
+
+- **Declared order, bottom to top:** `HOST` (launcher and surfaces), `BADGE`, `PIN`, `ACTIVITY`,
+  `NOTICE`, `POINTER`. This is 01 §1.3's intended stack (`pin < activity < notice < pointer`) with the
+  host underneath, and it is the architecture §3 decision "pin always below notice". The badge sits
+  just above the host: it only exists while no Nexus window is up, so its place matters only if a
+  host appears later, and there it must not end up on top. `AmbientLayer.focusable` is true for
+  `HOST` alone (HARDWARE W4); every ambient window keeps `NOT_FOCUSABLE | NOT_TOUCHABLE`, which the
+  emulator confirms with `dumpsys window` while keys still reach the host.
+- **Every add goes through the stack.** `HudHost.attach`, and the pin, activity, notice, pointer and
+  badge renderers, call `AmbientStack.main.added(window)` right after their `addView` and
+  `removed(layer)` when the window goes. F-17 is closed: a pin created under a live notice, a notice
+  created under the pointer, and a host attached under any of them all end in the declared order.
+- **How reordering works.** Android has no z-index for accessibility overlays and no call that moves
+  one, so the only tool is removing and adding a window again; the stack minimises it. It mirrors the
+  window manager's order. A new window is on top, so only the windows that must be above it (and
+  are now below) are re-added, lowest first; adding in the declared order re-adds nothing, and a
+  notice appearing over a pin touches neither. A window that is animating (`AmbientWindow.isAnimating`:
+  the notice's slide or fade, an activity island's spring) is not re-added mid-animation: it is
+  re-added when its animation goes idle (`HudMotionValue.onIdle`, `HudIslandView.onIdle` call
+  `animationEnded()`), with a 2 s backstop for a missed signal. The windows that belong above it
+  wait behind it, so each is re-added once. The cost is that a notice sliding in under a host or pin
+  added at that moment is covered for the rest of its slide (about 280 ms; emulator capture in
+  slow motion), which was judged better than cutting the slide. `updateViewLayout` is not used for
+  ordering.
+- **Camera (F-16).** The intent is that pin, notice and activity hide over the camera: BUSSPEC says
+  so for the pin, plan 011 says the pin hook "hides the notice too", `CameraOverlayView` calls both
+  setters, and `noticeOwnsRingInput` is false while the camera is up (item 139). HARDWARE C2's
+  "no HUD element other than notices" contradicts the code and was not followed. The flag was only set
+  inside the `:camera` process, where those singletons have no window. `CameraOverlayView` now
+  reports only the bridge edge and `AmbientStack.setCameraOverlayActive` fans it out in the main
+  process to `PinController`, `NoticeController` and `ActivityController`. The pointer stays (remote
+  input has to remain visible); the badge only exists over the ROM launcher.
+- **Late show of a cancelled open.** `HudState.cancelledOpen` records the plugin and the open's own
+  deadline when a Dismiss cancels `Opening`. A `SurfaceShown` matching that plugin (`matchesOpen`)
+  before the deadline emits `CloseApp(surfaceId, OPEN_CANCELLED)`, changes no screen and attaches no
+  window, so nothing is drawn or flashed. `SurfaceController.closeFromHud` handles `OPEN_CANCELLED`
+  exactly like a wearer dismissal (BACK is forwarded to the plugin), so the wire has no new value.
+  After the deadline the show is unsolicited as before. Selecting the plugin again clears the
+  record, and a show of the surface already beneath the launcher is an update, not a late answer.
+  Only a Dismiss cancels this way; a launcher toggled away from `Opening` keeps the old rule.
+
+Deviations and limits: the badge cannot be exercised on the emulator (it needs the ROM launcher's view
+ids), so its place is covered by the JVM permutation test only; the camera path was driven with the
+debug `CameraFixtureActivity`, not a real camera session.
+
+For U7: nothing in surface content depends on window order. The activity and notice renderers still
+own their visuals and state machines; only their window handling moved.

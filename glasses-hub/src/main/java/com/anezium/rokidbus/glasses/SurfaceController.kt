@@ -301,6 +301,7 @@ object SurfaceController {
             val surface = active?.takeIf { it.surfaceId == surfaceId } ?: return@runOnMain
             when (reason) {
                 CloseReason.WEARER_DISMISSED, CloseReason.OPEN_CANCELLED -> {
+                    if (reason == CloseReason.OPEN_CANCELLED) log("Surface closed unseen: its open was cancelled id=$surfaceId")
                     forwardSurfaceInput(KeyEvent.KEYCODE_BACK, KeyEvent.ACTION_DOWN)
                     closeAsWearer(surface)
                 }

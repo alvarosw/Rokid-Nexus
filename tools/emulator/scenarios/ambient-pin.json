@@ -1,0 +1,6 @@
+{
+  "description": "A pin in the top-right corner, no expiry.",
+  "envelopes": [
+    {"path": "/pin/show", "payload": {"kind": "pin", "surfaceId": "nav:pin", "title": "Next turn", "lines": ["300 m left", "Rue de Rivoli"], "position": "top-right"}}
+  ]
+}
