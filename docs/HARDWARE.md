@@ -12,8 +12,9 @@ device or emulator by the author of this file; every claim is traceable to code 
 
 ## How to read this file
 
-- **Mandatory fact: the glasses display is 480x352 px** (confirmed by the product owner, 2026-09-29).
-  Section 1 lists every place where code, docs, tests and screenshots disagree with that number.
+- **Mandatory fact: the glasses screen is 480x640 px** (official spec, relayed by the product owner,
+  2026-09-29). The 480x352 ("OS screen") and 480x400 ("panel") figures recorded earlier the same day are
+  **superseded**. Section 1 lists every place where code, docs, tests and screenshots disagree.
 - Path shorthand: `G/` = `glasses-hub/src/main/java/com/anezium/rokidbus/glasses/`,
   `BC/` = `bus-client/src/main/java/com/anezium/rokidbus/client/ui/`. Line numbers are for the working
   tree at compile time (`main`, `fa9c7715`). Evidence marked `stash@{0}` exists only in the stash
@@ -23,7 +24,7 @@ device or emulator by the author of this file; every claim is traceable to code 
 - "(inferred)" = deduced from code or arithmetic, not stated by any source. "(unverified)" = a claim
   in a document that nothing in the repo measures.
 - The Cuttlefish scripts in `tools/emulator/` (untracked, dated 2026-09-29) already exist:
-  `env.sh` (adb at `/opt/cuttlefish/cf/bin/adb`, serial `0.0.0.0:6520`, `GLASSES_SIZE=480x352`,
+  `env.sh` (adb at `/opt/cuttlefish/cf/bin/adb`, serial `0.0.0.0:6520`, `GLASSES_SIZE=480x640`,
   `GLASSES_DENSITY=240`), `setup-display.sh` (`wm size` / `wm density`), `install-and-arm.sh`
   (enables the accessibility service through `settings put secure`, `svc power stayon true`,
   `input keyevent KEYCODE_WAKEUP`), `ring.sh` (`input keyevent 85/87/88/4`), `capture.sh`.
@@ -39,7 +40,7 @@ Fact counts per section: see the table at the end of the file ("Summary of count
 
 | Topic | What each source says |
 |---|---|
-| Visible size | Owner (2026-09-29): **480x352**. `BC/RokidHudTokens.kt:92-93` `CANVAS_WIDTH=480`, `CANVAS_HEIGHT=352`. `docs/grid-hud-roadmap/00-overview.md:85` says 480x400 is the *physical* display and 480x352 only the "AIUI reference viewport". `docs/AIUI_RUNTIME.md:13`: page host observed "at 480x640 and 480x400". |
+| Visible size | Owner (2026-09-29, official spec): **480x640**; `BC/RokidHudTokens.kt` `CANVAS_WIDTH=480`, `CANVAS_HEIGHT=640`. ~~Earlier the same day: 480x352, `CANVAS_HEIGHT=352`~~ (superseded). `docs/grid-hud-roadmap/00-overview.md:85` says 480x400 is the *physical* display and 480x352 only the "AIUI reference viewport". `docs/AIUI_RUNTIME.md:13`: page host observed "at 480x640 and 480x400". |
 | Android window space | 480x640 px at density 1.5 on real RG glasses: `G/StatusBadgeGeometry.kt:7-8`, `glasses-hub/src/test/.../InkTemplateTortureTest.kt:31` (`w320dp-h427dp-hdpi`), `contracts/2026-08-16-lyrics-home-widget.contract.md:158` ("480x640 framebuffer"), `BUSSPEC.md:2264` ("nominal 480x640 display"), every activity `android:screenOrientation="portrait"` (`glasses-hub/src/main/AndroidManifest.xml`), all 32 untracked screenshots in the repo root (`afterback1.png` ... `wrapper_v3.png`) are 480x640. |
 | Roborazzi baseline | `glasses-hub/src/test/.../GridLauncherScreenshotTest.kt:32-37`: `w480dp-h400dp-mdpi` (density 1.0, 480x400 px), commented as "the HUD's real physical canvas". |
 | Density | 1.5 (240 dpi): `StatusBadgeGeometry.kt:8`, `InkTemplateTortureTest` hdpi, `stash@{0}` GridLauncherView comment (480 px is 320 dp), `tools/emulator/env.sh` (240). 2.0: `phone-hub/.../HudPositionPreviewView.kt:196,200` (`PANEL_DENSITY = 2f`, "480x640 px at 2x density"). 1.0: the Roborazzi test. |
@@ -51,22 +52,22 @@ Fact counts per section: see the table at the end of the file ("Summary of count
 
 ### 1.1 Facts
 
-**D1. The display hardware is 480x400; the OS exposes a 480x352 px screen (owner, 2026-09-29).**
-- **Resolved**: the OS screen is the full 480x352 with no lit-rows offset, so the visible viewport is that screen at origin 0,0 (`HudGeometry`). The 480x640 window evidence in D2 and Q1 came from an earlier firmware/configuration and is **superseded**; it is kept below as history.
-- **Fact**: Owner-confirmed on 2026-09-29. The design canvas in code already equals it.
-- **Evidence**: task statement; `BC/RokidHudTokens.kt:90-93`.
-- **Current handling**: only the grid-HUD token object knows it; the list launcher, notice band, pin, activity and surface hosts size from `displayMetrics` (D2) with fractions/margins tuned on device.
-- **Requirement**: the new UI defines one `DisplayGeometry` (visible width 480 px, height 352 px) and every layout budget (safe area, grid, band, pin/activity corners, launcher) derives from it. A render test at exactly 480x352 must show no element crossing any edge and the bottom row fully inside.
-- **Emulable?**: yes. `wm size 480x352; wm density 240` (`tools/emulator/setup-display.sh`).
+**D1. The glasses screen is 480x640 px (official spec, product owner, 2026-09-29).**
+- **Resolved**: the screen is the full 480x640 with no lit-rows offset, so the visible viewport is that screen at origin 0,0 (`HudGeometry`). ~~The display hardware is 480x400 and the OS exposes a 480x352 screen~~ — that statement, recorded earlier on 2026-09-29, is **superseded** by the official spec; the 480x640 window evidence in D2 and Q1 is valid again.
+- **Fact**: Owner-confirmed from the official specification on 2026-09-29. The token unit is the pixel (D5), so safe-x 16, safe-y 12 and content-width 448 apply as written; the vertical budget is 640 - 2 x 12 = 616 px.
+- **Evidence**: task statement; D2; `BC/RokidHudTokens.kt` `CANVAS_WIDTH/HEIGHT`; `G/hud/HudGeometry.kt`.
+- **Current handling**: the home layer (list and grid) is sized from `HudGeometry` and the tokens only; the notice band, pin, activity and surface hosts still size from `displayMetrics` (D2) with fractions/margins tuned on device.
+- **Requirement**: the new UI defines one `HudGeometry` (visible width 480 px, height 640 px) and every layout budget (safe area, grid, band, pin/activity corners, launcher) derives from it. A render test at exactly 480x640 must show no element crossing any edge and the bottom row fully inside. The design system's "3-4 items at a time" was written for the 352 reference canvas; the home layer shows as many whole rows as fit.
+- **Emulable?**: yes. `wm size 480x640; wm density 240` (`tools/emulator/setup-display.sh`).
 
-**D2. (Superseded by D1: earlier firmware/configuration.) Android exposes a 480x640 px window space at density 1.5 (240 dpi) on the real glasses.**
-- **Fact**: displayMetrics on the RG glasses read 480x640 px @1.5 (320x427 dp); the hub is portrait-only. How this relates to the 352 visible rows is not documented anywhere (open question Q1).
+**D2. Android exposes a 480x640 px window space at density 1.5 (240 dpi) on the real glasses.** (Briefly marked superseded on 2026-09-29 by the 480x352 figure; valid again after the official spec, D1.)
+- **Fact**: displayMetrics on the RG glasses read 480x640 px @1.5 (320x427 dp); the hub is portrait-only. The official spec makes the whole 480x640 the screen; how the ROM's own rows relate to it is D3/Q1.
 - **Evidence**: `G/StatusBadgeGeometry.kt:7-8` ("RG-glasses (480x640 @1.5) on 2026-07-28"); `InkTemplateTortureTest.kt:31`; `contracts/2026-08-16-lyrics-home-widget.contract.md:158`; `BUSSPEC.md:2264`; `G/InkCardPresentation.kt:10-22` (`HudBandGeometry.availableHeightPx(displayHeightPx, topPx)`), tested with 640 in `InkCardPresentationTest.kt:27-30`.
 - **Current handling**: `NoticeOverlayRenderer` (max band height 0.65 / 0.92 of `resources.displayMetrics.heightPixels`, `:491-496,877-878`), pointer geometry (`RemotePointerOverlayRenderer.kt:66-73`), `InkCardClipHost` and Camera (480x640) all scale from `metrics.heightPixels`, i.e. 640, not 352.
 - **Requirement**: no component may use `heightPixels` (or a literal 640/400) as "the screen height" until Q1 is answered. Provide the visible rect from one place and run every geometry test at 480x352, 480x400 and 480x640 (with `HudTopInset` applied) until the mapping is known; bands and cards must never be positioned by a fraction of 640.
 - **Emulable?**: yes. `wm size 480x640`, `wm density 240`; only the optics question needs the device.
 
-**D3. The ROM draws its own UI far below row 352 in that window space.**
+**D3. The ROM draws its own UI in the lower part of that 640-row window space (y 306..400 on the home layout).**
 - **Fact**: The ROM home status container spans y 306..400 (icons y 355..375, clock/weather left, wifi/battery right); the hint zone `no_plan_tips` is y 288..310; in-launcher app screens (teleprompter) relocate the container to y 466..560. (Measured 2026-07-28 and 2026-08-16.)
 - **Evidence**: `G/StatusBadgeGeometry.kt:9-26`; `contracts/2026-08-16-lyrics-home-widget.contract.md:162-164`.
 - **Current handling**: `StatusBadgeOverlayRenderer` reads the live node bounds every time (never a constant) and hides when it cannot find them (`:164-167`, `:73-76` of its doc).
@@ -84,7 +85,7 @@ Fact counts per section: see the table at the end of the file ("Summary of count
 - **Fact**: Real density is 1.5 (see 1.0). Sizes given in "px" in design docs (16, 12, 448) are applied as dp by the tokens, giving 24/18 px insets and a 432 px content width, not 16/12/448.
 - **Evidence**: 1.0 table; `BC/RokidHudTokens.kt:122-123`; `BC/HudFrameLayout.kt:23-27`; `G/StatusBadgeGeometry.kt:54-56` (20 px icons = 13 dp glyph at this density).
 - **Current handling**: mixed: dp for tokens, px literals in some ROM-alignment code, mdpi in one Roborazzi test.
-- **Requirement**: decide the unit of every token (dp or px) in one place; snapshot tests run at `w320dp-h235dp-hdpi` (480x352 px @1.5) and assert pixel sizes (e.g. safe inset = 24/18 px if dp, 16/12 px if px). No test may use `mdpi` for glasses geometry.
+- **Requirement**: decide the unit of every token (dp or px) in one place; snapshot tests run at `w320dp-h427dp-hdpi` (480x640 px @1.5) and assert pixel sizes (e.g. safe inset = 24/18 px if dp, 16/12 px if px). No test may use `mdpi` for glasses geometry.
 - **Emulable?**: yes. `wm density 240`; Robolectric qualifier `w320dp-h235dp-hdpi`.
 
 **D6. Platform identity: Android 12L / API 32, YodaOS, firmware `SKQ1.240613.001`.**
@@ -98,7 +99,7 @@ Fact counts per section: see the table at the end of the file ("Summary of count
 - **Fact**: 480 px is about 320 dp; four 96 dp tiles plus gaps are 408 dp, so a fixed unit ran columns off the right edge. Available width after safe padding is 288 dp -> unit = (288 - 3x8) / 4 = 66 dp (99 px) (inferred arithmetic).
 - **Evidence**: `stash@{0}` `G/GridLauncherView.kt` hunk "The tile unit is derived from the available width"; `G/GridLauncherView.kt:105` (working tree still `96`); `shared/.../tile/TileGridPacker.kt:13`.
 - **Current handling**: working tree: fixed 96 dp (bug); stash: `min(TILE_UNIT_DP, fitted)` recomputed in `onSizeChanged`.
-- **Requirement**: for every column count the sum of tile widths + gaps <= available width at 480x352 @240; no tile may be clipped by the right/bottom edge. Test with 1..4 columns and the largest tile spans.
+- **Requirement**: for every column count the sum of tile widths + gaps <= available width at 480x640 @240; no tile may be clipped by the right/bottom edge. Test with 1..4 columns and the largest tile spans.
 - **Emulable?**: yes.
 
 **D8. Ghost/panel geometry double-counts padding.** (stash@{0})
@@ -585,7 +586,7 @@ Fact counts per section: see the table at the end of the file ("Summary of count
 - **Fact**: window MATCH_PARENT overlay, band width 0.92 of the display width, top-centered, top margin 12 dp + inset; max height 0.65 (compact, 8 body lines) or 0.92 (pageable, up to 14); the flag is kept even though it does not stop the panel.
 - **Evidence**: `G/NoticeOverlayRenderer.kt:39-42,88-102,270-360,874-885`; `G/NoticeController.kt:136-137`.
 - **Current handling**: as stated.
-- **Requirement**: geometry budgets expressed on the visible 480x352 (D1), not 640; test the 8/14-line caps at 352.
+- **Requirement**: geometry budgets expressed on the 480x640 screen (D1); test the 8/14-line caps at 640.
 - **Emulable?**: yes.
 
 **N2. BACK always dismisses a notice first; a double ring tap is the same.**
@@ -796,7 +797,7 @@ Assumes the harness in `tools/emulator/` (`adb_` = `/opt/cuttlefish/cf/bin/adb -
 
 | Need | Command |
 |---|---|
-| Glasses canvas | `wm size 480x352; wm density 240` (or `480x640` to compare) |
+| Glasses canvas | `wm size 480x640; wm density 240` |
 | Enable the service | `settings put secure enabled_accessibility_services <pkg>/<pkg>.RokidBusAccessibilityService; settings put secure accessibility_enabled 1` |
 | 5 s timeout, no stay-on | `svc power stayon false; settings put system screen_off_timeout 5000` |
 | Sleep / wake | `input keyevent 223` / `input keyevent 224` (or `KEYCODE_WAKEUP`) |
@@ -815,7 +816,7 @@ Cannot be emulated: real 5 s timeout re-assertion at boot, the panel ignoring `F
 
 ## 14. Open questions (need an on-device check)
 
-1. **Q1 (display-size part resolved by D1: hardware 480x400, OS screen 480x352; the 640-row window was an earlier configuration) Which 352 rows are lit?** The window space is 480x640; the ROM home status row sits at y 353..375 and teleprompter chrome at 466..560, both below 352. Where is the 480x352 visible region within 640, does it move with the ROM screen-position setting, and is 480x400 (docs) ever true? Needed before any vertical fraction is reused.
+1. **Q1 (display-size part resolved by D1: the official screen is 480x640; the 480x352 / 480x400 figures are superseded) Where do the ROM's own rows sit inside the 480x640 screen?** The ROM home status row sits at y 353..375 and teleprompter chrome at 466..560; a Nexus overlay that lights those rows overlaps them. Does the region move with the ROM screen-position setting? Needed before the launcher body height is tuned against the ROM row.
 2. **Q2 Density (size part resolved, see D1):** confirm 1.5 (240 dpi); `HudPositionPreviewView` claims 2.0.
 3. **Q3 Do launcher, camera and plugin overlays survive >5 s idle?** They rely on `FLAG_KEEP_SCREEN_ON`, which is known not to stop the panel for the notice/surface windows. The grid launcher's screen-off investigation (stash) suggests a problem; measure idle-launcher wakefulness for 15 s.
 4. **Q4 What is the real screen timeout policy?** Forced 5000 at boot, wearer-adjustable, or "never turns off by itself" (1.2.6)? Does the value differ after Hi Rokid changes it?
@@ -824,7 +825,7 @@ Cannot be emulated: real 5 s timeout re-assertion at boot, the panel ignoring `F
 7. **Q7 R08 timing:** DOWN-to-UP spacing, repeat behavior and any duplicate events per tap/swipe (the 20-80 ms pair is documented only for the touchpad).
 8. **Q8 Clock bases (R10):** confirm event times are uptime and whether `elapsedRealtime` timers misfire after deep sleep.
 9. **Q9 Triple-tap on the ring** relies on the R08 Access Bridge; behavior when the bridge is absent or its version lacks "Nexus launcher".
-10. **Q10 Legibility of 12 %/6 % tints and bloom threshold** for `green-100` fills on the optics; minimum readable text size at 480x352.
+10. **Q10 Legibility of 12 %/6 % tints and bloom threshold** for `green-100` fills on the optics; minimum readable text size at 480x640.
 11. **Q11 ScrollView grain:** does it also affect the overlay launchers (list and grid), or only the activity it was removed from?
 12. **Q12 Touchpad classifier latency distribution** (300-500 ms) and the double-tap-to-BACK delay.
 13. **Q13 Is the first physical key after wake really eaten** (only shown for `adb input`)?

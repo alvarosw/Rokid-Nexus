@@ -5,9 +5,9 @@ The tooling lives in `tools/emulator/` and targets a Cuttlefish instance, but an
 
 ## Canvas and density
 
-- Display: **480 x 352 px**: the OS screen of the glasses, whose panel hardware is 480x400 (owner, 2026-09-29). This is the AIUI reference viewport (`RokidHudTokens.CANVAS_WIDTH/HEIGHT`,
-  `docs/grid-hud-roadmap/00-overview.md`). Older notes mention 480x400 or 480x640; those are not
-  the canvas to design for.
+- Display: **480 x 640 px**: the official screen of the glasses (owner, from the official spec,
+  2026-09-29; `RokidHudTokens.CANVAS_WIDTH/HEIGHT`, `HudGeometry`). The 480x352 / 480x400 figures used
+  briefly on 2026-09-29 (AIUI reference viewport, panel size) are superseded.
 - Density: **240 dpi (hdpi, 1.5x)**, i.e. 320 x 234.67 dp. Evidence in the repo:
   - `GridLauncherView` history (`git show stash@{0}`): "a 4-column row of TILE_UNIT_DP tiles is wider
     than this display on the glasses (408dp vs. 320dp)" - 480 px / 320 dp = 1.5.
@@ -17,10 +17,10 @@ The tooling lives in `tools/emulator/` and targets a Cuttlefish instance, but an
     (1 CSS px = 1 dp, matching the design mockup) and `HudPositionPreviewView.PANEL_DENSITY = 2f`.
     An mdpi canvas would make 96 dp tiles fit, contradicting the on-device overflow report.
   Density was never measured from a real unit; if it turns out different, set `GLASSES_DENSITY`.
-- Portrait-locked activities (`MainActivity`, `SurfaceActivity`) rotate a 480x352 display to
-  352x480 while they are in front. Overlays (launcher, surface overlay, notices) are windows and
-  render at 480x352. `install-and-arm.sh` goes HOME and pins rotation so captures are 480x352.
-  The 480x640 window seen on earlier firmware is superseded (HARDWARE D1).
+  The design tokens are physical pixels (safe-x 16, content 448), so layouts do not depend on it.
+- Portrait-locked activities (`MainActivity`, `SurfaceActivity`) rotate a 480x640 display to
+  640x480 while they are in front. Overlays (launcher, surface overlay, notices) are windows and
+  render at 480x640. `install-and-arm.sh` goes HOME and pins rotation so captures are 480x640.
 
 ## Scripts
 
@@ -28,7 +28,7 @@ All honor `ADB_BIN` (default `/opt/cuttlefish/cf/bin/adb`), `SERIAL` (default `0
 `GLASSES_SIZE`, `GLASSES_DENSITY`, `OUT_DIR` (default `/tmp/nexus-emu`).
 
 ```
-tools/emulator/setup-display.sh            # wm size 480x352, wm density 240 ("reset" restores)
+tools/emulator/setup-display.sh            # wm size 480x640, wm density 240 ("reset" restores)
 tools/emulator/install-and-arm.sh          # build, repack, install, enable a11y service, start hub
 SKIP_BUILD=1 tools/emulator/install-and-arm.sh
 tools/emulator/ring.sh fwd|back|tap|double|dismiss|launcher|overlay|state
@@ -66,7 +66,7 @@ The product APK is untouched. Set `X86_STUB=0` on a device that can run ARM.
 
 ## What emulation validates
 
-- Layout, sizing, typography, colors and clipping at 480x352 @ 240 dpi.
+- Layout, sizing, typography, colors and clipping at 480x640 @ 240 dpi.
 - Overlay windows via the real accessibility service: launcher, surface overlay, focus and dismiss.
 - Key routing of the ring keycodes through the accessibility key filter, BACK handling.
 - Crashes and logcat regressions in hub startup, overlays and controllers.

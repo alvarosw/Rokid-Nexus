@@ -89,7 +89,7 @@ staying awake (P1/P2) — wake is requested through the existing `DisplayWakePol
 
 Geometry comes from one `HudGeometry` object (visible viewport, safe area, content width) derived
 from `RokidHudTokens`; nothing else reads `displayMetrics` for layout. The visible-viewport origin
-inside the Android window is a single value; the OS screen is 480×352 and the viewport is all of it (HARDWARE D1).
+inside the Android window is a single value; the official screen is 480×640 and the viewport is all of it (HARDWARE D1).
 
 ### 2.4 `HomeLayer` — list and grid, one design system
 
@@ -97,8 +97,9 @@ Both modes render the same model `(entries, selectedId, tileData)` and use only 
 (`BusTheme` is retired from the glasses launcher). Views are keyed by plugin id and updated in
 place; a selection move changes focus state only, never rebuilds the tree (F-8). Live-data tiles
 show selection/focus like fallback tiles (F-10). No `ScrollView` grain (S5): scrolling is our own
-offset. List follows `ListItem` (32 px rows, 3–4 visible at a time is the design rule — to be
-checked against 352 px).
+offset. List follows `ListItem` (32 px rows). The design rule of 3–4 items at a time was written for
+the 352 px reference canvas; on the 480×640 screen the owner wants the whole screen used, so the
+list and grid show as many whole rows as fit (see §6, U3b/U4).
 
 ### 2.5 `AppLayer` — existing content, new host
 
@@ -157,7 +158,8 @@ U1 and U2 are independent. U3 needs both. U4–U6 need U3. U7 last.
 
 ## 5. Open questions blocking specific work
 
-- HARDWARE Q1/Q2 display size: resolved (panel 480×400, OS screen 480×352, no offset); density
+- HARDWARE Q1/Q2 display size: resolved (official screen 480×640, no offset; the 480×352 / 480×400
+  figures of 2026-09-29 are superseded); density
   (1.5) is still unconfirmed.
 - HARDWARE B1/Q5: whether a BACK arriving in `Hidden` shortly after a dismissal should be
   swallowed. One rule in the machine, default off until decided.
@@ -182,7 +184,7 @@ Implemented in `glasses-hub/.../glasses/hud/`:
 - `HudHost` is the persistent window with `HomeLayer` (existing list or grid content view plus one
   status line for "Opening..." and the failure) and `AppLayer` (`SurfaceHudView`). The app layer stays
   visible under a launcher opened over a surface, as that surface's own window used to.
-- `HudGeometry` holds the visible viewport (default 0,0,480x352, the whole OS screen) as one value.
+- `HudGeometry` holds the visible viewport (default 0,0,480x640, the whole screen) as one value.
 
 Deviations from §2, with the reason:
 

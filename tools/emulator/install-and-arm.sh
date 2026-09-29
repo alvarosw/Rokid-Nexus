@@ -31,7 +31,7 @@ adb_ shell wm dismiss-keyguard
 adb_ shell am start -n "$PKG/.MainActivity" >/dev/null
 sleep 2
 adb_ shell am broadcast -a "$PKG.PROBE" -n "$PKG/.ProbeBroadcastReceiver" --es probe hub
-# MainActivity is portrait-locked and rotates the 480x352 display to 352x480 while it is in
+# MainActivity is portrait-locked and rotates the 480x640 display to 640x480 while it is in
 # front; go home and pin rotation so overlays are captured at the real canvas.
 adb_ shell input keyevent HOME
 adb_ shell settings put system accelerometer_rotation 0
