@@ -614,6 +614,30 @@ class HudStateMachineTest {
     }
 
     @Test
+    fun item_112_an_update_of_the_surface_is_the_answer_and_disarms_the_failsafe() {
+        val h = Harness()
+        h.shown("s", handlesBack = true)
+        h.dismiss(at = 100)
+        val token = h.app().backToken!!
+        val fx = h.send(HudEvent.SurfaceInfoChanged("s", handlesBack = true, editable = false), at = 200)
+        assertEquals(listOf<HudEffect>(CancelDeadline), fx)
+        assertNull(h.app().backToken)
+        // The stale deadline that still fires later closes nothing.
+        assertTrue(h.send(HudEvent.DeadlineElapsed(token), at = 1_600).none { it is CloseApp })
+        assertTrue(h.screen is App)
+    }
+
+    @Test
+    fun item_112_a_reshow_of_the_same_surface_disarms_the_failsafe() {
+        val h = Harness()
+        h.shown("s", handlesBack = true)
+        h.dismiss(at = 100)
+        val fx = h.shown("s", handlesBack = true)
+        assertTrue(CancelDeadline in fx)
+        assertNull(h.app().backToken)
+    }
+
+    @Test
     fun item_111_surface_keys_and_intents_are_forwarded_not_passed() {
         val h = Harness()
         h.shown("s")

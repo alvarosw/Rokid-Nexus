@@ -307,7 +307,9 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
                 showSurface(info, path, inheritOrigin(sc, info))
                 return
             }
-            val next = surfaceScreen(info, path, originOf(sc), backTokenOf(sc))
+            // Any show of the surface is the plugin's answer to a forwarded BACK (it navigated inside
+            // itself), so the failsafe that would close it is disarmed.
+            val next = surfaceScreen(info, path, originOf(sc), null)
             val kindChanged = (sc is App) != (next is App)
             s = s.copy(screen = next)
             if (kindChanged) fx += showEffect(next)
@@ -341,9 +343,10 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
                 val cur = surfaceInfo(sc)
                 if (cur == null || cur.surfaceId != e.surfaceId) return sc
                 val info = cur.copy(handlesBack = e.handlesBack, editable = e.editable)
+                // An update is the plugin's answer to a forwarded BACK: disarm the failsafe.
                 return when (sc) {
-                    is App -> sc.copy(surface = info)
-                    is External -> sc.copy(surface = info)
+                    is App -> sc.copy(surface = info, backToken = null)
+                    is External -> sc.copy(surface = info, backToken = null)
                     else -> sc
                 }
             }
