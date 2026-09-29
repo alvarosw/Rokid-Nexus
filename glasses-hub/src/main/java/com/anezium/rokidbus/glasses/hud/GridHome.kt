@@ -12,6 +12,7 @@ import com.anezium.rokidbus.glasses.LiveTileView
 import com.anezium.rokidbus.shared.tile.TileGridPacker
 import com.anezium.rokidbus.shared.tile.TilePlacement
 import com.anezium.rokidbus.shared.tile.TileSize
+import com.anezium.rokidbus.shared.tile.TileTone
 
 /**
  * The grid rendering: four columns across the 448 px content width (unit 106 px, `space-2` gaps),
@@ -24,7 +25,8 @@ internal class GridHome(
     context: Context,
     private val iconLoader: (Context, GlassesHub.LauncherEntry) -> Drawable,
     private val sizes: (List<GlassesHub.LauncherEntry>) -> Map<String, TileSize?>,
-) : HomeScreenView(context) {
+    motion: HudMotionDriver,
+) : HomeScreenView(context, motion) {
     private class Tile(
         var entry: GlassesHub.LauncherEntry,
         val size: TileSize,
@@ -60,8 +62,8 @@ internal class GridHome(
             }
         } else {
             if (prev.selectedId != focusedId) {
-                prev.selectedId?.let { tiles[it]?.item?.setFocused(false) }
-                focusedId?.let { tiles[it]?.item?.setFocused(true) }
+                prev.selectedId?.let { tiles[it]?.item?.setFocused(false, animateMoves) }
+                focusedId?.let { tiles[it]?.item?.setFocused(true, animateMoves) }
             }
             val prevOpening = (prev.status as? HomeStatus.Opening)?.pluginId
             if (prevOpening != openingId) {
@@ -69,7 +71,21 @@ internal class GridHome(
                 openingId?.let { tiles[it]?.item?.setOpening(true) }
             }
         }
+        assignCriticalRoles(model)
         if (entriesChanged || prev?.selectedId != model.selectedId) followSelection(model.selectedId)
+    }
+
+    /**
+     * Only one tile per screen shows `critical`: the focused one if it is critical (focus wins
+     * visually, its alert icon says critical), otherwise the first in packer order. Every other
+     * critical tile reads as `WARN`.
+     */
+    private fun assignCriticalRoles(model: HomeViewModel) {
+        val critical = placements.map { it.pluginId }.filter { tiles[it]?.live?.snapshot?.tone == TileTone.CRITICAL }
+        val primary = critical.firstOrNull { it == model.selectedId } ?: critical.firstOrNull()
+        tiles.forEach { (id, tile) ->
+            (tile.view as? LiveTileView)?.setCriticalPrimary(id == primary || id !in critical)
+        }
     }
 
     private fun relayout(model: HomeViewModel) {
@@ -94,6 +110,7 @@ internal class GridHome(
                 if (tile.entry != entry) {
                     tile.entry = entry
                     (tile.view as? FallbackTileView)?.bind(entry, iconLoader)
+                    (tile.view as? LiveTileView)?.bindEntry(entry, iconLoader)
                 }
                 if (tile.live != data && data != null) {
                     (tile.view as LiveTileView).bind(data.snapshot, data.stale)
@@ -116,9 +133,12 @@ internal class GridHome(
 
     private fun createTile(entry: GlassesHub.LauncherEntry, size: TileSize, data: HomeTile?): Tile {
         val view: View = if (data != null) {
-            LiveTileView(context, size).apply { bind(data.snapshot, data.stale) }
+            LiveTileView(context, size, motion).apply {
+                bindEntry(entry, iconLoader)
+                bind(data.snapshot, data.stale)
+            }
         } else {
-            FallbackTileView(context, size).apply { bind(entry, iconLoader) }
+            FallbackTileView(context, size, motion).apply { bind(entry, iconLoader) }
         }
         return Tile(entry, size, data, view)
     }
@@ -160,7 +180,7 @@ internal class GridHome(
             if (bottom > offsetRow + visibleRows) offsetRow = bottom - visibleRows
         }
         offsetRow = offsetRow.coerceIn(0, (totalRows - visibleRows).coerceAtLeast(0))
-        strip.translationY = -(offsetRow * PITCH).toFloat()
+        scrollTo(offsetRow * PITCH)
         setPosition(offsetRow, visibleRows, totalRows)
     }
 
@@ -168,6 +188,10 @@ internal class GridHome(
         val view = tiles[id]?.view ?: return null
         return boundsOf(view)
     }
+
+    override fun itemView(id: String): View? = tiles[id]?.view
+
+    override fun settleItems() = tiles.values.forEach { it.item.settleFocus() }
 
     internal fun placementsForTest(): List<TilePlacement> = placements
 

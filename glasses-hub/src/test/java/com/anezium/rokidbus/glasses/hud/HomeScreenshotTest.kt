@@ -13,14 +13,10 @@ import com.anezium.rokidbus.shared.tile.TileSize
 import com.anezium.rokidbus.shared.tile.TileTone
 import com.github.takahirom.roborazzi.captureRoboImage
 import java.io.File
-import javax.imageio.ImageIO
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import kotlin.math.abs
 
 /**
  * Real pixels of the home layer on the glasses screen: 480x640 px at 240 dpi (`w320dp-h427dp-hdpi`).
@@ -62,6 +58,7 @@ class HomeScreenshotTest {
                     activity,
                     sizeSource = { list -> list.associate { it.id to sizes[it.id] } },
                     tileSource = { live[it] },
+                    motion = HudMotionDriver.instant(),
                 )
                 activity.setContentView(layer, FrameLayout.LayoutParams(480, 640))
                 setup(layer)
@@ -70,29 +67,6 @@ class HomeScreenshotTest {
             onView(isRoot()).captureRoboImage(path)
             assertSingleHue(File(path))
         }
-    }
-
-    private fun assertSingleHue(file: File) {
-        val image = ImageIO.read(file)
-        assertEquals("$file width", 480, image.width)
-        assertEquals("$file height", 640, image.height)
-        var lit = 0
-        for (y in 0 until image.height) for (x in 0 until image.width) {
-            val argb = image.getRGB(x, y)
-            val r = argb shr 16 and 0xFF
-            val g = argb shr 8 and 0xFF
-            val b = argb and 0xFF
-            if (g < 4 && r < 4 && b < 4) continue
-            lit++
-            // #40FF5E at any intensity over black: r = 0.251 g, b = 0.369 g (anti-aliasing keeps it).
-            assertTrue(
-                "$file pixel ($x,$y) is not the single hue: r=$r g=$g b=$b",
-                abs(r - g * 0.251) <= 4 && abs(b - g * 0.369) <= 4,
-            )
-        }
-        assertTrue("$file lit nothing", lit > 0)
-        // No large fill: lit area stays a small share of the canvas (bloom rule).
-        assertTrue("$file lit share ${lit / (480f * 640)}", lit < 480 * 640 * 0.35)
     }
 
     @Test
@@ -180,4 +154,63 @@ class HomeScreenshotTest {
 
     @Test
     fun grid_empty() = capture("grid-08-empty") { it.show(HomeMode.GRID, emptyList(), null) }
+
+    // ---- live tiles: identity, sizes and the one-critical rule ----------------------------
+
+    private val sizedLive = mapOf(
+        "plugin0" to HomeTile(snapshot("plugin0", title = "12", unit = "min", tone = TileTone.OK, subtitle = "Next bus"), false),
+        "plugin1" to HomeTile(snapshot("plugin1", title = "Late", unit = "", tone = TileTone.INFO, subtitle = "Line 4"), false),
+        "plugin2" to HomeTile(snapshot("plugin2", title = "3", unit = "new", tone = TileTone.WARN), false),
+        "plugin3" to HomeTile(snapshot("plugin3", title = "21", unit = "C", tone = TileTone.OFF), false),
+        "plugin4" to HomeTile(
+            snapshot("plugin4", title = "3", unit = "tasks", tone = TileTone.OK, subtitle = "Today")
+                .copy(rows = listOf("Call Ana", "Buy milk", "Send report")),
+            false,
+        ),
+        "plugin5" to HomeTile(snapshot("plugin5", title = "94", unit = "%", tone = TileTone.CRITICAL), false),
+    )
+    private val sizedLayout = mapOf(
+        "plugin0" to TileSize.WIDE, "plugin1" to TileSize.TALL, "plugin4" to TileSize.LARGE,
+    )
+
+    @Test
+    fun grid_live_tiles_all_sizes_carry_their_plugin_name() =
+        capture("grid-10-live-sizes-labeled", sizes = sizedLayout, live = sizedLive) {
+            it.show(HomeMode.GRID, withIcons(9), "plugin8")
+        }
+
+    @Test
+    fun grid_critical_focused_focus_wins_and_the_alert_icon_says_critical() =
+        capture("grid-11-critical-focused", sizes = sizedLayout, live = sizedLive) {
+            it.show(HomeMode.GRID, withIcons(9), "plugin5")
+            settleBlink()
+        }
+
+    @Test
+    fun grid_critical_unfocused_settled_to_a_non_focus_treatment() =
+        capture("grid-12-critical-unfocused-settled", sizes = sizedLayout, live = sizedLive) {
+            it.show(HomeMode.GRID, withIcons(9), "plugin0")
+            settleBlink()
+        }
+
+    @Test
+    fun grid_critical_unfocused_mid_blink() =
+        capture("grid-13-critical-unfocused-blink-off", sizes = sizedLayout, live = sizedLive) {
+            it.show(HomeMode.GRID, withIcons(9), "plugin0")
+            // The icon is dimmed in the first 200 ms step.
+        }
+
+    @Test
+    fun grid_two_criticals_only_the_first_is_critical() =
+        capture(
+            "grid-14-two-criticals",
+            live = sizedLive + ("plugin6" to HomeTile(snapshot("plugin6", title = "7", unit = "!", tone = TileTone.CRITICAL), false)),
+        ) {
+            it.show(HomeMode.GRID, withIcons(8), "plugin0")
+            settleBlink()
+        }
+
+    private fun settleBlink() {
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(1_500))
+    }
 }

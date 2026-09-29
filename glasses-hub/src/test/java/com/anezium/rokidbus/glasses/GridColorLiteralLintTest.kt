@@ -29,6 +29,8 @@ class GridColorLiteralLintTest {
         "hud/HomeScreenView.kt",
         "hud/ListHome.kt",
         "hud/GridHome.kt",
+        "hud/HudMorph.kt",
+        "hud/HudMotionDriver.kt",
     )
 
     private val root = File("src/main/java/com/anezium/rokidbus/glasses")

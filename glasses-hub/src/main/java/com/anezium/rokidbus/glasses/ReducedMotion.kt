@@ -13,4 +13,12 @@ import android.provider.Settings
 object ReducedMotion {
     fun isEnabled(context: Context): Boolean =
         Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+
+    /**
+     * The same setting as a multiplier for durations, `1` when unset or off. A value above `1` slows
+     * every host animation down, which is how the emulator runs read a 220 ms morph frame by frame.
+     */
+    fun durationScale(context: Context): Float =
+        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
+            .takeIf { it > 0f } ?: 1f
 }

@@ -2,6 +2,7 @@ package com.anezium.rokidbus.glasses.hud
 
 import android.content.Context
 import android.content.res.ColorStateList
+import android.graphics.Canvas
 import android.graphics.Rect
 import android.graphics.drawable.Drawable
 import android.view.Gravity
@@ -21,6 +22,7 @@ import com.anezium.rokidbus.glasses.GlassesHub
 internal class ListRowView(
     context: Context,
     private val iconLoader: (Context, GlassesHub.LauncherEntry) -> Drawable,
+    motion: HudMotionDriver? = null,
 ) : LinearLayout(context), HomeItemView {
     var entry: GlassesHub.LauncherEntry? = null
         private set
@@ -38,6 +40,11 @@ internal class ListRowView(
         visibility = GONE
     }
     private val loader = HudLoaderView(context).apply { visibility = GONE }
+    private var focusAmount = 0f
+    private val focusTransition = FocusTransition(motion) { amount ->
+        focusAmount = amount
+        applyChrome()
+    }
 
     init {
         orientation = HORIZONTAL
@@ -63,10 +70,20 @@ internal class ListRowView(
         label.text = entry.displayName
     }
 
-    override fun setFocused(focused: Boolean) {
+    override fun setFocused(focused: Boolean, animate: Boolean) {
         if (homeFocused == focused) return
         homeFocused = focused
-        applyChrome()
+        focusTransition.set(focused, animate)
+    }
+
+    override fun settleFocus() = focusTransition.settle()
+
+    override fun drawContent(canvas: Canvas) {
+        // Alpha, not visibility: a visibility change would stop and restart the loader's animator.
+        val hidden = listOf<View>(openingLabel, loader).filter { it.visibility == VISIBLE }
+        hidden.forEach { it.alpha = 0f }
+        dispatchDraw(canvas)
+        hidden.forEach { it.alpha = 1f }
     }
 
     override fun setOpening(opening: Boolean) {
@@ -79,8 +96,8 @@ internal class ListRowView(
     }
 
     private fun applyChrome() {
-        val intensity = if (homeFocused) RokidHudTokens.FOCUS else RokidHudTokens.TEXT_PRIMARY
-        background = if (homeFocused) HomeChrome.focused() else HomeChrome.rest()
+        val intensity = HomeChrome.intensity(focusAmount, RokidHudTokens.TEXT_PRIMARY)
+        background = HomeChrome.blended(focusAmount, RokidHudTokens.LINE, RokidHudTokens.BORDER_DEFAULT)
         label.setTextColor(intensity)
         icon.imageTintList = ColorStateList.valueOf(intensity)
     }
@@ -100,7 +117,8 @@ internal class ListRowView(
 internal class ListHome(
     context: Context,
     private val iconLoader: (Context, GlassesHub.LauncherEntry) -> Drawable,
-) : HomeScreenView(context) {
+    motion: HudMotionDriver,
+) : HomeScreenView(context, motion) {
     private val rows = LinkedHashMap<String, ListRowView>()
     private var offset = 0
 
@@ -123,7 +141,7 @@ internal class ListHome(
         rows.keys.filterNot { it in keep }.forEach { id -> strip.removeView(rows.remove(id)) }
         entries.forEachIndexed { index, entry ->
             val row = rows.getOrPut(entry.id) {
-                ListRowView(context, iconLoader).also { strip.addView(it) }
+                ListRowView(context, iconLoader, motion).also { strip.addView(it) }
             }
             if (row.entry != entry) row.bind(entry)
             val params = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, ROW_HEIGHT).apply {
@@ -138,8 +156,8 @@ internal class ListHome(
         if (all) {
             rows.forEach { (id, row) -> row.setFocused(id == model.selectedId) }
         } else {
-            prev?.selectedId?.let { rows[it]?.setFocused(false) }
-            model.selectedId?.let { rows[it]?.setFocused(true) }
+            prev?.selectedId?.let { rows[it]?.setFocused(false, animateMoves) }
+            model.selectedId?.let { rows[it]?.setFocused(true, animateMoves) }
         }
     }
 
@@ -173,7 +191,7 @@ internal class ListHome(
             if (bottom > offset + bodyHeight) offset = bottom - bodyHeight
         }
         offset = offset.coerceIn(0, maxOffset)
-        strip.translationY = -offset.toFloat()
+        scrollTo(offset)
         setPosition(offset, bodyHeight, contentHeight)
     }
 
@@ -181,6 +199,10 @@ internal class ListHome(
         val row = rows[id] ?: return null
         return boundsOf(row)
     }
+
+    override fun itemView(id: String): View? = rows[id]
+
+    override fun settleItems() = rows.values.forEach { it.settleFocus() }
 
     internal fun rowsForTest(): Map<String, ListRowView> = rows
 

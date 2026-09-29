@@ -49,4 +49,20 @@ class CriticalBlinkTest {
         assertEquals(alphaAtCancel, view.alpha)
         assertTrue(settledCount == 0)
     }
+
+    @Test
+    fun `reduced motion skips the blink and settles at once`() {
+        android.provider.Settings.Global.putFloat(
+            context.contentResolver,
+            android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
+            0f,
+        )
+        val view = View(context)
+        var settledCount = 0
+        CriticalBlink.animate(view) { settledCount++ }
+        assertEquals(1f, view.alpha)
+        assertEquals(1, settledCount)
+        mainLooper().idleFor(java.time.Duration.ofSeconds(2))
+        assertEquals(1f, view.alpha)
+    }
 }

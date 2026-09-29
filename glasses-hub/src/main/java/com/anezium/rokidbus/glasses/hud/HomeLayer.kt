@@ -1,6 +1,8 @@
 package com.anezium.rokidbus.glasses.hud
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Rect
 import android.graphics.drawable.Drawable
 import android.os.Handler
@@ -38,10 +40,12 @@ internal class HomeLayer(
             TileCache.get(context, id)?.let { HomeTile(it.snapshot, TileCache.isStale(it, SystemClock.elapsedRealtime())) }
         }
     },
+    internal val motion: HudMotionDriver = HudMotionDriver.forContext(context),
 ) : FrameLayout(context) {
     private var screen: HomeScreenView? = null
     private var model = HomeViewModel()
-    private var topInsetPx = 0
+    var topInsetPx = 0
+        private set
     private var stopObservingTiles: (() -> Unit)? = null
 
     // Not View.postDelayed: that queues until the view is attached, and a hidden layer must still expire.
@@ -65,11 +69,14 @@ internal class HomeLayer(
         apply(model.copy(entries = entries, selectedId = selectedId, tileData = tileData))
     }
 
-    /** A selection move is an input, so it also dismisses a failure. */
+    /**
+     * A selection move is an input, so it also dismisses a failure. It is the one change that
+     * animates: the scroll offset and the focus ring move at `duration-default`.
+     */
     fun select(selectedId: String?) {
         handler.removeCallbacks(expireFailure)
         val status = if (model.status is HomeStatus.Failed) HomeStatus.None else model.status
-        apply(model.copy(selectedId = selectedId, status = status))
+        apply(model.copy(selectedId = selectedId, status = status), animate = selectedId != model.selectedId)
     }
 
     fun showOpening(pluginId: String) {
@@ -110,6 +117,43 @@ internal class HomeLayer(
     /** Where an item is, in this layer's coordinates and with the scroll offset applied. */
     fun itemBounds(pluginId: String): Rect? = screen?.itemBounds(pluginId)
 
+    /** Ends the scroll and focus animations on their end states; bounds read after it are final. */
+    fun settleMotion() {
+        screen?.settleMotion()
+    }
+
+    /** A bitmap of one item's content, for the morph panel to keep it while it grows. */
+    fun snapshotItem(pluginId: String): Bitmap? = screen?.snapshotItem(pluginId)
+
+    /**
+     * The rect the morph panel covers: the home is not drawn inside it, so what a panel grows over
+     * is hidden rather than seen through it (black is transparent on the optic).
+     */
+    fun setCover(rect: Rect?) {
+        if (cover == rect) return
+        cover = rect?.let(::Rect)
+        invalidate()
+    }
+
+    private var cover: Rect? = null
+
+    internal val coverForTest: Rect? get() = cover
+
+    override fun dispatchDraw(canvas: Canvas) {
+        val hole = cover
+        if (hole == null) {
+            super.dispatchDraw(canvas)
+            return
+        }
+        val saved = canvas.save()
+        canvas.clipOutRect(hole)
+        super.dispatchDraw(canvas)
+        canvas.restoreToCount(saved)
+    }
+
+    // Dimming the home is a plain alpha on children that never overlap: no offscreen layer.
+    override fun hasOverlappingRendering(): Boolean = false
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         stopObservingTiles?.invoke()
@@ -123,17 +167,17 @@ internal class HomeLayer(
         super.onDetachedFromWindow()
     }
 
-    private fun apply(next: HomeViewModel) {
+    private fun apply(next: HomeViewModel, animate: Boolean = false) {
         if (screen == null || next.mode != model.mode) swapScreen(next.mode)
         model = next
-        screen?.bind(next)
+        screen?.bind(next, animate)
     }
 
     private fun swapScreen(mode: HomeMode) {
         screen?.let(::removeView)
         val next: HomeScreenView = when (mode) {
-            HomeMode.LIST -> ListHome(context, iconLoader)
-            HomeMode.GRID -> GridHome(context, iconLoader, sizeSource)
+            HomeMode.LIST -> ListHome(context, iconLoader, motion)
+            HomeMode.GRID -> GridHome(context, iconLoader, sizeSource, motion)
         }
         next.setTopInsetPx(topInsetPx)
         addView(next, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))

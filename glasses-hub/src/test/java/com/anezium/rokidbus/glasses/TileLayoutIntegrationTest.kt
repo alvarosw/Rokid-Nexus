@@ -1,5 +1,6 @@
 package com.anezium.rokidbus.glasses
 
+import com.anezium.rokidbus.glasses.hud.HudMotionDriver
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import com.anezium.rokidbus.glasses.hud.GridHome
@@ -34,7 +35,7 @@ class TileLayoutIntegrationTest {
 
     // Real icon resolution needs the app's resources; a flat drawable keeps this about layout.
     private fun gridWith(entries: List<GlassesHub.LauncherEntry>, selectedId: String): GridHome {
-        val layer = HomeLayer(context, iconLoader = { _, _ -> ColorDrawable(Color.BLACK) })
+        val layer = HomeLayer(context, iconLoader = { _, _ -> ColorDrawable(Color.BLACK) }, motion = HudMotionDriver.instant())
         layer.show(HomeMode.GRID, entries, selectedId)
         return layer.screenForTest() as GridHome
     }

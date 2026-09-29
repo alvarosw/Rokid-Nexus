@@ -28,6 +28,7 @@ class GridHomeTest {
         iconLoader = flatIcons,
         sizeSource = { sizes(it) },
         tileSource = { live[it] },
+        motion = HudMotionDriver.instant(),
     )
     private val grid get() = layer.screenForTest() as GridHome
 

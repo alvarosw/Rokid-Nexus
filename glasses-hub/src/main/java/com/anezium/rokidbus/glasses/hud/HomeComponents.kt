@@ -1,20 +1,26 @@
 package com.anezium.rokidbus.glasses.hud
 
+import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.anezium.rokidbus.client.ui.RokidHudTokens
+import com.anezium.rokidbus.glasses.GlassesHub
 import com.anezium.rokidbus.glasses.ReducedMotion
 
 /** The design system's text styles applied to a [TextView]; sizes are pixels (RokidHudTokens). */
@@ -65,15 +71,63 @@ internal object HomeChrome {
         cornerRadius = RokidHudTokens.RADIUS_CONTROL.toFloat()
     }
 
-    /** A home item at rest: hairline `line` border, no fill. */
-    fun rest(): GradientDrawable =
-        outline(android.graphics.Color.TRANSPARENT, RokidHudTokens.LINE, RokidHudTokens.BORDER_DEFAULT)
+    /**
+     * An item [amount] of the way from its resting chrome to the focused one (0 = at rest, 1 =
+     * focused). The ends are the plain drawables; in between the two frames cross-fade, so the
+     * intensities of the outgoing and the incoming item always add up to at most one focus ring.
+     */
+    fun blended(
+        amount: Float,
+        restStroke: Int,
+        restWidth: Int,
+        restDashed: Boolean = false,
+        focusDashed: Boolean = false,
+    ): Drawable {
+        if (amount <= 0f) return outline(android.graphics.Color.TRANSPARENT, restStroke, restWidth, restDashed)
+        if (amount >= 1f) {
+            return outline(RokidHudTokens.SURFACE_SELECTED, RokidHudTokens.FOCUS, RokidHudTokens.BORDER_STRONG, focusDashed)
+        }
+        return LayerDrawable(
+            arrayOf(
+                outline(android.graphics.Color.TRANSPARENT, RokidHudTokens.scaleAlpha(restStroke, 1f - amount), restWidth, restDashed),
+                outline(
+                    RokidHudTokens.scaleAlpha(RokidHudTokens.SURFACE_SELECTED, amount),
+                    RokidHudTokens.scaleAlpha(RokidHudTokens.FOCUS, amount),
+                    RokidHudTokens.BORDER_STRONG,
+                    focusDashed,
+                ),
+            ),
+        )
+    }
 
-    /** The focused item: `surface-selected`, 2 px `focus` border. */
-    fun focused(): GradientDrawable =
-        outline(RokidHudTokens.SURFACE_SELECTED, RokidHudTokens.FOCUS, RokidHudTokens.BORDER_STRONG)
+    /** [rest] text or icon intensity moved [amount] of the way to `focus`. */
+    fun intensity(amount: Float, rest: Int): Int =
+        if (amount <= 0f) rest else if (amount >= 1f) RokidHudTokens.FOCUS else ArgbEvaluator().evaluate(amount, rest, RokidHudTokens.FOCUS) as Int
 
     private const val DASH_PX = 3f
+}
+
+/**
+ * The focus ring of one home item: 0 at rest, 1 focused. A selection move animates it at
+ * `duration-default` when the owner asks for it; the item's [homeFocused] state changes at once and
+ * this only paints the way there. Without a [HudMotionDriver] it always lands immediately.
+ */
+internal class FocusTransition(motion: HudMotionDriver?, private val apply: (Float) -> Unit) {
+    private val value = motion?.value(0f, apply)
+
+    fun set(focused: Boolean, animate: Boolean) {
+        val target = if (focused) 1f else 0f
+        when {
+            value == null -> apply(target)
+            animate -> value.animateTo(target, RokidHudTokens.DURATION_DEFAULT_MS)
+            else -> value.snapTo(target)
+        }
+    }
+
+    /** Ends a running move on its target; no-op when nothing runs. */
+    fun settle() {
+        value?.let { if (it.isRunning) it.snapTo(it.target) }
+    }
 }
 
 /**
@@ -330,4 +384,42 @@ internal class ScrollTrackView(context: Context) : View(context) {
     companion object {
         const val WIDTH = 2
     }
+}
+
+/**
+ * The corner every tile carries, fallback or live: the 16 px plugin icon over a `label`-style
+ * uppercase plugin name, top-left. Stacked rather than side by side because at 106 px a name beside
+ * its icon leaves ~70 px, which cuts "NAVIGATION" mid-word.
+ */
+internal class TileHeaderView(context: Context, nameLines: Int) : LinearLayout(context) {
+    private val icon = ImageView(context)
+    private val name = HudType.label(TextView(context)).apply { maxLines = nameLines }
+
+    init {
+        orientation = VERTICAL
+        val iconSize = RokidHudTokens.ICON_SM
+        addView(icon, LayoutParams(iconSize, iconSize))
+        addView(
+            name,
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                topMargin = RokidHudTokens.SPACE_1
+            },
+        )
+    }
+
+    fun bind(
+        entry: GlassesHub.LauncherEntry,
+        iconLoader: (Context, GlassesHub.LauncherEntry) -> Drawable,
+    ) {
+        icon.setImageDrawable(iconLoader(context, entry))
+        name.text = entry.displayName.uppercase()
+    }
+
+    /** [amount] is the focus cross-fade, 0 at rest and 1 focused. */
+    fun setFocusAmount(amount: Float) {
+        name.setTextColor(HomeChrome.intensity(amount, RokidHudTokens.TEXT_SECONDARY))
+        icon.imageTintList = ColorStateList.valueOf(HomeChrome.intensity(amount, RokidHudTokens.TEXT_PRIMARY))
+    }
+
+    val nameText: String get() = name.text.toString()
 }

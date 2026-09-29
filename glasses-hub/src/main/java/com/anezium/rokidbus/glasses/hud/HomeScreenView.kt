@@ -1,6 +1,8 @@
 package com.anezium.rokidbus.glasses.hud
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Rect
 import android.view.Gravity
 import android.view.View
@@ -19,7 +21,10 @@ import kotlin.math.roundToInt
  * the status slot, in whole rows ([fitBody]); nothing is sized from the density, only from the
  * tokens, so it is the same 448 px wide at any density.
  */
-internal abstract class HomeScreenView(context: Context) : HudFrameLayout(context) {
+internal abstract class HomeScreenView(
+    context: Context,
+    protected val motion: HudMotionDriver,
+) : HudFrameLayout(context) {
     /** Clips the moving [strip] to exactly the rows or tile rows that are allowed to show. */
     protected val viewport = FrameLayout(context).apply { clipChildren = true }
 
@@ -43,6 +48,13 @@ internal abstract class HomeScreenView(context: Context) : HudFrameLayout(contex
     private var contentHeight = 0
 
     private var screenHeight = HudGeometry.DEFAULT.viewport.height
+
+    /** The strip's scroll offset in pixels; the only thing a selection move animates besides focus. */
+    private val scroll = motion.value(0f) { strip.translationY = -it }
+
+    /** True while a selection move is being bound: it animates at `duration-default`. */
+    protected var animateMoves = false
+        private set
 
     init {
         clipToPadding = false
@@ -78,10 +90,12 @@ internal abstract class HomeScreenView(context: Context) : HudFrameLayout(contex
         track.visibility = View.INVISIBLE
     }
 
-    fun bind(model: HomeViewModel) {
+    /** [animate] is set for a selection move only; every other change lands at once. */
+    fun bind(model: HomeViewModel, animate: Boolean = false) {
         if (maxBody == 0) fit()
         val prev = applied
         applied = model
+        animateMoves = animate
         val empty = model.entries.isEmpty()
         if (empty) {
             header.setCounter("WAITING FOR PHONE")
@@ -92,6 +106,7 @@ internal abstract class HomeScreenView(context: Context) : HudFrameLayout(contex
             emptyView.hide()
         }
         bindBody(prev, model)
+        animateMoves = false
         val failure = model.status as? HomeStatus.Failed
         if (failure != null) statusView.show(HudStatusView.Kind.WARN, failure.text) else statusView.hide()
     }
@@ -134,6 +149,30 @@ internal abstract class HomeScreenView(context: Context) : HudFrameLayout(contex
         applied?.let(::onBodyChanged)
     }
 
+    /** Moves the strip to [offsetPx]: animated for a selection move, at once otherwise. */
+    protected fun scrollTo(offsetPx: Int) {
+        if (animateMoves) {
+            scroll.animateTo(offsetPx.toFloat(), RokidHudTokens.DURATION_DEFAULT_MS)
+        } else {
+            scroll.snapTo(offsetPx.toFloat())
+        }
+    }
+
+    /** Ends the scroll and every focus cross-fade on their end states, so bounds are final. */
+    fun settleMotion() {
+        if (scroll.isRunning) scroll.snapTo(scroll.target)
+        settleItems()
+    }
+
+    /** Draws the content of item [id] (no chrome) into a bitmap of the item's size. */
+    fun snapshotItem(id: String): Bitmap? {
+        val view = itemView(id) ?: return null
+        if (view.width <= 0 || view.height <= 0) return null
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        (view as HomeItemView).drawContent(Canvas(bitmap))
+        return bitmap
+    }
+
     /** Draws the indicator for a body of [contentSize] of which [viewSize] shows from [offset]. */
     protected fun setPosition(offset: Int, viewSize: Int, contentSize: Int) {
         if (contentSize <= viewSize) {
@@ -153,6 +192,10 @@ internal abstract class HomeScreenView(context: Context) : HudFrameLayout(contex
 
     /** Where an item is, in this view's coordinates, scroll offset included. Null if unknown. */
     abstract fun itemBounds(id: String): Rect?
+
+    protected abstract fun itemView(id: String): View?
+
+    protected abstract fun settleItems()
 
     /**
      * [view]'s rect in this view's coordinates. Translations are added by hand: the strip moves by

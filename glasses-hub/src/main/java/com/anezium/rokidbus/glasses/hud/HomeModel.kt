@@ -1,5 +1,6 @@
 package com.anezium.rokidbus.glasses.hud
 
+import android.graphics.Canvas
 import com.anezium.rokidbus.glasses.GlassesHub
 import com.anezium.rokidbus.shared.tile.TileSnapshot
 
@@ -37,8 +38,17 @@ internal interface HomeItemView {
     val homeFocused: Boolean
     val homeOpening: Boolean
 
-    /** Focus is the one selection the home layer has: fill, 2 px focus border, focus text. */
-    fun setFocused(focused: Boolean)
+    /**
+     * Focus is the one selection the home layer has: fill, 2 px focus border, focus text. The
+     * state changes at once; [animate] only cross-fades the chrome at `duration-default`.
+     */
+    fun setFocused(focused: Boolean, animate: Boolean = false)
+
+    /** Ends a focus cross-fade on its end state, so the item is drawn as it will rest. */
+    fun settleFocus()
+
+    /** Draws the item's content only, at the item's own size: no chrome, no loader. */
+    fun drawContent(canvas: Canvas)
 
     /** Shows or hides the `Loader` while the plugin's surface is being opened. */
     fun setOpening(opening: Boolean)

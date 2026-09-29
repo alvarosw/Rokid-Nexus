@@ -5,6 +5,7 @@ import android.graphics.PixelFormat
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.glasses.HudOverlayStack
 import com.anezium.rokidbus.glasses.logError
 
@@ -15,25 +16,40 @@ import com.anezium.rokidbus.glasses.logError
  * only when it enters them again, never between Home, Opening and App.
  *
  * The window's own layout params are set once. Nothing here calls `updateViewLayout` (HARDWARE W3):
- * later motion moves child views inside this fixed window.
+ * motion moves child views inside this fixed window. [sync] is told what the machine's screen is and
+ * lays the layers out for it at once; [HudMorph] then animates the open and close between the home
+ * and the app toward that state, and can be interrupted by the next [sync] at any moment.
  */
 internal class HudHost(
     context: Context,
     private val windowManager: WindowManager,
     val geometry: HudGeometry = HudGeometry.DEFAULT,
+    motion: HudMotionDriver = HudMotionDriver.forContext(context),
+    val home: HomeLayer = HomeLayer(context, motion = motion),
 ) {
-    val home = HomeLayer(context)
     val app = AppLayer(context)
+    private val panel = MorphPanelView(context)
+    private val backdrop = View(context).apply {
+        setBackgroundColor(RokidHudTokens.GROUND)
+        visibility = View.GONE
+    }
     private val root = HudRootView(context)
+    private val morph = HudMorph(home, app, panel, backdrop, geometry, motion) { layOutStatically() }
+
+    /** The screen the layers are laid out for, whatever motion is still playing toward it. */
+    private var shown: HudScreen = HudScreen.Hidden
 
     var isAttached = false
         private set
 
     init {
         val frame = FrameLayout(context)
+        frame.addView(backdrop, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         frame.addView(app, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         frame.addView(home, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        frame.addView(panel, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         root.addView(frame, geometry.viewportLayoutParams())
+        panel.visibility = View.GONE
         showLayers(homeVisible = false, appVisible = false)
     }
 
@@ -61,6 +77,8 @@ internal class HudHost(
         if (!isAttached) return
         isAttached = false
         runCatching { windowManager.removeView(root) }
+        morph.snap()
+        shown = HudScreen.Hidden
         app.clear()
         home.clear()
         showLayers(homeVisible = false, appVisible = false)
@@ -72,24 +90,45 @@ internal class HudHost(
      * drawing and its first-frame gate is unaffected.
      */
     fun sync(screen: HudScreen) {
+        val previous = shown
+        shown = screen
+        val homeVisible = isHomeVisible(screen)
+        val appVisible = isAppVisible(screen)
+        val morphing = morph.handle(HudMorphPlan.of(previous, screen))
+        if (!morphing) showLayers(homeVisible, appVisible)
+        if (!isAttached) return
+        if (homeVisible && !isHomeVisible(previous)) root.requestFocus()
+        if (!homeVisible && appVisible) app.focusContent()
+    }
+
+    private fun layOutStatically() {
+        showLayers(isHomeVisible(shown), isAppVisible(shown))
+    }
+
+    private fun isHomeVisible(screen: HudScreen) = screen is HudScreen.Home || screen is HudScreen.Opening
+
+    private fun isAppVisible(screen: HudScreen): Boolean {
         val beneath = when (screen) {
             is HudScreen.Home -> screen.beneath
             is HudScreen.Opening -> screen.home.beneath
             else -> null
         }
-        val homeVisible = screen is HudScreen.Home || screen is HudScreen.Opening
-        val appVisible = screen is HudScreen.App || beneath is HudScreen.App
-        val homeWasVisible = home.visibility == View.VISIBLE
-        showLayers(homeVisible, appVisible)
-        if (!isAttached) return
-        if (homeVisible && !homeWasVisible) root.requestFocus()
-        if (!homeVisible && appVisible) app.focusContent()
+        return screen is HudScreen.App || beneath is HudScreen.App
     }
 
     private fun showLayers(homeVisible: Boolean, appVisible: Boolean) {
         home.visibility = if (homeVisible) View.VISIBLE else View.GONE
         app.visibility = if (appVisible) View.VISIBLE else View.GONE
     }
+
+    /** The window's content, for a test that draws the host without a window manager. */
+    internal val contentViewForTest: View get() = root
+
+    internal val panelForTest: MorphPanelView get() = panel
+
+    internal val backdropForTest: View get() = backdrop
+
+    internal val morphForTest: HudMorph get() = morph
 
     private class HudRootView(context: Context) : FrameLayout(context) {
         init {

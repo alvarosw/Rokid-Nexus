@@ -28,6 +28,12 @@ object CriticalBlink {
     }
 
     fun animate(target: View, onSettled: (() -> Unit)? = null): Handle {
+        // Reduced motion: the steady end state, no blink (checked at animation start).
+        if (ReducedMotion.isEnabled(target.context)) {
+            target.alpha = SETTLED_ALPHA
+            onSettled?.invoke()
+            return Handle {}
+        }
         val handler = Handler(Looper.getMainLooper())
         val totalSteps = BLINK_COUNT * 2
         var step = 0

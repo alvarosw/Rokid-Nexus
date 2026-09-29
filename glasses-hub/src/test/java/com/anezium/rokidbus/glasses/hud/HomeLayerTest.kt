@@ -29,6 +29,7 @@ class HomeLayerTest {
         iconLoader = flatIcons,
         sizeSource = sizesOf(),
         tileSource = { live[it] },
+        motion = HudMotionDriver.instant(),
     )
 
     private val list get() = layer.screenForTest() as ListHome
@@ -119,7 +120,7 @@ class HomeLayerTest {
         TileController.start(context)
         try {
             val entries = entries(2)
-            val cache = HomeLayer(context, flatIcons, sizesOf())
+            val cache = HomeLayer(context, flatIcons, sizesOf(), motion = HudMotionDriver.instant())
             val host = android.widget.FrameLayout(context)
             val windowed = org.robolectric.Robolectric.buildActivity(android.app.Activity::class.java).setup().get()
             windowed.setContentView(host)

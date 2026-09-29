@@ -1,5 +1,6 @@
 package com.anezium.rokidbus.glasses.hud
 
+import android.graphics.Rect
 import android.widget.FrameLayout
 import com.anezium.rokidbus.client.ui.RokidHudTokens
 
@@ -25,6 +26,17 @@ data class HudGeometry(val viewport: Viewport = Viewport()) {
             leftMargin = viewport.left
             topMargin = viewport.top
         }
+
+    /**
+     * The app safe area, in viewport coordinates: `safe-x` in, `safe-y` plus the synced HUD top
+     * inset down from the top, `safe-y` up from the bottom. The rect an open panel grows to.
+     */
+    fun appBounds(topInsetPx: Int): Rect = Rect(
+        RokidHudTokens.SAFE_X,
+        RokidHudTokens.SAFE_Y + topInsetPx,
+        RokidHudTokens.SAFE_X + RokidHudTokens.CONTENT_WIDTH,
+        viewport.height - RokidHudTokens.SAFE_Y,
+    )
 
     companion object {
         val DEFAULT = HudGeometry()

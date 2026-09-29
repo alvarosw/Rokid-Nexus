@@ -20,7 +20,7 @@ import org.robolectric.annotation.Config
 @Config(qualifiers = "w320dp-h427dp-hdpi")
 class ListHomeTest {
     private val context = RuntimeEnvironment.getApplication()
-    private val layer = HomeLayer(context, iconLoader = flatIcons, sizeSource = sizesOf(), tileSource = { null })
+    private val layer = HomeLayer(context, iconLoader = flatIcons, sizeSource = sizesOf(), tileSource = { null }, motion = HudMotionDriver.instant())
     private val list get() = layer.screenForTest() as ListHome
 
     private val bodyTop = RokidHudTokens.SAFE_Y + HomeHeaderView.HEIGHT + HomeScreenView.GAP

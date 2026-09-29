@@ -28,4 +28,13 @@ class ReducedMotionTest {
         Settings.Global.putFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1.5f)
         assertFalse(ReducedMotion.isEnabled(context))
     }
+
+    @Test
+    fun `duration scale is the setting, one when unset or off`() {
+        org.junit.Assert.assertEquals(1f, ReducedMotion.durationScale(context), 0f)
+        Settings.Global.putFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 5f)
+        org.junit.Assert.assertEquals(5f, ReducedMotion.durationScale(context), 0f)
+        Settings.Global.putFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
+        org.junit.Assert.assertEquals(1f, ReducedMotion.durationScale(context), 0f)
+    }
 }
