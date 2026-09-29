@@ -51,14 +51,15 @@ Fact counts per section: see the table at the end of the file ("Summary of count
 
 ### 1.1 Facts
 
-**D1. The display is 480x352 px.**
+**D1. The display hardware is 480x400; the OS exposes a 480x352 px screen (owner, 2026-09-29).**
+- **Resolved**: the OS screen is the full 480x352 with no lit-rows offset, so the visible viewport is that screen at origin 0,0 (`HudGeometry`). The 480x640 window evidence in D2 and Q1 came from an earlier firmware/configuration and is **superseded**; it is kept below as history.
 - **Fact**: Owner-confirmed on 2026-09-29. The design canvas in code already equals it.
 - **Evidence**: task statement; `BC/RokidHudTokens.kt:90-93`.
 - **Current handling**: only the grid-HUD token object knows it; the list launcher, notice band, pin, activity and surface hosts size from `displayMetrics` (D2) with fractions/margins tuned on device.
 - **Requirement**: the new UI defines one `DisplayGeometry` (visible width 480 px, height 352 px) and every layout budget (safe area, grid, band, pin/activity corners, launcher) derives from it. A render test at exactly 480x352 must show no element crossing any edge and the bottom row fully inside.
 - **Emulable?**: yes. `wm size 480x352; wm density 240` (`tools/emulator/setup-display.sh`).
 
-**D2. Android exposes a 480x640 px window space at density 1.5 (240 dpi) on the real glasses.**
+**D2. (Superseded by D1: earlier firmware/configuration.) Android exposes a 480x640 px window space at density 1.5 (240 dpi) on the real glasses.**
 - **Fact**: displayMetrics on the RG glasses read 480x640 px @1.5 (320x427 dp); the hub is portrait-only. How this relates to the 352 visible rows is not documented anywhere (open question Q1).
 - **Evidence**: `G/StatusBadgeGeometry.kt:7-8` ("RG-glasses (480x640 @1.5) on 2026-07-28"); `InkTemplateTortureTest.kt:31`; `contracts/2026-08-16-lyrics-home-widget.contract.md:158`; `BUSSPEC.md:2264`; `G/InkCardPresentation.kt:10-22` (`HudBandGeometry.availableHeightPx(displayHeightPx, topPx)`), tested with 640 in `InkCardPresentationTest.kt:27-30`.
 - **Current handling**: `NoticeOverlayRenderer` (max band height 0.65 / 0.92 of `resources.displayMetrics.heightPixels`, `:491-496,877-878`), pointer geometry (`RemotePointerOverlayRenderer.kt:66-73`), `InkCardClipHost` and Camera (480x640) all scale from `metrics.heightPixels`, i.e. 640, not 352.
@@ -814,8 +815,8 @@ Cannot be emulated: real 5 s timeout re-assertion at boot, the panel ignoring `F
 
 ## 14. Open questions (need an on-device check)
 
-1. **Q1 Which 352 rows are lit?** The window space is 480x640; the ROM home status row sits at y 353..375 and teleprompter chrome at 466..560, both below 352. Where is the 480x352 visible region within 640, does it move with the ROM screen-position setting, and is 480x400 (docs) ever true? Needed before any vertical fraction is reused.
-2. **Q2 Density:** confirm 1.5 (240 dpi); `HudPositionPreviewView` claims 2.0.
+1. **Q1 (display-size part resolved by D1: hardware 480x400, OS screen 480x352; the 640-row window was an earlier configuration) Which 352 rows are lit?** The window space is 480x640; the ROM home status row sits at y 353..375 and teleprompter chrome at 466..560, both below 352. Where is the 480x352 visible region within 640, does it move with the ROM screen-position setting, and is 480x400 (docs) ever true? Needed before any vertical fraction is reused.
+2. **Q2 Density (size part resolved, see D1):** confirm 1.5 (240 dpi); `HudPositionPreviewView` claims 2.0.
 3. **Q3 Do launcher, camera and plugin overlays survive >5 s idle?** They rely on `FLAG_KEEP_SCREEN_ON`, which is known not to stop the panel for the notice/surface windows. The grid launcher's screen-off investigation (stash) suggests a problem; measure idle-launcher wakefulness for 15 s.
 4. **Q4 What is the real screen timeout policy?** Forced 5000 at boot, wearer-adjustable, or "never turns off by itself" (1.2.6)? Does the value differ after Hi Rokid changes it?
 5. **Q5 Which BACK sources hit the ROM `onKeyUp(BACK)` sleep?** Ring double-tap through the bridge, touchpad double-tap classification, the idle-activity `GLOBAL_ACTION_BACK` (B2), or all? Is 4 s enough on every path?
