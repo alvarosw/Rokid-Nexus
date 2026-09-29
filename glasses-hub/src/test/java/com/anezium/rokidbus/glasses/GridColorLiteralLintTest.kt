@@ -18,22 +18,31 @@ class GridColorLiteralLintTest {
         Regex("""BusTheme\.(phosphor|dim|text|hairline|muted|bg|card|cardPressed|well|danger)\b"""),
     )
 
-    // The new grid package's own files. RokidHudTokens/HudFrameLayout (bus-client) are the token
-    // object itself and are exempt by design; everything that renders a grid tile lives here.
-    private val gridFiles = listOf(
+    // Every file that renders the home layer. RokidHudTokens/HudFrameLayout (bus-client) are the
+    // token object itself and are exempt by design.
+    private val homeFiles = listOf(
         "FallbackTileView.kt",
-        "GridLauncherView.kt",
+        "LiveTileView.kt",
+        "hud/HomeComponents.kt",
+        "hud/HomeLayer.kt",
+        "hud/HomeModel.kt",
+        "hud/HomeScreenView.kt",
+        "hud/ListHome.kt",
+        "hud/GridHome.kt",
     )
 
-    @Test
-    fun `no raw color literal or BusTheme reference in the new grid package`() {
-        val root = File("src/main/java/com/anezium/rokidbus/glasses")
-        assertTrue("expected grid package at ${root.absolutePath}", root.isDirectory)
+    private val root = File("src/main/java/com/anezium/rokidbus/glasses")
 
-        gridFiles.forEach { name ->
-            val file = File(root, name)
-            assertTrue("missing expected grid file $name", file.isFile)
-            val text = file.readText()
+    private fun text(name: String): String {
+        val file = File(root, name)
+        assertTrue("missing expected home file $name (looked in ${root.absolutePath})", file.isFile)
+        return file.readText()
+    }
+
+    @Test
+    fun `no raw color literal or BusTheme reference in the home layer`() {
+        homeFiles.forEach { name ->
+            val text = text(name)
             forbidden.forEach { pattern ->
                 val match = pattern.find(text)
                 assertTrue(
@@ -41,6 +50,32 @@ class GridColorLiteralLintTest {
                     match == null,
                 )
             }
+        }
+    }
+
+    @Test
+    fun `no ScrollView and no density-scaled units in the home layer`() {
+        // HARDWARE S5: layers dither grey grain, so scrolling is our own offset. Tokens are pixels.
+        val forbiddenUnits = listOf(
+            Regex("""\bScrollView\b"""),
+            Regex("""RokidHudTokens\.dp\("""),
+            Regex("""_TEXT_SIZE_SP\b"""),
+            Regex("""COMPLEX_UNIT_(SP|DIP)"""),
+            Regex("""displayMetrics\.(density|scaledDensity)"""),
+        )
+        homeFiles.forEach { name ->
+            val text = text(name)
+            forbiddenUnits.forEach { pattern ->
+                val match = pattern.find(text.lineSequence().filterNot { it.trimStart().startsWith("*") || it.trimStart().startsWith("//") }.joinToString("\n"))
+                assertTrue("forbidden ${pattern.pattern} found in $name: ${match?.value}", match == null)
+            }
+        }
+    }
+
+    @Test
+    fun `the renderings never rebuild the whole tree`() {
+        listOf("hud/ListHome.kt", "hud/GridHome.kt").forEach { name ->
+            assertTrue("removeAllViews in $name", !text(name).contains("removeAllViews"))
         }
     }
 }

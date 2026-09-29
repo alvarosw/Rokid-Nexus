@@ -197,3 +197,42 @@ Deviations from §2, with the reason:
   signal that the camera activity left the display.
 - With the accessibility service not connected an overlay-path surface still falls back to its
   activity as before, but it is not moved back onto the overlay when the service returns.
+
+### U3b + U4 (home layer: list and grid, design-system pixels)
+
+Implemented in `glasses-hub/.../glasses/hud/`: `HomeLayer` holds one `HomeViewModel(entries,
+selectedId, mode, status, tileData)` and draws it with `ListHome` or `GridHome`, both built on
+`HomeScreenView` (header, body, status slot, position indicator). `LauncherMenuView`,
+`GridLauncherView` and `TileGridContainer` are deleted.
+
+- Views are keyed by plugin id and diffed in place. A selection move calls `setFocused` on the old
+  and the new item only; an entry change adds, removes and re-positions by id; a tile-data change
+  swaps or rebinds that one tile. Nothing calls `removeAllViews` and there is no `ScrollView`
+  (`GridColorLiteralLintTest` enforces both). `TileCache.observe` notifies an attached `HomeLayer`
+  of every write, which fixes F-10.
+- Units: `RokidHudTokens` and `HudFrameLayout` are physical pixels now (safe-x 16, safe-y 12,
+  content 448, text via `applyTextSize`/`COMPLEX_UNIT_PX`). The only dp left is the synced HUD top
+  inset, converted once in `HudTopInset.toPx`. Blast radius: the two files above, `FallbackTileView`,
+  `LiveTileView` and the home layer; `phone-hub` does not reference them.
+- Vertical budget on 480x640: header 16, `space-1` gaps, a 24 px `Status` slot, so the body may take
+  `640 - 24 - 16 - 8 - 24 = 568` px. The list shows every whole 32 px row that fits (14, i.e. 552 px),
+  the grid every whole 106 px tile row (5, 562 px). The body is only as tall as its content, so the
+  failure strip sits directly under the last row or tile row. A HUD top inset takes rows away
+  instead of pushing the body off the screen. This deliberately exceeds `ListItem`'s "3-4 items";
+  the owner asked for the whole screen.
+- List rows: 32 px, 20 px icon, `body` label; focused = `surface-selected` fill + 2 px `focus`
+  border + `focus` text; at rest a hairline `line` border. The list scrolls by its own offset with
+  one row of context around the selection. Grid tiles: 106 px unit, `space-2` gaps, sizes from
+  `TileLayoutStore`, whole-row scrolling (a TALL/LARGE tile always shows whole), selection order =
+  packer order. Fallback tiles stack icon over name (an icon-beside-name header leaves ~70 px and
+  cut "NAVIGATION"). Live tiles take the same focus chrome (dashed for `WARN`); a stale snapshot dims
+  the content only.
+- `Opening` = `Loader` (scan, 1200 ms, one static frame under reduced motion) on the selected row
+  ("OPENING" label) or tile (bottom edge), only while the open is in flight. A failed open is
+  `Status warn` (alert icon, dashed `line-control` border) until the next input or 4 s. The empty
+  state is `Status off`.
+- For U5: the morph starts at `HomeLayer.itemBounds(pluginId)` (row or tile rect in home-layer
+  coordinates, scroll offset included) and ends at the safe area (16, 12 + inset, 448 wide) of the
+  app layer. The row and tile views are stable per id, so the morph can animate the real view or a
+  ghost of its rect without rebinding anything. `HudLoaderView` is the loader to reuse inside the
+  morphing panel. `TileExpansionAnimator`/`DownscaleBlur` are untouched and unused by the home layer.

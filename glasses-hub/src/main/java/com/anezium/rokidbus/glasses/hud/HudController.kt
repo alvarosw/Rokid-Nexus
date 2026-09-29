@@ -356,7 +356,7 @@ internal object HudController {
                 }
                 is HudEffect.SetHomeSelection -> host?.home?.select(effect.selectedId)
                 is HudEffect.RefreshHomeEntries -> host?.home?.update(entriesFor(effect.entries), effect.selectedId)
-                is HudEffect.ShowOpening -> host?.home?.showOpening(label(effect.pluginId))
+                is HudEffect.ShowOpening -> host?.home?.showOpening(effect.pluginId)
                 is HudEffect.ShowApp -> showApp(host, effect.surfaceId)
                 is HudEffect.ShowActivitySurface ->
                     context?.let { SurfaceController.startSurfaceActivity(it, effect.surfaceId) }

@@ -93,6 +93,12 @@ internal object HudTopInset {
 
     fun sanitize(value: Int): Int = PhoneHubCapabilitiesContract.sanitizeHudTopInsetDp(value)
 
+    /**
+     * The inset is measured against the ROM's own rows in dp, but the design tokens are pixels: this
+     * is the one place a synced dp inset becomes the pixels a home layer pads by.
+     */
+    fun toPx(context: Context, dp: Int): Int = (sanitize(dp) * context.resources.displayMetrics.density).roundToInt()
+
     private fun ensureLoaded(context: Context) {
         if (initialized) return
         state = readPersisted(context)

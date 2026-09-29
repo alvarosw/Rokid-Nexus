@@ -46,4 +46,13 @@ class RokidHudTokensTest {
         assertEquals(16, RokidHudTokens.SAFE_X)
         assertEquals(12, RokidHudTokens.SAFE_Y)
     }
+
+    @Test
+    fun `tokens are pixels on the 480x640 screen and the content column is 448 wide`() {
+        assertEquals(480, RokidHudTokens.CANVAS_WIDTH)
+        assertEquals(640, RokidHudTokens.CANVAS_HEIGHT)
+        assertEquals(448, RokidHudTokens.CONTENT_WIDTH)
+        assertEquals(RokidHudTokens.CANVAS_WIDTH - 2 * RokidHudTokens.SAFE_X, RokidHudTokens.CONTENT_WIDTH)
+        assertEquals(32, RokidHudTokens.LIST_ITEM_HEIGHT)
+    }
 }

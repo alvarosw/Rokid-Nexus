@@ -210,7 +210,7 @@ class HudRunnerTest {
     @Test
     fun geometry_keeps_the_viewport_in_one_value() {
         val geometry = HudGeometry()
-        assertEquals(HudGeometry.Viewport(0, 0, 480, 352), geometry.viewport)
+        assertEquals(HudGeometry.Viewport(0, 0, 480, 640), geometry.viewport)
         assertEquals(HudGeometry.DEFAULT, geometry)
     }
 }
