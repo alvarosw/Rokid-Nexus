@@ -21,7 +21,7 @@ class HomeMotionTest {
     private val layer = HomeLayer(
         context,
         iconLoader = flatIcons,
-        sizeSource = sizesOf(),
+        placementSource = placementsOf(),
         tileSource = { null },
         motion = manualMotion(clock) { reduced },
     )

@@ -206,8 +206,9 @@ singleton and survives close/open (`:52`); it is only clamped, never reset, when
 - Side effect at the hub: grid mode starts `TileController`, list mode stops it and clears its rate
   limiter, so in list mode `/tile/publish` envelopes are consumed and dropped without touching
   `TileCache` (`G/GlassesHub.kt:223`, `:231-233`, `:355`; `G/TileController.kt:24-43`).
-- Tile layout order/size arrive on `/glasses/tile-layout/config`; entries are re-ordered by
-  `TileLayoutStore.applyOrder` for **both** modes, and a layout push notifies launcher observers
+- Tile layout order/size arrive on `/glasses/tile-layout/config`; entries are sorted by
+  the resolved grid's reading order (`TileLayoutStore.placements`, `TileGridLayout.readingOrder`) for
+  **both** modes, and a layout push notifies launcher observers
   (`G/GlassesHub.kt:359-369`, `:1388-1392`; `G/TileLayoutStore.kt`).
 
 ### 2.4 Hand-off to a plugin, by path
@@ -472,7 +473,7 @@ immediately on subscribe and on every change (`G/GlassesHub.kt:579-583`, `:1404-
    present only while the phone advertises `CAMERA_CONSUMER_READY` and a name
    (`:1388-1402`; cleared on link loss `:1411-1415`).
 2. Then the `/launcher/list` payload `plugins[]` (`id`, `displayName`, `iconKey`; blank ids skipped)
-   re-ordered by `TileLayoutStore.applyOrder` (stored order first, unplaced appended) (`:1196-1218`,
+   sorted by grid reading order after `TileGridLayout.resolve` (stored positions first, unplaced tiles in the first free cells) (`:1196-1218`,
    `G/TileLayoutStore.kt:54-61`).
 Icons resolve through `GlassesHub.launcherDrawable`: built-in key, then per-plugin glyph cache
 (`/launcher/glyphs`), then a default (`:611-621`, `:1220-1251`).
@@ -1024,7 +1025,7 @@ becomes a test.
 44. [JVM] `/glasses/hud-mode/config` with an invalid payload leaves the stored mode unchanged (`GlassesHub:347-353`).
 45. [EMU] The mode is read at each `show()`; flipping it while open changes nothing until the next open (`LOR:102-104`).
 46. [JVM] Grid mode starts the tile subsystem, list mode stops it; in list mode `/tile/publish` does not touch `TileCache` (`GlassesHub:231-233`, `TileController:35-43`).
-47. [JVM] The camera entry is first, only when `CAMERA_CONSUMER_READY` and a consumer name exist; others follow `TileLayoutStore.applyOrder` (unplaced appended in original order) in both modes (`GlassesHub:1388-1402`, `TileLayoutStore:54-61`).
+47. [JVM] The camera entry is first, only when `CAMERA_CONSUMER_READY` and a consumer name exist; others follow the reading order of `TileLayoutStore.placements` (unplaced tiles take the first free cells; camera first, then catalog order, seeds that placement) in both modes (`GlassesHub:1388-1402`, `TileLayoutStore:54-61`).
 48. [JVM] `/launcher/list` skips blank ids, defaults `displayName` to the id, drops blank `iconKey` (`GlassesHub:1196-1218`).
 49. [JVM] A `/glasses/tile-layout/config` push re-notifies launcher observers (`GlassesHub:359-369`).
 50. [EMU] The launcher renders on top of a notice that was already visible and the notice keeps ring priority (`HudOverlayStack` doc, `RBAS:250-252`).

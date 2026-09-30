@@ -9,6 +9,7 @@ import androidx.test.espresso.matcher.ViewMatchers.isRoot
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.anezium.rokidbus.glasses.GlassesHub
 import com.anezium.rokidbus.glasses.HomeScreenshotHostActivity
+import com.anezium.rokidbus.shared.tile.TileLayoutEntry
 import com.anezium.rokidbus.shared.tile.TileSize
 import com.anezium.rokidbus.shared.tile.TileTone
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -50,13 +51,14 @@ class HomeScreenshotTest {
         name: String,
         sizes: Map<String, TileSize> = emptyMap(),
         live: Map<String, HomeTile> = emptyMap(),
+        stored: List<TileLayoutEntry>? = null,
         setup: (HomeLayer) -> Unit,
     ) {
         launchHost().use { scenario ->
             scenario.onActivity { activity ->
                 val layer = HomeLayer(
                     activity,
-                    sizeSource = { list -> list.associate { it.id to sizes[it.id] } },
+                    placementSource = stored?.let(::placementsOf) ?: placementsOf(*sizes.toList().toTypedArray()),
                     tileSource = { live[it] },
                     motion = HudMotionDriver.instant(),
                 )
@@ -218,6 +220,83 @@ class HomeScreenshotTest {
         ) {
             it.show(HomeMode.GRID, withIcons(8), "plugin0")
             settleBlink()
+        }
+
+    // ---- free placement: holes, the 3-wide sizes and the progress track ---------------------
+
+    private fun at(id: Int, size: TileSize, col: Int, row: Int) = TileLayoutEntry("plugin$id", size, col, row)
+
+    private val freeLayout = listOf(
+        at(0, TileSize.BANNER, 0, 0),
+        at(1, TileSize.SMALL, 3, 0),
+        at(2, TileSize.PANEL, 1, 2),
+        at(3, TileSize.SMALL, 0, 3),
+        at(4, TileSize.JUMBO, 0, 5),
+    )
+
+    private val freeLive = mapOf(
+        "plugin0" to HomeTile(
+            snapshot("plugin0", title = "Next bus in 12 min", unit = "", tone = TileTone.OK, subtitle = "Line 4 to Central"),
+            false,
+        ),
+        "plugin1" to HomeTile(snapshot("plugin1", title = "7", unit = "new", tone = TileTone.INFO), false),
+        "plugin2" to HomeTile(
+            snapshot("plugin2", title = "3", unit = "tasks", tone = TileTone.OK, subtitle = "Today")
+                .copy(rows = listOf("Call Ana", "Buy milk", "Send report"), progress = 0.66f),
+            false,
+        ),
+        "plugin4" to HomeTile(
+            snapshot("plugin4", title = "Sync", unit = "", tone = TileTone.OFF, subtitle = "Photos")
+                .copy(rows = listOf("IMG_0412", "IMG_0413", "IMG_0414", "IMG_0415"), progress = 0.3f, badge = "42%"),
+            false,
+        ),
+    )
+
+    @Test
+    fun grid_free_layout_with_holes() =
+        capture("grid-15-free-layout-holes", stored = freeLayout.take(4)) {
+            it.show(HomeMode.GRID, withIcons(4), "plugin0")
+        }
+
+    @Test
+    fun grid_banner_panel_jumbo_fallback() =
+        capture("grid-16-banner-panel-jumbo", stored = freeLayout) {
+            it.show(HomeMode.GRID, withIcons(5), "plugin2")
+        }
+
+    @Test
+    fun grid_banner_panel_jumbo_live_with_progress() =
+        capture("grid-17-wide-live-progress", stored = freeLayout, live = freeLive) {
+            it.show(HomeMode.GRID, withIcons(5), "plugin2")
+        }
+
+    // A focused JUMBO alone is about 36 % of the canvas, past the single-hue check's bloom limit, so
+    // the scrolled capture focuses the small tile under it.
+    @Test
+    fun grid_scrolled_to_a_tile_below_a_jumbo_and_a_hole() =
+        capture(
+            "grid-18-scrolled-below-jumbo",
+            stored = listOf(at(0, TileSize.JUMBO, 0, 0), at(1, TileSize.PANEL, 1, 3), at(2, TileSize.SMALL, 0, 6)),
+            live = freeLive,
+        ) {
+            it.show(HomeMode.GRID, withIcons(3), "plugin2")
+        }
+
+    @Test
+    fun grid_one_by_one_live_tile_with_progress_and_badge() =
+        capture(
+            "grid-19-small-live-progress",
+            stored = listOf(at(0, TileSize.SMALL, 0, 0), at(1, TileSize.SMALL, 1, 0)),
+            live = mapOf(
+                "plugin0" to HomeTile(
+                    snapshot("plugin0", title = "Transit planner", unit = "", tone = TileTone.OK)
+                        .copy(progress = 0.5f, badge = "NEW"),
+                    false,
+                ),
+                "plugin1" to HomeTile(snapshot("plugin1", title = "88", unit = "%").copy(progress = 0.88f), false),
+            ),
+        ) {
+            it.show(HomeMode.GRID, withIcons(2), "plugin0")
         }
 
     private fun settleBlink() {

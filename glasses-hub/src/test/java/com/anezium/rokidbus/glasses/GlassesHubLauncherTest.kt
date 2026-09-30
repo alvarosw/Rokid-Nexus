@@ -144,16 +144,48 @@ class GlassesHubLauncherTest {
     // ---- item 49 -------------------------------------------------------------------------
 
     @Test
-    fun item49_a_tile_layout_push_re_notifies_launcher_observers_in_the_new_order() {
+    fun item49_a_tile_layout_push_re_notifies_launcher_observers_in_reading_order() {
         GlassesHubTestSupport.launcherList("a", "b", "c")
         assertEquals(listOf("a", "b", "c"), seen.last().map { it.id })
         val before = seen.size
 
-        val layout = listOf(TileLayoutEntry("c", TileSize.WIDE), TileLayoutEntry("a", TileSize.SMALL))
+        val layout = listOf(
+            TileLayoutEntry("c", TileSize.WIDE, col = 0, row = 0),
+            TileLayoutEntry("a", TileSize.SMALL, col = 2, row = 0),
+        )
         GlassesHubTestSupport.receive(BusPaths.TILE_LAYOUT_CONFIG, TileLayoutContract.configToJson(layout))
 
         assertEquals("one re-notification", before + 1, seen.size)
         assertEquals(listOf("c", "a", "b"), seen.last().map { it.id })
+    }
+
+    @Test
+    fun a_stored_v2_layout_orders_the_launcher_by_position_camera_included() {
+        GlassesHubTestSupport.launcherList("a", "b", "c")
+        GlassesHubTestSupport.advertiseCamera("Lens")
+        assertEquals("no layout: camera first, then the catalog", listOf("camera", "a", "b", "c"), seen.last().map { it.id })
+
+        // Holes are fine; "b" is not in the layout and takes the first free cell behind the pinned ones.
+        val layout = listOf(
+            TileLayoutEntry("c", TileSize.SMALL, col = 0, row = 0),
+            TileLayoutEntry("camera", TileSize.BANNER, col = 0, row = 2),
+            TileLayoutEntry("a", TileSize.SMALL, col = 3, row = 0),
+        )
+        GlassesHubTestSupport.receive(BusPaths.TILE_LAYOUT_CONFIG, TileLayoutContract.configToJson(layout))
+
+        assertEquals(listOf("c", "b", "a", "camera"), seen.last().map { it.id })
+    }
+
+    @Test
+    fun the_list_mode_order_is_the_same_reading_order() {
+        HudModeStore.setGridModeEnabled(context, false)
+        GlassesHubTestSupport.launcherList("a", "b")
+        val layout = listOf(
+            TileLayoutEntry("b", TileSize.SMALL, col = 0, row = 0),
+            TileLayoutEntry("a", TileSize.SMALL, col = 1, row = 0),
+        )
+        GlassesHubTestSupport.receive(BusPaths.TILE_LAYOUT_CONFIG, TileLayoutContract.configToJson(layout))
+        assertEquals(listOf("b", "a"), seen.last().map { it.id })
     }
 
     @Test

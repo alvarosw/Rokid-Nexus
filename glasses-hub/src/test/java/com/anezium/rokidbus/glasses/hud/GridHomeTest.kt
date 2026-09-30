@@ -4,6 +4,7 @@ import android.graphics.Rect
 import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.glasses.FallbackTileView
 import com.anezium.rokidbus.glasses.LiveTileView
+import com.anezium.rokidbus.shared.tile.TileLayoutEntry
 import com.anezium.rokidbus.shared.tile.TilePlacement
 import com.anezium.rokidbus.shared.tile.TileSize
 import org.junit.Assert.assertEquals
@@ -21,12 +22,12 @@ import org.robolectric.annotation.Config
 @Config(qualifiers = "w320dp-h427dp-hdpi")
 class GridHomeTest {
     private val context = RuntimeEnvironment.getApplication()
-    private var sizes = sizesOf()
+    private var sizes: (List<com.anezium.rokidbus.glasses.GlassesHub.LauncherEntry>) -> List<TilePlacement> = placementsOf()
     private val live = HashMap<String, HomeTile>()
     private val layer = HomeLayer(
         context,
         iconLoader = flatIcons,
-        sizeSource = { sizes(it) },
+        placementSource = { sizes(it) },
         tileSource = { live[it] },
         motion = HudMotionDriver.instant(),
     )
@@ -77,7 +78,7 @@ class GridHomeTest {
 
     @Test
     fun wide_tall_and_large_tiles_use_the_layout_store_sizes() {
-        sizes = sizesOf("plugin0" to TileSize.WIDE, "plugin1" to TileSize.TALL, "plugin2" to TileSize.LARGE)
+        sizes = placementsOf("plugin0" to TileSize.WIDE, "plugin1" to TileSize.TALL, "plugin2" to TileSize.LARGE)
         show(6, 0)
         assertEquals(TileSize.WIDE, grid.placementsForTest()[0].size)
         val wide = layer.itemBounds("plugin0")!!
@@ -91,16 +92,104 @@ class GridHomeTest {
     }
 
     @Test
-    fun selection_order_is_packer_order() {
-        sizes = sizesOf("plugin0" to TileSize.WIDE, "plugin1" to TileSize.TALL, "plugin2" to TileSize.LARGE)
+    fun selection_order_is_reading_order() {
+        sizes = placementsOf("plugin0" to TileSize.WIDE, "plugin1" to TileSize.TALL, "plugin2" to TileSize.LARGE)
         show(9, 0)
         assertEquals(entries(9).map { it.id }, grid.placementsForTest().map { it.pluginId })
         assertEquals(entries(9).map { it.id }, grid.tileIdsForTest())
     }
 
+    private fun stored(vararg entries: TileLayoutEntry) = placementsOf(entries.toList())
+
+    @Test
+    fun stored_positions_are_kept_and_holes_stay_empty() {
+        sizes = stored(
+            TileLayoutEntry("plugin0", TileSize.SMALL, col = 0, row = 0),
+            TileLayoutEntry("plugin1", TileSize.SMALL, col = 3, row = 0),
+            TileLayoutEntry("plugin2", TileSize.SMALL, col = 1, row = 2),
+        )
+        show(3, 0)
+        assertEquals(
+            listOf(
+                TilePlacement("plugin0", TileSize.SMALL, 0, 0),
+                TilePlacement("plugin1", TileSize.SMALL, 3, 0),
+                TilePlacement("plugin2", TileSize.SMALL, 1, 2),
+            ),
+            grid.placementsForTest(),
+        )
+        assertEquals(16 + 3 * 114, layer.itemBounds("plugin1")!!.left)
+        assertEquals(bodyTop + 2 * 114, layer.itemBounds("plugin2")!!.top)
+        assertEquals(1, grid.tileIdsForTest().count { it == "plugin2" })
+    }
+
+    @Test
+    fun the_three_wide_sizes_span_three_columns_and_their_rows() {
+        sizes = stored(
+            TileLayoutEntry("plugin0", TileSize.BANNER, col = 0, row = 0),
+            TileLayoutEntry("plugin1", TileSize.PANEL, col = 1, row = 1),
+            TileLayoutEntry("plugin2", TileSize.JUMBO, col = 0, row = 3),
+        )
+        show(3, 0)
+        val banner = layer.itemBounds("plugin0")!!
+        assertEquals(3 * 106 + 2 * 8, banner.width())
+        assertEquals(106, banner.height())
+        val panel = layer.itemBounds("plugin1")!!
+        assertEquals(3 * 106 + 2 * 8, panel.width())
+        assertEquals(2 * 106 + 8, panel.height())
+        assertEquals(16 + 114, panel.left)
+        assertEquals(16 + 448, panel.right)
+        val jumbo = layer.itemBounds("plugin2")!!
+        assertEquals(3 * 106 + 2 * 8, jumbo.width())
+        assertEquals(3 * 106 + 2 * 8, jumbo.height())
+        assertTrue("plugin0", inside("plugin0"))
+        assertTrue("plugin1", inside("plugin1"))
+    }
+
+    @Test
+    fun the_grid_ends_at_the_bottom_of_the_lowest_tile_and_scrolls_to_a_tile_below_empty_rows() {
+        sizes = stored(
+            TileLayoutEntry("plugin0", TileSize.SMALL, col = 0, row = 0),
+            TileLayoutEntry("plugin1", TileSize.WIDE, col = 2, row = 6),
+        )
+        show(2, 0)
+        assertEquals(0, grid.offsetRowForTest)
+
+        layer.select("plugin1")
+        layer.layoutOnCanvas()
+        // Rows 0..6 hold one tile in row 0; the lowest tile ends at row 7, so the last 5 rows show.
+        assertEquals(7 - grid.visibleRowsForTest, grid.offsetRowForTest)
+        assertTrue(inside("plugin1"))
+
+        layer.select("plugin0")
+        layer.layoutOnCanvas()
+        assertEquals(0, grid.offsetRowForTest)
+        assertTrue(inside("plugin0"))
+    }
+
+    @Test
+    fun a_layout_change_that_keeps_the_reading_order_moves_the_tiles() {
+        sizes = stored(
+            TileLayoutEntry("plugin0", TileSize.SMALL, col = 0, row = 0),
+            TileLayoutEntry("plugin1", TileSize.SMALL, col = 1, row = 0),
+        )
+        show(2, 0)
+        val before = layer.itemBounds("plugin1")!!
+
+        sizes = stored(
+            TileLayoutEntry("plugin0", TileSize.SMALL, col = 0, row = 0),
+            TileLayoutEntry("plugin1", TileSize.SMALL, col = 3, row = 1),
+        )
+        layer.update(entries(2), "plugin0")
+        layer.layoutOnCanvas()
+
+        val after = layer.itemBounds("plugin1")!!
+        assertEquals(16 + 3 * 114, after.left)
+        assertEquals(before.top + 114, after.top)
+    }
+
     @Test
     fun more_than_two_rows_scroll_by_whole_rows_and_keep_the_selected_tile_visible() {
-        sizes = sizesOf("plugin4" to TileSize.LARGE, "plugin9" to TileSize.TALL, "plugin20" to TileSize.LARGE)
+        sizes = placementsOf("plugin4" to TileSize.LARGE, "plugin9" to TileSize.TALL, "plugin20" to TileSize.LARGE)
         val count = 30
         show(count, 0)
         for (selected in 0 until count) {
@@ -161,7 +250,7 @@ class GridHomeTest {
     fun a_layout_change_adds_removes_and_resizes_by_id() {
         show(4, 0)
         val kept = grid.tileViewForTest("plugin1")
-        sizes = sizesOf("plugin3" to TileSize.WIDE)
+        sizes = placementsOf("plugin3" to TileSize.WIDE)
         layer.update(entries(5).filterNot { it.id == "plugin0" }, "plugin1")
         layer.layoutOnCanvas()
         assertSame(kept, grid.tileViewForTest("plugin1"))

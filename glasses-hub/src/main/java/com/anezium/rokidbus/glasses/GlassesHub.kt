@@ -53,6 +53,7 @@ import com.anezium.rokidbus.shared.WirelessAdbAction
 import com.anezium.rokidbus.shared.WirelessAdbContract
 import com.anezium.rokidbus.shared.WirelessAdbReply
 import com.anezium.rokidbus.shared.plugin.PathRules
+import com.anezium.rokidbus.shared.tile.TileGridLayout
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.CopyOnWriteArrayList
@@ -1392,10 +1393,17 @@ object GlassesHub {
         if (cameraLauncherEntry(next) != cameraLauncherEntry(previous)) notifyLauncherEntries()
     }
 
+    /**
+     * The launcher entries in the grid's reading order: camera first and then the catalog order seed
+     * the placement of anything the stored layout does not pin, and the result is sorted by tile
+     * position, so ring selection and list mode follow what the phone laid out.
+     */
     private fun allLauncherEntries(): List<LauncherEntry> {
         val nonCamera = launcherEntries.filterNot { it.id == CAMERA_LAUNCHER_ID }
-        val ordered = appContext?.let { context -> TileLayoutStore.applyOrder(context, nonCamera) } ?: nonCamera
-        return listOfNotNull(cameraLauncherEntry(remotePhoneCapabilities)) + ordered
+        val entries = listOfNotNull(cameraLauncherEntry(remotePhoneCapabilities)) + nonCamera
+        val context = appContext ?: return entries
+        val byId = entries.associateBy { it.id }
+        return TileGridLayout.readingOrder(TileLayoutStore.placements(context, entries)).mapNotNull { byId[it.pluginId] }
     }
 
     private fun cameraLauncherEntry(capabilities: PhoneHubCapabilities): LauncherEntry? {

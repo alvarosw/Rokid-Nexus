@@ -10,22 +10,21 @@ import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.glasses.FallbackTileView
 import com.anezium.rokidbus.glasses.GlassesHub
 import com.anezium.rokidbus.glasses.LiveTileView
-import com.anezium.rokidbus.shared.tile.TileGridPacker
+import com.anezium.rokidbus.shared.tile.TileGridLayout
 import com.anezium.rokidbus.shared.tile.TilePlacement
 import com.anezium.rokidbus.shared.tile.TileSize
 import com.anezium.rokidbus.shared.tile.TileTone
 
 /**
  * The grid rendering: four columns across the 448 px content width (unit 106 px, `space-2` gaps),
- * packed by [TileGridPacker] with the wearer's sizes. Tiles are kept by plugin id: a selection move
+ * each tile at the position the wearer's layout gives it; cells no tile covers stay empty. Tiles are kept by plugin id: a selection move
  * changes focus on two views, an entry-list change adds and removes tiles, and a tile-data change
  * swaps only that tile's content. The body shows as many whole grid rows as fit (5 on the 480x640 screen) and scrolls by whole rows so the
- * selected tile is always fully visible (a TALL or LARGE tile spans two).
+ * selected tile is always fully visible (a tall tile spans up to three rows).
  */
 internal class GridHome(
     context: Context,
     private val iconLoader: (Context, GlassesHub.LauncherEntry) -> Drawable,
-    private val sizes: (List<GlassesHub.LauncherEntry>) -> Map<String, TileSize?>,
     motion: HudMotionDriver,
 ) : HomeScreenView(context, motion) {
     private class Tile(
@@ -46,7 +45,7 @@ internal class GridHome(
     internal val visibleRowsForTest: Int get() = visibleRows
 
     override fun bindBody(prev: HomeViewModel?, model: HomeViewModel) {
-        val entriesChanged = prev == null || prev.entries != model.entries
+        val entriesChanged = prev == null || prev.entries != model.entries || prev.placements != model.placements
         if (entriesChanged) {
             relayout(model)
         } else if (prev.tileData != model.tileData) {
@@ -78,7 +77,7 @@ internal class GridHome(
 
     /**
      * Only one tile per screen shows `critical`: the focused one if it is critical (focus wins
-     * visually, its alert icon says critical), otherwise the first in packer order. Every other
+     * visually, its alert icon says critical), otherwise the first in placement order. Every other
      * critical tile reads as `WARN`.
      */
     private fun assignCriticalRoles(model: HomeViewModel) {
@@ -91,15 +90,12 @@ internal class GridHome(
 
     private fun relayout(model: HomeViewModel) {
         val entries = model.entries
-        val sizeById = sizes(entries)
-        placements = TileGridPacker.pack(
-            entries.map { it.id to sizeById[it.id] },
-            columns = COLUMNS,
-        )
+        placements = model.placements
+        val placementById = placements.associateBy { it.pluginId }
         val keep = entries.mapTo(HashSet()) { it.id }
         tiles.keys.filterNot { it in keep }.forEach { id -> strip.removeView(tiles.remove(id)?.view) }
-        entries.forEachIndexed { index, entry ->
-            val placement = placements[index]
+        entries.forEach { entry ->
+            val placement = placementById.getValue(entry.id)
             val data = model.tileData[entry.id]
             var tile = tiles[entry.id]
             if (tile == null || tile.size != placement.size || (data != null) != (tile.live != null)) {
@@ -206,7 +202,7 @@ internal class GridHome(
     private fun height(rows: Int) = rows * UNIT + (rows - 1) * RokidHudTokens.SPACE_2
 
     companion object {
-        const val COLUMNS = TileGridPacker.DEFAULT_COLUMNS
+        const val COLUMNS = TileGridLayout.COLUMNS
         const val UNIT = HudGridMetrics.UNIT
         const val PITCH = HudGridMetrics.PITCH
     }

@@ -6,6 +6,9 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.view.View
 import com.anezium.rokidbus.glasses.GlassesHub
+import com.anezium.rokidbus.shared.tile.TileGridLayout
+import com.anezium.rokidbus.shared.tile.TileLayoutEntry
+import com.anezium.rokidbus.shared.tile.TilePlacement
 import com.anezium.rokidbus.shared.tile.TileSize
 import com.anezium.rokidbus.shared.tile.TileSnapshot
 import com.anezium.rokidbus.shared.tile.TileTone
@@ -29,10 +32,15 @@ internal fun snapshot(
     subtitle: String = "",
 ) = TileSnapshot(pluginId = id, contentKey = "k", title = title, unit = unit, tone = tone, subtitle = subtitle)
 
-internal fun sizesOf(vararg pairs: Pair<String, TileSize>): (List<GlassesHub.LauncherEntry>) -> Map<String, TileSize?> {
+/** Placement seam for a home layer: [pairs] are the declared sizes, positions come from the auto-pack. */
+internal fun placementsOf(vararg pairs: Pair<String, TileSize>): (List<GlassesHub.LauncherEntry>) -> List<TilePlacement> {
     val map = pairs.toMap()
-    return { list -> list.associate { it.id to map[it.id] } }
+    return { list -> TileGridLayout.resolve(list.map { it.id to map[it.id] }, emptyList()) }
 }
+
+/** Placement seam for a home layer driven by a stored layout, as the phone would sync it. */
+internal fun placementsOf(stored: List<TileLayoutEntry>): (List<GlassesHub.LauncherEntry>) -> List<TilePlacement> =
+    { list -> TileGridLayout.resolve(list.map { it.id to null }, stored) }
 
 /** Lays a home layer out on the 480x640 screen, as the host window does. */
 internal fun HomeLayer.layoutOnCanvas(): HomeLayer {

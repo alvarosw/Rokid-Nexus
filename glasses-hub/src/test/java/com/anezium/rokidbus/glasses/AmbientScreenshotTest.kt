@@ -67,7 +67,7 @@ class AmbientScreenshotTest {
 
     private fun homeBackdrop(activity: android.app.Activity): View = HomeLayer(
         activity,
-        sizeSource = { list -> list.associate { it.id to null } },
+        placementSource = com.anezium.rokidbus.glasses.hud.placementsOf(),
         tileSource = { null },
         motion = HudMotionDriver.instant(),
     ).apply {

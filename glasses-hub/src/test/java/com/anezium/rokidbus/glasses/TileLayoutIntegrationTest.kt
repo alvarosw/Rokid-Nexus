@@ -7,6 +7,7 @@ import com.anezium.rokidbus.glasses.hud.GridHome
 import com.anezium.rokidbus.glasses.hud.HomeLayer
 import com.anezium.rokidbus.glasses.hud.HomeMode
 import com.anezium.rokidbus.shared.TileLayoutContract
+import com.anezium.rokidbus.shared.tile.TileGridLayout
 import com.anezium.rokidbus.shared.tile.TileLayoutEntry
 import com.anezium.rokidbus.shared.tile.TilePlacement
 import com.anezium.rokidbus.shared.tile.TileSize
@@ -40,13 +41,19 @@ class TileLayoutIntegrationTest {
         return layer.screenForTest() as GridHome
     }
 
+    /** Exactly what GlassesHub.allLauncherEntries() does with the entries it is given. */
+    private fun readingOrder(entries: List<GlassesHub.LauncherEntry>): List<GlassesHub.LauncherEntry> {
+        val byId = entries.associateBy { it.id }
+        return TileGridLayout.readingOrder(TileLayoutStore.placements(context, entries)).map { byId.getValue(it.pluginId) }
+    }
+
     @Test
-    fun `a synced layout reorders and sizes tiles, and a newly installed plugin lands after them`() {
-        // The phone's chosen layout: "c" wide, "a" small. "b" doesn't exist yet from the phone's
-        // point of view.
+    fun `a synced layout keeps its positions and holes, and a newly installed plugin takes the first free cell`() {
+        // The phone's layout: "c" wide at the top right, "a" small below it, a hole in between.
+        // "b" doesn't exist yet from the phone's point of view.
         val phoneSideEntries = listOf(
-            TileLayoutEntry("c", TileSize.WIDE),
-            TileLayoutEntry("a", TileSize.SMALL),
+            TileLayoutEntry("c", TileSize.WIDE, col = 2, row = 0),
+            TileLayoutEntry("a", TileSize.SMALL, col = 1, row = 2),
         )
 
         // Exactly what crosses the wire, and exactly what GlassesHub.onRemoteEnvelope does with the
@@ -55,29 +62,20 @@ class TileLayoutIntegrationTest {
         val parsedEntries = requireNotNull(TileLayoutContract.entriesFromConfig(wirePayload))
         TileLayoutStore.setEntries(context, parsedEntries)
 
-        // The launcher list as it exists on the glasses today: install order a, b, c — "b" was
-        // installed after the layout above was saved and was never placed.
         val installOrderEntries = listOf(launcherEntry("a"), launcherEntry("b"), launcherEntry("c"))
-
-        // Exactly what GlassesHub.allLauncherEntries() does to the non-camera portion of the list.
-        val ordered = TileLayoutStore.applyOrder(context, installOrderEntries)
-        assertEquals(listOf("c", "a", "b"), ordered.map { it.id })
+        val ordered = readingOrder(installOrderEntries)
+        assertEquals(listOf("b", "c", "a"), ordered.map { it.id })
 
         val view = gridWith(ordered, selectedId = ordered.first().id)
 
-        assertEquals(listOf("c", "a", "b"), view.tileIdsForTest())
-        assertTrue("the first tile in the custom order should be focused", view.isTileFocusedForTest("c"))
-        assertTrue(!view.isTileFocusedForTest("a") && !view.isTileFocusedForTest("b"))
-
-        // The packer guarantees no overlap by construction; this asserts the actual placements it
-        // produced for this order match what a 4-column row-major pack of [WIDE, SMALL, SMALL]
-        // must be: "c" (wide) takes columns 0-1, "a" and "b" fall into the two open columns behind
-        // it, all on the same row since everything still fits in one.
+        assertEquals(listOf("b", "c", "a"), view.tileIdsForTest())
+        assertTrue("the first tile in reading order should be focused", view.isTileFocusedForTest("b"))
+        assertTrue(!view.isTileFocusedForTest("a") && !view.isTileFocusedForTest("c"))
         assertEquals(
             listOf(
-                TilePlacement("c", TileSize.WIDE, col = 0, row = 0),
-                TilePlacement("a", TileSize.SMALL, col = 2, row = 0),
-                TilePlacement("b", TileSize.SMALL, col = 3, row = 0),
+                TilePlacement("b", TileSize.SMALL, col = 0, row = 0),
+                TilePlacement("c", TileSize.WIDE, col = 2, row = 0),
+                TilePlacement("a", TileSize.SMALL, col = 1, row = 2),
             ),
             view.placementsForTest(),
         )
@@ -88,7 +86,7 @@ class TileLayoutIntegrationTest {
         TileLayoutStore.setEntries(context, emptyList())
         val installOrderEntries = listOf(launcherEntry("a"), launcherEntry("b"))
 
-        val ordered = TileLayoutStore.applyOrder(context, installOrderEntries)
+        val ordered = readingOrder(installOrderEntries)
         assertEquals(listOf("a", "b"), ordered.map { it.id })
 
         val view = gridWith(ordered, selectedId = ordered.first().id)

@@ -58,7 +58,7 @@ internal class HostHarness(
     lateinit var runner: HudRunner
         private set
     var live: (String) -> HomeTile? = { null }
-    var sizes: (List<com.anezium.rokidbus.glasses.GlassesHub.LauncherEntry>) -> Map<String, com.anezium.rokidbus.shared.tile.TileSize?> = sizesOf()
+    var sizes: (List<com.anezium.rokidbus.glasses.GlassesHub.LauncherEntry>) -> List<com.anezium.rokidbus.shared.tile.TilePlacement> = placementsOf()
 
     private val home: HomeLayer get() = host.home
 
@@ -67,7 +67,7 @@ internal class HostHarness(
         val layer = HomeLayer(
             context,
             iconLoader = flatIcons,
-            sizeSource = { sizes(it) },
+            placementSource = { sizes(it) },
             tileSource = { live(it) },
             motion = motion,
         )
