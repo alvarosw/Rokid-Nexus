@@ -6,140 +6,129 @@ import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.RectF
-import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.text.TextPaint
 import android.text.TextUtils
-import android.util.TypedValue
 import android.view.View
-import com.anezium.rokidbus.client.ui.BusTheme
+import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.shared.ActivityTrack
 
-/** How the panel fits its primary value: the size, and whether the ETA had to move down. */
+/** How the panel fits its primary value: the size in px, and whether the ETA had to move down. */
 internal data class ActivityPrimaryFit(
-    val sizeSp: Float,
+    val sizePx: Float,
     val etaBelow: Boolean,
 )
 
 /**
  * Picks the largest primary size that fits instead of ellipsizing.
  *
- * Inline with the ETA the size may shrink to [inlineMinSp]; below that the
+ * Inline with the ETA the size may shrink to [inlineMinPx]; below that the
  * primary is worth more than the ETA's position, so the ETA moves to the
  * secondary row and the primary takes the largest size that fits alone.
- * [widthAtSp] measures the primary at a given size.
+ * [widthAtPx] measures the primary at a given size.
  */
 internal fun fitActivityPrimary(
     availablePx: Float,
     inlineEtaPx: Float?,
-    widthAtSp: (Float) -> Float,
-    maxSp: Float = ACTIVITY_PRIMARY_MAX_SP,
-    inlineMinSp: Float = ACTIVITY_PRIMARY_INLINE_MIN_SP,
-    minSp: Float = ACTIVITY_PRIMARY_MIN_SP,
+    widthAtPx: (Float) -> Float,
+    maxPx: Float = ACTIVITY_PRIMARY_MAX_PX,
+    inlineMinPx: Float = ACTIVITY_PRIMARY_INLINE_MIN_PX,
+    minPx: Float = ACTIVITY_PRIMARY_MIN_PX,
 ): ActivityPrimaryFit {
     if (inlineEtaPx != null) {
-        var size = maxSp
-        while (size >= inlineMinSp) {
-            if (widthAtSp(size) + inlineEtaPx <= availablePx) return ActivityPrimaryFit(size, false)
+        var size = maxPx
+        while (size >= inlineMinPx) {
+            if (widthAtPx(size) + inlineEtaPx <= availablePx) return ActivityPrimaryFit(size, false)
             size -= 1f
         }
     }
-    var size = maxSp
-    while (size >= minSp) {
-        if (widthAtSp(size) <= availablePx) return ActivityPrimaryFit(size, inlineEtaPx != null)
+    var size = maxPx
+    while (size >= minPx) {
+        if (widthAtPx(size) <= availablePx) return ActivityPrimaryFit(size, inlineEtaPx != null)
         size -= 1f
     }
-    return ActivityPrimaryFit(minSp, inlineEtaPx != null)
+    return ActivityPrimaryFit(minPx, inlineEtaPx != null)
 }
 
-internal const val ACTIVITY_PRIMARY_MAX_SP = 24f
-internal const val ACTIVITY_PRIMARY_INLINE_MIN_SP = 20f
-internal const val ACTIVITY_PRIMARY_MIN_SP = 16f
+/** The primary is the panel's one `display` value, and shrinks no further than `heading`. */
+internal const val ACTIVITY_PRIMARY_MAX_PX = RokidHudTokens.DISPLAY_TEXT_SIZE
+internal const val ACTIVITY_PRIMARY_INLINE_MIN_PX = 18f
+internal const val ACTIVITY_PRIMARY_MIN_PX = RokidHudTokens.HEADING_TEXT_SIZE
 
 /**
- * A line or route mark ("38", "RER B") as an outlined plate, drawn the way the
- * pin and notice draw everything: a line and text, never a lit block, which on
+ * A line or route mark ("38", "RER B"): a `data` chip, `line-control` outline and `text-primary`
+ * mono text, the way the surface rows draw a route. A line and text, never a lit block, which on
  * additive optics would outweigh the value next to it.
  *
- * It stands in for the activity glyph, so it draws into whatever bounds the
- * glyph slot gives it.
+ * It stands in for the activity glyph, so it is as tall as an `icon-lg` and as wide as its text
+ * needs ([getIntrinsicWidth]); it draws into whatever bounds the glyph slot gives it.
  */
-internal class ActivityBadgeDrawable(
-    context: Context,
-    private val text: String,
-) : Drawable() {
-    private val density = context.resources.displayMetrics.density
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+internal class ActivityBadgeDrawable(private val text: String) : Drawable() {
+    private val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = OUTLINE_DP * density
-        color = BusTheme.phosphor
+        strokeWidth = RokidHudTokens.BORDER_DEFAULT.toFloat()
+        color = RokidHudTokens.LINE_CONTROL
     }
     private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = BusTheme.phosphor
-        typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        color = RokidHudTokens.TEXT_PRIMARY
+        typeface = RokidHudTokens.dataTypeface()
+        textSize = RokidHudTokens.DATA_TEXT_SIZE
         textAlign = Paint.Align.CENTER
     }
     private val rect = RectF()
+    private val width = (label.measureText(text) + 2 * RokidHudTokens.SPACE_2).toInt()
+
+    override fun getIntrinsicWidth(): Int = maxOf(RokidHudTokens.ICON_LG, width)
+
+    override fun getIntrinsicHeight(): Int = RokidHudTokens.ICON_LG
 
     override fun draw(canvas: Canvas) {
         val box = bounds
         if (box.isEmpty) return
         rect.set(box)
-        rect.inset(fill.strokeWidth / 2f, fill.strokeWidth / 2f)
-        val radius = box.height() * CORNER_FRACTION
-        canvas.drawRoundRect(rect, radius, radius, fill)
+        rect.inset(outline.strokeWidth / 2f, outline.strokeWidth / 2f)
+        val radius = RokidHudTokens.RADIUS_CONTROL.toFloat()
+        canvas.drawRoundRect(rect, radius, radius, outline)
 
-        // Largest size that fits both the height share and the width, so "38"
-        // stays big and "RER B" still fits the same slot.
-        val padding = 3f * density
-        label.textSize = box.height() * TEXT_HEIGHT_FRACTION
-        val width = label.measureText(text)
-        val room = box.width() - 2 * padding
-        if (width > room && width > 0f) label.textSize *= room / width
+        // "RER B" still fits a slot sized for "38": the text gives way, not the mark.
+        val room = box.width() - 2 * RokidHudTokens.SPACE_1
+        val measured = label.measureText(text)
+        val size = label.textSize
+        if (measured > room && measured > 0f) label.textSize = size * room / measured
         val baseline = box.exactCenterY() - (label.descent() + label.ascent()) / 2f
         canvas.drawText(text, box.exactCenterX(), baseline, label)
+        label.textSize = size
     }
 
     override fun setAlpha(alpha: Int) {
-        fill.alpha = alpha
+        outline.alpha = alpha
         label.alpha = alpha
     }
 
     override fun setColorFilter(colorFilter: ColorFilter?) {
-        fill.colorFilter = colorFilter
+        outline.colorFilter = colorFilter
         label.colorFilter = colorFilter
     }
 
     @Deprecated("Deprecated in Java")
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
-
-    private companion object {
-        const val OUTLINE_DP = 1.6f
-        const val CORNER_FRACTION = 0.17f
-        const val TEXT_HEIGHT_FRACTION = 0.46f
-    }
 }
 
 /**
- * A row of ordered positions: passed ones filled dim, the current one filled
- * bright, the target as a ring, and later ones hollow. The target's label
- * follows the row. Every value comes from the plugin's last update; the view
- * never advances on its own.
+ * A row of ordered positions: passed ones filled `text-secondary`, the current one filled
+ * `text-primary`, the target as a ring, and later ones hollow on a `line` outline. The target's
+ * label follows the row. Every value comes from the plugin's last update; the view never advances
+ * on its own.
  */
 internal class ActivityTrackView(context: Context) : View(context) {
-    private val density = resources.displayMetrics.density
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
     }
     private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val label = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
-        textSize = TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_SP,
-            LABEL_SP,
-            resources.displayMetrics,
-        )
+        typeface = RokidHudTokens.bodyTypeface()
+        textSize = RokidHudTokens.BODY_SMALL_TEXT_SIZE
     }
     private var track: ActivityTrack? = null
 
@@ -152,23 +141,23 @@ internal class ActivityTrackView(context: Context) : View(context) {
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         setMeasuredDimension(
             getDefaultSize(suggestedMinimumWidth, widthMeasureSpec),
-            (HEIGHT_DP * density).toInt(),
+            HEIGHT_PX,
         )
     }
 
     override fun onDraw(canvas: Canvas) {
         val current = track ?: return
-        val bright = BusTheme.phosphor
-        val quiet = BusTheme.dim
-        val hollow = BLACK
-        val targetRadius = TARGET_RADIUS_DP * density
-        val dotRadius = DOT_RADIUS_DP * density
+        val bright = RokidHudTokens.TEXT_PRIMARY
+        val passed = RokidHudTokens.TEXT_SECONDARY
+        val hollow = RokidHudTokens.LINE
+        val targetRadius = TARGET_RADIUS_PX
+        val dotRadius = DOT_RADIUS_PX
         val centerY = height / 2f
 
         // The dots keep a legible minimum spacing; a long label gives way to
         // them rather than the other way round.
-        val minimumDots = (current.count - 1) * MIN_STEP_DP * density + 2 * targetRadius
-        val gap = LABEL_GAP_DP * density
+        val minimumDots = (current.count - 1) * MIN_STEP_PX + 2 * targetRadius
+        val gap = LABEL_GAP_PX
         val labelText = current.label
             ?.let { TextUtils.ellipsize(it, label, width - minimumDots - gap, TextUtils.TruncateAt.END) }
             ?.toString()
@@ -177,25 +166,25 @@ internal class ActivityTrackView(context: Context) : View(context) {
         val start = targetRadius
         val room = (width - labelWidth - 2 * targetRadius).coerceAtLeast(0f)
         val step = if (current.count > 1) {
-            (room / (current.count - 1)).coerceAtMost(MAX_STEP_DP * density)
+            (room / (current.count - 1)).coerceAtMost(MAX_STEP_PX)
         } else {
             0f
         }
         fun x(index: Int) = start + index * step
 
-        stroke.strokeWidth = SEGMENT_DP * density
+        stroke.strokeWidth = SEGMENT_PX
         for (index in 0 until current.count - 1) {
-            stroke.color = if (index < current.at) bright else quiet
+            stroke.color = if (index < current.at) passed else hollow
             canvas.drawLine(x(index), centerY, x(index + 1), centerY, stroke)
         }
         for (index in 0 until current.count) {
             val cx = x(index)
             when {
                 index == current.target -> {
-                    dot.color = hollow
+                    dot.color = RokidHudTokens.GROUND
                     canvas.drawCircle(cx, centerY, targetRadius, dot)
                     stroke.color = bright
-                    stroke.strokeWidth = TARGET_STROKE_DP * density
+                    stroke.strokeWidth = RokidHudTokens.BORDER_DEFAULT.toFloat()
                     canvas.drawCircle(cx, centerY, targetRadius - stroke.strokeWidth / 2f, stroke)
                     if (index == current.at) {
                         dot.color = bright
@@ -203,7 +192,7 @@ internal class ActivityTrackView(context: Context) : View(context) {
                     }
                 }
                 index < current.at -> {
-                    dot.color = quiet
+                    dot.color = passed
                     canvas.drawCircle(cx, centerY, dotRadius, dot)
                 }
                 index == current.at -> {
@@ -211,10 +200,10 @@ internal class ActivityTrackView(context: Context) : View(context) {
                     canvas.drawCircle(cx, centerY, dotRadius, dot)
                 }
                 else -> {
-                    dot.color = hollow
+                    dot.color = RokidHudTokens.GROUND
                     canvas.drawCircle(cx, centerY, dotRadius, dot)
-                    stroke.color = quiet
-                    stroke.strokeWidth = HOLLOW_STROKE_DP * density
+                    stroke.color = hollow
+                    stroke.strokeWidth = RokidHudTokens.BORDER_DEFAULT.toFloat()
                     canvas.drawCircle(cx, centerY, dotRadius - stroke.strokeWidth / 2f, stroke)
                 }
             }
@@ -232,16 +221,12 @@ internal class ActivityTrackView(context: Context) : View(context) {
     }
 
     private companion object {
-        const val BLACK = 0xFF000000.toInt()
-        const val HEIGHT_DP = 16f
-        const val DOT_RADIUS_DP = 3.5f
-        const val TARGET_RADIUS_DP = 6f
-        const val TARGET_STROKE_DP = 2.2f
-        const val HOLLOW_STROKE_DP = 1.4f
-        const val SEGMENT_DP = 2f
-        const val MAX_STEP_DP = 22f
-        const val MIN_STEP_DP = 9f
-        const val LABEL_GAP_DP = 7f
-        const val LABEL_SP = 11f
+        const val HEIGHT_PX = RokidHudTokens.SPACE_6
+        const val DOT_RADIUS_PX = 4f
+        const val TARGET_RADIUS_PX = 7f
+        const val SEGMENT_PX = 2f
+        const val MAX_STEP_PX = 32f
+        const val MIN_STEP_PX = 14f
+        const val LABEL_GAP_PX = RokidHudTokens.SPACE_2.toFloat()
     }
 }

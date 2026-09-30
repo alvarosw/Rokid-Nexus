@@ -5,7 +5,9 @@ import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.WindowManager
-import com.anezium.rokidbus.client.ui.BusTheme
+import com.anezium.rokidbus.client.ui.RokidHudTokens
+import com.anezium.rokidbus.glasses.hud.CloseReason
+import com.anezium.rokidbus.glasses.hud.HudController
 
 class SurfaceActivity : Activity() {
     private lateinit var hudView: SurfaceHudView
@@ -18,8 +20,8 @@ class SurfaceActivity : Activity() {
             setTurnScreenOn(true)
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        window.statusBarColor = BusTheme.glassesBg
-        window.navigationBarColor = BusTheme.glassesBg
+        window.statusBarColor = RokidHudTokens.GROUND
+        window.navigationBarColor = RokidHudTokens.GROUND
         hudView = SurfaceHudView(this)
         setContentView(hudView)
         unsubscribe = SurfaceController.observe { surface ->
@@ -46,7 +48,18 @@ class SurfaceActivity : Activity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (NoticeKeyDispatcher.handleKeyEvent(event)) return true
-        if (SurfaceController.handleKeyEvent(event)) return true
+        // With the accessibility service up its key filter has already decided; this is only the
+        // dismiss for a display that has no service.
+        if (!HudController.isServiceConnected() &&
+            event.keyCode == KeyEvent.KEYCODE_BACK &&
+            event.action == KeyEvent.ACTION_DOWN &&
+            event.repeatCount == 0
+        ) {
+            SurfaceController.activeSurface()?.let {
+                SurfaceController.closeFromHud(it.surfaceId, CloseReason.WEARER_DISMISSED)
+                return true
+            }
+        }
         return super.dispatchKeyEvent(event)
     }
 }

@@ -3,6 +3,7 @@ package com.anezium.rokidbus.glasses
 import android.content.Context
 import com.anezium.rokidbus.shared.tile.TileSnapshot
 import com.anezium.rokidbus.shared.tile.WidgetTileContract
+import java.util.concurrent.CopyOnWriteArrayList
 import org.json.JSONObject
 
 /**
@@ -21,11 +22,23 @@ internal object TileCache {
 
     data class CachedTile(val snapshot: TileSnapshot, val receivedAtElapsedRealtime: Long)
 
+    private val listeners = CopyOnWriteArrayList<(String) -> Unit>()
+
+    /**
+     * Called with the plugin id after every [put], on the thread that wrote it, so an open grid can
+     * refresh that one tile instead of waiting for the next selection move (F-10).
+     */
+    fun observe(listener: (String) -> Unit): () -> Unit {
+        listeners += listener
+        return { listeners -= listener }
+    }
+
     fun put(context: Context, snapshot: TileSnapshot, nowElapsedRealtime: Long) {
         val entry = JSONObject()
             .put("snapshot", WidgetTileContract.toPayload(snapshot))
             .put("receivedAtElapsedRealtime", nowElapsedRealtime)
         prefs(context).edit().putString(KEY_PREFIX + snapshot.pluginId, entry.toString()).apply()
+        listeners.forEach { runCatching { it(snapshot.pluginId) } }
     }
 
     fun get(context: Context, pluginId: String): CachedTile? {

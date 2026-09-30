@@ -1,8 +1,9 @@
 package com.anezium.rokidbus.client.ui
 
-import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
+import android.util.TypedValue
+import android.widget.TextView
 
 /**
  * Rokid HUD design system v1 — native port of `tokens.json`, verbatim. Six intensities of a single
@@ -10,10 +11,15 @@ import android.graphics.Typeface
  * system, state is intensity + border shape + icon + text.
  *
  * This is a **separate token object from [BusTheme]**, deliberately not an extension of it.
- * `BusTheme` is a different, older green (`#71FF97`) and keeps serving every surface that already
- * depends on it (phone settings, today's list launcher, notices) — none of that is in scope here
- * and none of it should regress. Only the new grid-HUD code (`GridLauncherView`, `FallbackTileView`,
- * `HudFrameLayout`, and everything later deliveries add on top) may reference this object.
+ * `BusTheme` is a different, older green (`#71FF97`) and still serves the phone hub and the
+ * plugins. The glasses hub no longer references it: every glasses layer (home, plugin surfaces,
+ * notice, pin, activity, pointer, setup screens) is drawn with this object, and a lint test keeps
+ * color literals out of the rest of the glasses sources.
+ *
+ * Unit: every size, spacing, radius, border and text size here is a **physical pixel** on the
+ * 480x640 screen, not a dp/sp. The design canvas equals the screen, so the tokens are applied as
+ * they are written (safe-x 16, content 448) at any display density; use [applyTextSize] for text
+ * and plain pixel values for everything else.
  *
  * See docs/grid-hud-roadmap/00-overview.md for the source values and the reasoning.
  */
@@ -65,6 +71,12 @@ object RokidHudTokens {
     const val SAFE_X = 16
     const val SAFE_Y = 12
 
+    // viewport.content-width — the canvas inside the safe area.
+    const val CONTENT_WIDTH = 448
+
+    // ListItem — fixed row height.
+    const val LIST_ITEM_HEIGHT = 32
+
     // radius.radius-control / radius-panel / radius-data
     const val RADIUS_CONTROL = 4
     const val RADIUS_PANEL = 6
@@ -80,33 +92,41 @@ object RokidHudTokens {
     const val ICON_LG = 24
 
     // motion.duration-feedback / duration-default / duration-structural / duration-ambient /
-    // duration-scan, all in milliseconds.
+    // duration-scan, all in milliseconds. Structural is 220, not the 320 of the source tokens: the
+    // owner settled it watching the loop on the glasses (docs/ui-rewrite/00-architecture.md §2.6).
     const val DURATION_FEEDBACK_MS = 120L
     const val DURATION_DEFAULT_MS = 200L
-    const val DURATION_STRUCTURAL_MS = 320L
+    const val DURATION_STRUCTURAL_MS = 220L
     const val DURATION_AMBIENT_MS = 6_000L
     const val DURATION_SCAN_MS = 1_200L
 
-    // viewport.aiui-width / aiui-height — the reference canvas every screen targets; see the
-    // overview doc's viewport note for why this is 352, not the 400px physical display.
+    // The glasses screen: 480x640 px (owner, from the official spec, 2026-09-29). It supersedes the
+    // 480x352 "aiui" reference viewport of the design system; the tokens above are the same pixels.
     const val CANVAS_WIDTH = 480
-    const val CANVAS_HEIGHT = 352
+    const val CANVAS_HEIGHT = 640
 
     // typography.body — default text size, sans, 400 weight. 14 / 20 / 400.
-    const val BODY_TEXT_SIZE_SP = 14f
+    const val BODY_TEXT_SIZE = 14f
 
     // typography.label — data labels/panel titles, sans, 500 weight, uppercase, 0.06em tracking.
     // 11 / 14 / 500.
-    const val LABEL_TEXT_SIZE_SP = 11f
+    const val LABEL_TEXT_SIZE = 11f
     const val LABEL_LETTER_SPACING_EM = 0.06f
 
     // typography.data — numeric values, mono, 500 weight. 13 / 18 / 500.
-    const val DATA_TEXT_SIZE_SP = 13f
+    const val DATA_TEXT_SIZE = 13f
 
     // Lazy: a plain JVM unit test that only touches a color/spacing constant must not pay for
     // (or crash on) an unstubbed android.graphics.Typeface call at object-init time.
     private val sans: Typeface by lazy { Typeface.create("sans-serif", Typeface.NORMAL) }
     private val sansMedium: Typeface by lazy { Typeface.create("sans-serif-medium", Typeface.NORMAL) }
+    private val semibold: Typeface by lazy {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            Typeface.create(Typeface.create("sans-serif", Typeface.NORMAL), 600, false)
+        } else {
+            Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        }
+    }
     private val mono: Typeface by lazy { Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL) }
 
     fun bodyTypeface(): Typeface = sans
@@ -119,6 +139,31 @@ object RokidHudTokens {
 
     fun monoTypeface(): Typeface = mono
 
-    fun dp(context: Context, value: Int): Int =
-        (value * context.resources.displayMetrics.density).toInt()
+    // typography.mono — coordinates, codes, counters. 11 / 14 / 400.
+    const val MONO_TEXT_SIZE = 11f
+
+    // typography.body-small — supporting text. 12 / 16 / 400.
+    const val BODY_SMALL_TEXT_SIZE = 12f
+
+    // typography.heading — panel/screen title, sans, 600 weight. 16 / 22 / 600.
+    const val HEADING_TEXT_SIZE = 16f
+
+    // typography.display — one value or title per screen, at most; sans, 600 weight. 22 / 28 / 600.
+    const val DISPLAY_TEXT_SIZE = 22f
+
+    /** `heading` and `display` are 600 weight; the platform has no 600 sans, so this is its semibold cut. */
+    fun headingTypeface(): Typeface = semibold
+
+    fun displayTypeface(): Typeface = semibold
+
+    /** [color] with its alpha multiplied by [factor] (0..1); a token color faded, never re-hued. */
+    fun scaleAlpha(color: Int, factor: Float): Int {
+        val alpha = ((color ushr 24) * factor.coerceIn(0f, 1f)).toInt().coerceIn(0, 255)
+        return (alpha shl 24) or (color and 0xFFFFFF)
+    }
+
+    /** Sets a token text size, which is in pixels (see the unit note above), never scaled. */
+    fun applyTextSize(view: TextView, sizePx: Float) {
+        view.setTextSize(TypedValue.COMPLEX_UNIT_PX, sizePx)
+    }
 }

@@ -9,8 +9,12 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
-import android.os.SystemClock
 import android.view.KeyEvent
+import com.anezium.rokidbus.glasses.hud.CloseReason
+import com.anezium.rokidbus.glasses.hud.DisplayPath
+import com.anezium.rokidbus.glasses.hud.HudController
+import com.anezium.rokidbus.glasses.hud.HudIntent
+import com.anezium.rokidbus.glasses.hud.forwardsBackToPlugin
 import com.anezium.rokidbus.shared.BusEnvelope
 import com.anezium.rokidbus.shared.BusPaths
 import com.anezium.rokidbus.shared.EditableSurfaceContract
@@ -25,7 +29,6 @@ import java.util.concurrent.Executors
 object SurfaceController {
     private const val PREFS = "surface_renderer"
     private const val PREF_DISPLAY_PATH = "display_path"
-    private const val BACK_FAILSAFE_MS = 1_500L
     private val main = Handler(Looper.getMainLooper())
     private val inkRendererLayer = InkRendererLayer(
         main,
@@ -37,16 +40,12 @@ object SurfaceController {
     private val inkPresentationGate = InkPresentationGate()
     private val listeners = CopyOnWriteArrayList<(NexusSurface?) -> Unit>()
     private val readerScrollListeners = CopyOnWriteArrayList<(Int) -> Unit>()
-    private val inputDedupe = DpadPairDedupe()
-    private val suppressedDpadUps = mutableSetOf<Int>()
-    private val ringInputPolicy = RingSurfaceInputPolicy()
-    private val ringTapExpiry = Runnable(::resolveRingTaps)
     private val imageDecodeCoordinator = ImageDecodeCoordinator<Bitmap>()
     private val imageDecodeExecutor = Executors.newFixedThreadPool(2) { runnable ->
         Thread(runnable, "RokidNexusImageDecode").apply { isDaemon = true }
     }
-    private var backFailsafeSurfaceId: String? = null
-    private var backFailsafe: Runnable? = null
+    // Set when BACK was forwarded to a handlesBack plugin, so its hide is reported as the wearer's.
+    private var backForwardedSurfaceId: String? = null
     private var inkFrameMeterRunning = false
     private var displayStateReceiverRegistered = false
     private var inkDisplayTransitioning = false
@@ -249,87 +248,113 @@ object SurfaceController {
         return "surfaceDemo=${path.prefValue} surfaceId=${surface.surfaceId}"
     }
 
-    fun handleKeyEvent(event: KeyEvent): Boolean {
-        val surface = active ?: return false
-        if (surface.isReader) return handleReaderKeyEvent(surface, event)
-        if (surface.kind == NexusSurface.KIND_CARD && surface.editable != null) {
-            // FORWARDED_KEYS below exists for read-only cards' remote-control
-            // navigation (space/enter as media or select). An editable field
-            // needs those same keys typed, not intercepted, so only BACK is
-            // still claimed here; everything else reaches the focused EditText
-            // the normal Android way.
-            if (event.keyCode == KeyEvent.KEYCODE_BACK &&
-                event.action == KeyEvent.ACTION_DOWN &&
-                event.repeatCount == 0
-            ) {
-                handleBackDown(surface)
-                return true
-            }
-            return false
-        }
-        if (shouldSuppressDpadEvent(event)) {
-            return true
-        }
-        if (surface.isInk && inkRendererLayer.handleKeyEvent(event)) {
-            return true
-        }
-        if ((event.action == KeyEvent.ACTION_DOWN || event.action == KeyEvent.ACTION_UP) &&
-            event.keyCode in FORWARDED_KEYS
-        ) {
-            forwardSurfaceInput(event.keyCode, event.action)
-        }
-        if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-            handleBackDown(surface)
-            return true
-        }
-        return event.keyCode in FORWARDED_KEYS
-    }
-
-    fun handleRingKey(keyCode: Int, eventTimeMs: Long): Boolean {
-        val surface = active ?: return false
-        if (surface.isReader) {
-            readerScrollDirection(keyCode)?.let { direction ->
-                val dedupeKey = if (direction > 0) {
-                    KeyEvent.KEYCODE_DPAD_RIGHT
+    /**
+     * Runs an intent the HUD state machine routed to the active surface. Keys are decided before
+     * they get here: this only delivers them to the Ink renderer or the plugin, or scrolls a
+     * reader. Ring and swipe directions arrive as [HudIntent.Next]/[HudIntent.Prev] and become the
+     * D-pad keys a plugin has always been sent for them.
+     */
+    fun onHudIntent(surfaceId: String, intent: HudIntent) {
+        val surface = active?.takeIf { it.surfaceId == surfaceId } ?: return
+        when (intent) {
+            HudIntent.Next ->
+                if (surface.isReader) requestReaderScroll(1) else deliverKeyPair(surface, KeyEvent.KEYCODE_DPAD_RIGHT)
+            HudIntent.Prev ->
+                if (surface.isReader) requestReaderScroll(-1) else deliverKeyPair(surface, KeyEvent.KEYCODE_DPAD_LEFT)
+            HudIntent.Select -> deliverKeyPair(surface, KeyEvent.KEYCODE_ENTER)
+            is HudIntent.Raw -> {
+                val key = intent.key
+                val action = if (key.isDown) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP
+                if (key.keyCode == TripleTapDetector.KEYCODE_NOTIFICATION) {
+                    forwardSurfaceInput(key.keyCode, action)
                 } else {
-                    KeyEvent.KEYCODE_DPAD_LEFT
+                    deliverKey(surface, key.keyCode, action)
                 }
-                if (inputDedupe.onKey(dedupeKey, KeyEvent.ACTION_DOWN, 0, eventTimeMs) != null) {
-                    requestReaderScroll(direction)
-                }
-                return true
             }
+            HudIntent.Dismiss -> {
+                // Only a handlesBack plugin gets here: it decides, and the machine's failsafe closes
+                // the surface if it does not.
+                backForwardedSurfaceId = surface.surfaceId
+                forwardSurfaceInput(KeyEvent.KEYCODE_BACK, KeyEvent.ACTION_DOWN)
+            }
+            is HudIntent.OpenLauncher -> Unit
         }
-        applyRingResolution(ringInputPolicy.onKeyDown(keyCode, eventTimeMs))
-        if (keyCode == RingSurfaceInputPolicy.RING_KEYCODE_TAP) {
-            main.removeCallbacks(ringTapExpiry)
-            main.postDelayed(ringTapExpiry, RingTapPolicy.DEFAULT_WINDOW_MS + 1L)
-        }
-        return true
     }
 
-    private fun handleReaderKeyEvent(surface: NexusSurface, event: KeyEvent): Boolean {
-        if (event.keyCode in READER_SCROLL_KEYS) {
-            if (event.keyCode in DPAD_DIRECTION_KEYS && shouldSuppressDpadEvent(event)) return true
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                readerScrollDirection(event.keyCode)?.let(::requestReaderScroll)
-            }
-            return true
-        }
-        if ((event.action == KeyEvent.ACTION_DOWN || event.action == KeyEvent.ACTION_UP) &&
-            event.keyCode in READER_FORWARDED_KEYS
-        ) {
-            forwardSurfaceInput(event.keyCode, event.action)
-        }
-        if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-            handleBackDown(surface)
-            return true
-        }
-        return event.keyCode in READER_FORWARDED_KEYS
+    private fun deliverKeyPair(surface: NexusSurface, keyCode: Int) {
+        deliverKey(surface, keyCode, KeyEvent.ACTION_DOWN)
+        deliverKey(surface, keyCode, KeyEvent.ACTION_UP)
     }
 
-    fun cancelRingInput() {
-        runOnMain(::resetRingInputOnMain)
+    private fun deliverKey(surface: NexusSurface, keyCode: Int, action: Int) {
+        if (!surface.isReader && surface.isInk) {
+            // Route through the renderer's local-consumption hook first, like any other key.
+            val now = android.os.SystemClock.uptimeMillis()
+            if (inkRendererLayer.handleKeyEvent(KeyEvent(now, now, action, keyCode, 0))) return
+        }
+        val forwarded = if (surface.isReader) READER_FORWARDED_KEYS else FORWARDED_KEYS
+        if (keyCode in forwarded) forwardSurfaceInput(keyCode, action)
+    }
+
+    /** The machine closes the surface: the wearer dismissed it, its BACK failsafe ran, or a native app took over. */
+    fun closeFromHud(surfaceId: String, reason: CloseReason) {
+        runOnMain {
+            val surface = active?.takeIf { it.surfaceId == surfaceId } ?: return@runOnMain
+            when (reason) {
+                CloseReason.WEARER_DISMISSED -> {
+                    if (reason.forwardsBackToPlugin()) forwardSurfaceInput(KeyEvent.KEYCODE_BACK, KeyEvent.ACTION_DOWN)
+                    closeAsWearer(surface)
+                }
+                CloseReason.OPEN_CANCELLED -> {
+                    // Never displayed, never dismissed: nothing is sent to a plugin that has no closed
+                    // event for a surface, so a re-show cannot start a loop. An Ink surface does have
+                    // one, and still ends its session.
+                    log("Surface closed unseen: its open was cancelled id=$surfaceId")
+                    if (surface.isInk) sendInkClosed(surfaceId, InkSurfaceContract.CLOSE_USER)
+                    hideLocalOnMain(DisplayHoldReleaseReason.SESSION_CLOSED)
+                }
+                CloseReason.BACK_FAILSAFE -> closeAsWearer(surface)
+                CloseReason.SUPERSEDED -> {
+                    if (surface.isInk) sendInkClosed(surfaceId, InkSurfaceContract.CLOSE_USER)
+                    hideLocalOnMain(DisplayHoldReleaseReason.SESSION_CLOSED)
+                }
+            }
+        }
+    }
+
+    private fun closeAsWearer(surface: NexusSurface) {
+        if (surface.isInk) sendInkClosed(surface.surfaceId, InkSurfaceContract.CLOSE_USER)
+        if (surface.kind == NexusSurface.KIND_CARD && surface.editable != null) {
+            forwardSurfaceText("", cancelled = true)
+        }
+        hideLocalOnMain(DisplayHoldReleaseReason.WEARER_DISMISSED)
+    }
+
+    /** The HUD window could not be added: the surface moves to its activity, or an Ink one closes. */
+    fun onOverlayUnavailable(surfaceId: String) {
+        runOnMain {
+            val surface = active?.takeIf { it.surfaceId == surfaceId } ?: return@runOnMain
+            if (surface.isInk) {
+                log("Ink surface overlay unavailable")
+                onInkRendererError(surface, emptyList())
+                return@runOnMain
+            }
+            log("Surface overlay unavailable; falling back to activity")
+            activeDisplayedViaActivity = true
+            MainActivity.finishIfStale()
+            HudController.onSurfacePresented(surface, DisplayPath.ACTIVITY, asShow = true)
+        }
+    }
+
+    fun startSurfaceActivity(context: Context, surfaceId: String) {
+        runCatching {
+            context.startActivity(
+                Intent(context, SurfaceActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    .putExtra("surfaceId", surfaceId),
+            )
+        }.onFailure { logError("SurfaceActivity start failed", it) }
     }
 
     fun onPhoneLinkLost() {
@@ -449,8 +474,6 @@ object SurfaceController {
         forcedPath: SurfaceDisplayPath? = null,
         launcherShow: Boolean = false,
     ) {
-        val completesRingHandoff =
-            launcherShow && launcherReturnCoordinator.onSurfaceShown(surface.surfaceId)
         runOnMain {
             if (surface.isInk) {
                 ensureDisplayStateMonitoring(context)
@@ -464,10 +487,9 @@ object SurfaceController {
             val coordinated = if (keepMediaDecode) null else imageDecodeCoordinator.invalidate()
             coordinated?.recycleSafely()
             recycleActiveImageUnless(surface.imageBitmap ?: coordinated)
-            cancelBackFailsafeOnMain(surface.surfaceId)
+            clearBackForwarded(surface.surfaceId)
             DisplayWakePolicy.requestWake(context, DisplayWakeKind.SURFACE, requested = true)
             deactivateReplacedSurface(surface.surfaceId)
-            prepareRingInputForSurface(surface.surfaceId)
             AssistantDisplayEpisode.accept(
                 context,
                 assistantEpisodeSurfacePresentedSignal(surface.ownerPluginId),
@@ -478,13 +500,8 @@ object SurfaceController {
             val isHandoff = active?.surfaceId != surface.surfaceId
             active = surface
             syncInkFrameMeter(surface)
-            RingFocusBroadcastCoordinator.setSurfaceActive(
-                context,
-                active = true,
-                completesHandoff = completesRingHandoff,
-            )
             notifyListeners(surface)
-            displaySurface(context, surface, forcedPath, isHandoff)
+            displaySurface(context, surface, forcedPath, isHandoff, launcherShow)
         }
     }
 
@@ -518,8 +535,6 @@ object SurfaceController {
         baseOrder: SurfaceOrder,
         launcherShow: Boolean = false,
     ) {
-        val completesRingHandoff =
-            launcherShow && launcherReturnCoordinator.onSurfaceShown(surface.surfaceId)
         val metadata = surface.imageMetadata ?: surface.mediaArtworkMetadata ?: return
         val key = ImageDecodeKey(surface.surfaceId, baseOrder.seq, metadata.contentKey)
         runOnMain {
@@ -531,23 +546,17 @@ object SurfaceController {
                 notifyReplacedInk(surface)
                 clearInkRenderer()
                 recycleActiveImageUnless(surface.imageBitmap)
-                cancelBackFailsafeOnMain(surface.surfaceId)
+                clearBackForwarded(surface.surfaceId)
                 DisplayWakePolicy.requestWake(context, DisplayWakeKind.SURFACE, requested = true)
                 deactivateReplacedSurface(surface.surfaceId)
-                prepareRingInputForSurface(surface.surfaceId)
                 AssistantDisplayEpisode.accept(
                     context,
                     assistantEpisodeSurfacePresentedSignal(surface.ownerPluginId),
                 )
                 val isHandoff = active?.surfaceId != surface.surfaceId
                 active = surface
-                RingFocusBroadcastCoordinator.setSurfaceActive(
-                    context,
-                    active = true,
-                    completesHandoff = completesRingHandoff,
-                )
                 notifyListeners(surface)
-                displaySurface(context, surface, null, isHandoff)
+                displaySurface(context, surface, null, isHandoff, launcherShow)
             }
             imageDecodeExecutor.execute {
                 val decoded = ImageHudView.decodeRgb565(bytes, metadata)
@@ -579,26 +588,20 @@ object SurfaceController {
                             val published = target.copy(imageBitmap = decoded)
                             notifyReplacedInk(published)
                             clearInkRenderer()
-                            cancelBackFailsafeOnMain(target.surfaceId)
+                            clearBackForwarded(target.surfaceId)
                             DisplayWakePolicy.requestWake(
                                 context,
                                 DisplayWakeKind.SURFACE,
                                 requested = true,
                             )
-                            prepareRingInputForSurface(target.surfaceId)
                             AssistantDisplayEpisode.accept(
                                 context,
                                 assistantEpisodeSurfacePresentedSignal(published.ownerPluginId),
                             )
                             val isHandoff = current?.surfaceId != published.surfaceId
                             active = published
-                            RingFocusBroadcastCoordinator.setSurfaceActive(
-                                context,
-                                active = true,
-                                completesHandoff = completesRingHandoff,
-                            )
                             notifyListeners(published)
-                            displaySurface(context, published, null, isHandoff)
+                            displaySurface(context, published, null, isHandoff, launcherShow)
                         }
                     }
                 }
@@ -611,46 +614,32 @@ object SurfaceController {
         surface: NexusSurface,
         forcedPath: SurfaceDisplayPath?,
         isHandoff: Boolean,
+        asShow: Boolean,
     ) {
         val path = surfaceDisplayPath(surface, forcedPath ?: displayPath(context))
+        val serviceUp = HudController.isServiceConnected()
         if (surface.isInk) {
             activeDisplayedViaActivity = false
-            if (!SurfaceOverlayRenderer.show(context, surface)) {
+            if (!serviceUp) {
                 log("Ink surface overlay unavailable")
                 onInkRendererError(surface, emptyList())
+                return
             }
+            HudController.onSurfacePresented(surface, DisplayPath.OVERLAY, asShow)
             return
         }
-        // The launcher overlay dismisses itself on the keys it claims, but
-        // nothing makes it step aside for a surface arriving some other way
-        // (a plugin's own gesture, a phone-triggered show like typed notes) —
-        // seen on hardware sitting behind a closed editable card's activity,
-        // stuck open from whenever it was last shown. Only a real handoff onto
-        // the ACTIVITY path needs this: the overlay path never creates the task
-        // that triggers Android's fallback resume, and an update to the surface
-        // already on screen (Lyrics, Media) isn't a handoff at all — doing this
-        // on every such update made the launcher overlay vanish out from under
-        // whatever plugin was already showing it.
-        fun stepLauncherAside() {
-            if (!isHandoff) return
-            LauncherOverlayRenderer.hide()
-            MainActivity.finishIfStale()
-        }
-        when (path) {
-            SurfaceDisplayPath.ACTIVITY -> {
-                activeDisplayedViaActivity = true
-                stepLauncherAside()
-                showActivity(context, surface)
-            }
-            SurfaceDisplayPath.OVERLAY -> {
-                activeDisplayedViaActivity = false
-                if (!SurfaceOverlayRenderer.show(context, surface)) {
-                    log("Surface overlay unavailable; falling back to activity")
-                    activeDisplayedViaActivity = true
-                    stepLauncherAside()
-                    showActivity(context, surface)
-                }
-            }
+        // Only a real handoff onto the ACTIVITY path needs a stale MainActivity finished: the
+        // overlay path never creates the task that triggers Android's fallback resume, and an
+        // update to the surface already on screen (Lyrics, Media) isn't a handoff at all.
+        val viaActivity = path == SurfaceDisplayPath.ACTIVITY || !serviceUp
+        activeDisplayedViaActivity = viaActivity
+        if (viaActivity) {
+            if (isHandoff) MainActivity.finishIfStale()
+            HudController.onSurfacePresented(surface, DisplayPath.ACTIVITY, asShow)
+            // With the service down the machine draws nothing; the activity is the display.
+            if (!serviceUp) startSurfaceActivity(context, surface.surfaceId)
+        } else {
+            HudController.onSurfacePresented(surface, DisplayPath.OVERLAY, asShow)
         }
     }
 
@@ -668,13 +657,13 @@ object SurfaceController {
         if (surfaceId.isBlank()) return
         when (val decision = orderingCoordinator.onHide(surfaceId, seq)) {
             SurfaceOrderDecision.ApplyHide -> {
-                val endReason = if (backFailsafeSurfaceId == surfaceId) {
+                val endReason = if (backForwardedSurfaceId == surfaceId) {
                     DisplayHoldReleaseReason.WEARER_DISMISSED
                 } else {
                     DisplayHoldReleaseReason.SESSION_CLOSED
                 }
                 val pending = pendingInk?.takeIf { it.surfaceId == surfaceId }
-                cancelBackFailsafeOnMain(surfaceId)
+                clearBackForwarded(surfaceId)
                 if (active?.surfaceId == surfaceId) {
                     if (active?.isInk == true) {
                         sendInkClosed(surfaceId, InkSurfaceContract.CLOSE_PLUGIN)
@@ -695,10 +684,6 @@ object SurfaceController {
         }
     }
 
-    private fun hideLocal(reason: DisplayHoldReleaseReason) {
-        runOnMain { hideLocalOnMain(reason) }
-    }
-
     private fun hideLocalOnMain(reason: DisplayHoldReleaseReason) {
         // Same reasoning as the show-side call in displaySurface, and gated the
         // same way: only a surface that actually rendered through the ACTIVITY
@@ -716,19 +701,15 @@ object SurfaceController {
         }
         val activeSurfaceId = active?.surfaceId
         if (pendingInk?.surfaceId == activeSurfaceId) pendingInk = null
-        val returnToLauncher = activeSurfaceId?.let(launcherReturnCoordinator::consumeReturnOnHide) == true
-        activeSurfaceId?.let { cancelBackFailsafeOnMain(it) }
+        activeSurfaceId?.let { clearBackForwarded(it) }
         activeSurfaceId?.let(orderingCoordinator::deactivate)
         val coordinated = activeSurfaceId?.let(imageDecodeCoordinator::invalidate)
         coordinated?.recycleSafely()
         recycleActiveImageUnless(coordinated)
         clearInkRenderer()
-        resetRingInputOnMain()
         active = null
         notifyListeners(null)
-        SurfaceOverlayRenderer.hide()
-        if (returnToLauncher) LauncherOverlayRenderer.show()
-        RingFocusBroadcastCoordinator.setSurfaceInactive()
+        activeSurfaceId?.let(HudController::onSurfaceHidden)
     }
 
     private fun deactivateReplacedSurface(surfaceId: String) {
@@ -896,52 +877,6 @@ object SurfaceController {
         )
     }
 
-    private fun shouldSuppressDpadEvent(event: KeyEvent): Boolean {
-        if (event.keyCode !in DPAD_DIRECTION_KEYS) return false
-        if (event.action == KeyEvent.ACTION_UP && suppressedDpadUps.remove(event.keyCode)) {
-            return true
-        }
-        if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount != 0) return false
-        val direction = inputDedupe.onKey(event.keyCode, event.action, event.repeatCount, event.eventTime)
-        if (direction != null) return false
-        suppressedDpadUps += event.keyCode
-        return true
-    }
-
-    private fun resolveRingTaps() {
-        applyRingResolution(ringInputPolicy.resolveExpired(SystemClock.uptimeMillis()))
-    }
-
-    private fun applyRingResolution(resolution: RingSurfaceInputPolicy.Resolution?) {
-        when (resolution) {
-            is RingSurfaceInputPolicy.Resolution.Forward -> {
-                val readerDirection = active?.takeIf { it.isReader }?.let {
-                    resolution.events.firstNotNullOfOrNull { event ->
-                        readerScrollDirection(event.keyCode)
-                    }
-                }
-                if (readerDirection != null) {
-                    requestReaderScroll(readerDirection)
-                } else {
-                    // Route through the full key pipeline so the ink renderer's
-                    // local-consumption hook sees ring input like any other key.
-                    resolution.events.forEach { event ->
-                        val now = SystemClock.uptimeMillis()
-                        handleKeyEvent(KeyEvent(now, now, event.action, event.keyCode, 0))
-                    }
-                }
-            }
-            RingSurfaceInputPolicy.Resolution.Back -> {
-                val surface = active ?: return
-                forwardSurfaceInput(KeyEvent.KEYCODE_BACK, KeyEvent.ACTION_DOWN)
-                handleBackDown(surface)
-            }
-            RingSurfaceInputPolicy.Resolution.Ignore,
-            null,
-            -> Unit
-        }
-    }
-
     private fun requestReaderScroll(direction: Int) {
         runOnMain {
             readerScrollListeners.forEach { listener ->
@@ -950,65 +885,8 @@ object SurfaceController {
         }
     }
 
-    private fun readerScrollDirection(keyCode: Int): Int? = when (keyCode) {
-        KeyEvent.KEYCODE_DPAD_RIGHT,
-        KeyEvent.KEYCODE_DPAD_DOWN,
-        KeyEvent.KEYCODE_MEDIA_NEXT,
-        -> 1
-        KeyEvent.KEYCODE_DPAD_LEFT,
-        KeyEvent.KEYCODE_DPAD_UP,
-        KeyEvent.KEYCODE_MEDIA_PREVIOUS,
-        -> -1
-        else -> null
-    }
-
-    private fun handleBackDown(surface: NexusSurface) {
-        if (surface.handlesBack) {
-            armBackFailsafe(surface.surfaceId)
-        } else {
-            if (surface.isInk) sendInkClosed(surface.surfaceId, InkSurfaceContract.CLOSE_USER)
-            if (surface.kind == NexusSurface.KIND_CARD && surface.editable != null) {
-                forwardSurfaceText("", cancelled = true)
-            }
-            hideLocal(DisplayHoldReleaseReason.WEARER_DISMISSED)
-        }
-    }
-
-    private fun prepareRingInputForSurface(surfaceId: String) {
-        if (active?.surfaceId != surfaceId) resetRingInputOnMain()
-    }
-
-    private fun resetRingInputOnMain() {
-        main.removeCallbacks(ringTapExpiry)
-        ringInputPolicy.reset()
-    }
-
-    private fun armBackFailsafe(surfaceId: String) {
-        runOnMain {
-            cancelBackFailsafeOnMain()
-            val runnable = Runnable {
-                if (active?.surfaceId == surfaceId) {
-                    if (active?.isInk == true) {
-                        sendInkClosed(surfaceId, InkSurfaceContract.CLOSE_USER)
-                    }
-                    hideLocalOnMain(DisplayHoldReleaseReason.WEARER_DISMISSED)
-                }
-                if (backFailsafeSurfaceId == surfaceId) {
-                    backFailsafeSurfaceId = null
-                    backFailsafe = null
-                }
-            }
-            backFailsafeSurfaceId = surfaceId
-            backFailsafe = runnable
-            main.postDelayed(runnable, BACK_FAILSAFE_MS)
-        }
-    }
-
-    private fun cancelBackFailsafeOnMain(surfaceId: String? = null) {
-        if (surfaceId != null && backFailsafeSurfaceId != surfaceId) return
-        backFailsafe?.let { main.removeCallbacks(it) }
-        backFailsafeSurfaceId = null
-        backFailsafe = null
+    private fun clearBackForwarded(surfaceId: String) {
+        if (backForwardedSurfaceId == surfaceId) backForwardedSurfaceId = null
     }
 
     private fun runOnMain(action: () -> Unit) {
@@ -1016,21 +894,6 @@ object SurfaceController {
             action()
         } else {
             main.post(action)
-        }
-    }
-
-    private fun showActivity(context: Context, surface: NexusSurface) {
-        SurfaceOverlayRenderer.hide()
-        runCatching {
-            context.startActivity(
-                Intent(context, SurfaceActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                    .putExtra("surfaceId", surface.surfaceId),
-            )
-        }.onFailure {
-            logError("SurfaceActivity start failed; trying overlay", it)
-            SurfaceOverlayRenderer.show(context, surface)
         }
     }
 
@@ -1058,18 +921,6 @@ object SurfaceController {
         KeyEvent.KEYCODE_DPAD_DOWN,
         KeyEvent.KEYCODE_SPACE,
         KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
-        KeyEvent.KEYCODE_MEDIA_NEXT,
-        KeyEvent.KEYCODE_MEDIA_PREVIOUS,
-    )
-
-    private val DPAD_DIRECTION_KEYS = setOf(
-        KeyEvent.KEYCODE_DPAD_LEFT,
-        KeyEvent.KEYCODE_DPAD_RIGHT,
-        KeyEvent.KEYCODE_DPAD_UP,
-        KeyEvent.KEYCODE_DPAD_DOWN,
-    )
-
-    private val READER_SCROLL_KEYS = DPAD_DIRECTION_KEYS + setOf(
         KeyEvent.KEYCODE_MEDIA_NEXT,
         KeyEvent.KEYCODE_MEDIA_PREVIOUS,
     )

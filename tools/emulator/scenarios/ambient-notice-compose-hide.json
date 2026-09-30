@@ -1,0 +1,21 @@
+{
+  "description": "Hides the compose band and its card.",
+  "envelopes": [
+    {
+      "path": "/notice/hide",
+      "payload": {
+        "surfaceId": "relay:notice",
+        "ownerPluginId": "relay",
+        "noticeInstanceId": "inst-c",
+        "noticeQuestionId": "q-c"
+      }
+    },
+    {
+      "path": "/surface/hide",
+      "payload": {
+        "surfaceId": "relay:reply",
+        "ownerPluginId": "relay"
+      }
+    }
+  ]
+}

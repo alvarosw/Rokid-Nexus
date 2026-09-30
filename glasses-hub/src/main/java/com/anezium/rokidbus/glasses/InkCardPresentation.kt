@@ -4,7 +4,7 @@ import android.content.Context
 import android.graphics.Rect
 import android.view.View
 import android.widget.FrameLayout
-import com.anezium.rokidbus.client.ui.BusTheme
+import com.anezium.rokidbus.client.ui.RokidHudTokens
 import kotlin.math.roundToInt
 
 /** Geometry shared by the notice band and the Ink card it becomes. */
@@ -15,8 +15,10 @@ internal object HudBandGeometry {
     fun widthPx(displayWidthPx: Int): Int =
         (displayWidthPx.coerceAtLeast(0) * WIDTH_FRACTION).toInt()
 
+    // dp, not the design-token pixels: the Ink rpx layout is measured on this width and top, so the
+    // card's metrics stay what they were, and the notice band that morphs into it shares them.
     fun topPx(context: Context, hudTopInsetDp: Int): Int =
-        BusTheme.dp(context, EDGE_MARGIN_DP + HudTopInset.sanitize(hudTopInsetDp))
+        ((EDGE_MARGIN_DP + HudTopInset.sanitize(hudTopInsetDp)) * context.resources.displayMetrics.density).toInt()
 
     fun availableHeightPx(displayHeightPx: Int, topPx: Int): Int =
         (displayHeightPx - topPx).coerceAtLeast(0)
@@ -38,7 +40,8 @@ internal fun surfaceHudMode(kind: String): SurfaceHudMode =
  *
  * This is a value rather than a pair of methods because `SurfaceHudView` cannot
  * be instantiated under Robolectric (`ReaderSurfaceView` calls an API the
- * sandbox does not shadow), and the decision still deserves a test.
+ * sandbox does not shadow), and the decision still deserves a test. The full-bleed padding is the
+ * legacy dp figure `InkCardPresentationTest` pins; the view itself lays out on the design safe area.
  */
 internal data class SurfaceHostChrome(
     val backgroundColor: Int?,
@@ -52,7 +55,7 @@ internal fun surfaceHostChrome(mode: SurfaceHudMode, hudTopInsetDp: Int): Surfac
     when (mode) {
         SurfaceHudMode.INK_CARD -> SurfaceHostChrome(null, 0, 0, 0, 0)
         SurfaceHudMode.FULL_BLEED -> SurfaceHostChrome(
-            backgroundColor = BusTheme.glassesBg,
+            backgroundColor = RokidHudTokens.GROUND,
             paddingLeftDp = 18,
             paddingTopDp = 16 + HudTopInset.sanitize(hudTopInsetDp),
             paddingRightDp = 18,

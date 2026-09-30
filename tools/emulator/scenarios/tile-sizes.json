@@ -1,0 +1,31 @@
+{
+  "description": "Custom tile sizes: lyrics WIDE, media TALL, nav LARGE.",
+  "envelopes": [
+    {
+      "path": "/glasses/tile-layout/config",
+      "payload": {
+        "version": 1,
+        "entries": [
+          {
+            "pluginId": "lyrics",
+            "size": "2x1",
+            "col": 0,
+            "row": 0
+          },
+          {
+            "pluginId": "media",
+            "size": "1x2",
+            "col": 2,
+            "row": 0
+          },
+          {
+            "pluginId": "nav",
+            "size": "2x2",
+            "col": 0,
+            "row": 1
+          }
+        ]
+      }
+    }
+  ]
+}

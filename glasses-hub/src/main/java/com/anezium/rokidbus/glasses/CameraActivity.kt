@@ -24,6 +24,7 @@ import android.widget.TextView
 import com.anezium.rokidbus.client.BusClient
 import com.anezium.rokidbus.client.BusEvent
 import com.anezium.rokidbus.client.HubTarget
+import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.shared.BusCapabilityBits
 import com.anezium.rokidbus.shared.BusPaths
 import com.anezium.rokidbus.shared.CameraLinkEndpointOffer
@@ -77,7 +78,7 @@ class CameraActivity : Activity(), TextureView.SurfaceTextureListener {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        window.decorView.setBackgroundColor(Color.BLACK)
+        window.decorView.setBackgroundColor(RokidHudTokens.GROUND)
         buildUi()
         startBusClient()
         hideSystemUi()
@@ -168,8 +169,8 @@ class CameraActivity : Activity(), TextureView.SurfaceTextureListener {
             setBackgroundColor(Color.TRANSPARENT)
         }
         emptyView = TextView(this).apply {
-            setBackgroundColor(Color.BLACK)
-            setTextColor(Color.rgb(113, 255, 151))
+            setBackgroundColor(RokidHudTokens.GROUND)
+            setTextColor(RokidHudTokens.TEXT_PRIMARY)
             textSize = 19f
             typeface = android.graphics.Typeface.MONOSPACE
             gravity = Gravity.CENTER
@@ -178,7 +179,7 @@ class CameraActivity : Activity(), TextureView.SurfaceTextureListener {
         }
         setContentView(
             FrameLayout(this).apply {
-                setBackgroundColor(Color.BLACK)
+                setBackgroundColor(RokidHudTokens.GROUND)
                 addView(previewView, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
                 addView(overlayView, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
                 addView(emptyView, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)

@@ -1,0 +1,12 @@
+{
+  "description": "Ends the transit activity.",
+  "envelopes": [
+    {
+      "path": "/activity/end",
+      "payload": {
+        "surfaceId": "nav:activity",
+        "ownerPluginId": "nav"
+      }
+    }
+  ]
+}

@@ -8,7 +8,7 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
 import android.view.View
-import com.anezium.rokidbus.client.ui.BusTheme
+import com.anezium.rokidbus.client.ui.RokidHudTokens
 
 /** Draws decoded pixels as-is with FIT_CENTER on the AR-safe black surface. */
 class ImageHudView(context: Context) : View(context) {
@@ -18,7 +18,7 @@ class ImageHudView(context: Context) : View(context) {
     private var bitmap: Bitmap? = null
 
     init {
-        setBackgroundColor(BusTheme.glassesBg)
+        setBackgroundColor(RokidHudTokens.GROUND)
     }
 
     fun render(surface: NexusSurface?) {

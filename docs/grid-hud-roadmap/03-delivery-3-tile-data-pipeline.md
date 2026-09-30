@@ -1,3 +1,5 @@
+> Current: the tile data pipeline described here remains in use. Only the glasses-side rendering of tiles is superseded by docs/ui-rewrite/ (kept for history).
+
 # Delivery 3 — Tile data pipeline (`WidgetTileContract`)
 
 ## Goal
@@ -62,7 +64,17 @@ border-shape combination, see the [overview](00-overview.md#component-contracts-
 — so `TileTone` mirrors that set directly. The hub-side tile renderer owns
 translating a tone into the `Status`-specified icon/border treatment; a plugin only
 ever picks which of the five states it's in, never a color.
-**Independence note**: `CRITICAL`'s spec includes a blink-then-settle
+**Delivered rendering of `CRITICAL` (U5, docs/ui-rewrite/00-architecture.md §6)**: a `CRITICAL` live
+tile has a solid 1 px `text-primary` border and the `alert` icon at 100 %, and the icon alone blinks
+three times at `duration-default` and then stays steady (not at all under reduced motion). It never
+draws a 2 px critical frame: the 2 px `focus` frame belongs to focus alone, so there is never a second
+one on screen beside the focused tile. `WARN` is the `alert` icon at 72 % on the dashed border. When
+several tiles are `CRITICAL` only one is (the focused one, else the first in packer order) and the
+rest read as `WARN`. State is still told by border, icon and text, never by a color. The original plan
+below (a 2 px `critical` border rendered statically, with Delivery 2's blink as an optional extra) is
+kept for history.
+
+**Independence note (original plan)**: `CRITICAL`'s spec includes a blink-then-settle
 motion, which is Delivery 2's helper — but this delivery does not depend
 on Delivery 2 to be correct. Render `CRITICAL` here with the static parts
 of its spec (2px `critical` border, `alert` icon, text) regardless of
@@ -180,9 +192,10 @@ system has a specific, different primitive for each.
 7. Hub restart with a previously-cached snapshot still on disk shows that
    last-known tile immediately, marked with its real (now-stale) age.
 8. Each of the five `TileTone` values renders with its `Status`-specified
-   icon and border shape, never a distinct color; `CRITICAL` is correct
-   (static or blinking, see the independence note above) whether or not
-   Delivery 2 has shipped.
+   icon and border shape, never a distinct color; `CRITICAL` is a 1 px
+   `text-primary` border with the `alert` icon at 100 % that blinks three
+   times and settles, and focus alone owns the 2 px frame (see the delivered
+   rendering note above).
 9. A tile with no snapshot yet (fresh approval, no cache) shows `Loader`,
    never a blank view; a numeric primary value renders via `DataReadout`
    (mono value, optional unit), never as plain proportional-font text.
@@ -210,9 +223,10 @@ system has a specific, different primitive for each.
   doesn't need physical glasses hardware since it's exercising the bus
   protocol and hub-side cache, not the display compositor.
 - Unit tests for `TileTone` rendering: each of the five tones produces the
-  `Status`-specified icon + border-shape combination, `CRITICAL` reuses
-  Delivery 2's blink-then-settle helper (3 blinks, then steady, never
-  looping, only one `critical` tile at a time), and none of the five tones
+  `Status`-specified icon + border-shape combination, `CRITICAL` is the
+  1 px `text-primary` border with the `alert` icon at 100 %, blinking the
+  icon alone 3 times, then steady, never looping, only one `critical` tile
+  at a time, and none of the five tones
   ever resolves to a color outside the six design-system intensities.
 - A unit test for the pre-first-snapshot state: a tile with no cached
   entry and no snapshot yet renders `Loader` (`scan`/`point`), never a

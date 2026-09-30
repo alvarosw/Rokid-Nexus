@@ -1,0 +1,16 @@
+{
+  "description": "A significant update of ambient-activity's activity: the ordinary flare.",
+  "envelopes": [
+    {
+      "path": "/activity/update",
+      "payload": {
+        "surfaceId": "media:activity",
+        "ownerPluginId": "media",
+        "primary": "Done",
+        "secondary": "album.zip",
+        "progress": 100,
+        "significant": true
+      }
+    }
+  ]
+}

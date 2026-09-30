@@ -1,0 +1,387 @@
+{
+  "description": "14 plugins (the plugins8 set plus six that are never answered); exercises list and grid scrolling.",
+  "envelopes": [
+    {
+      "path": "/launcher/list",
+      "payload": {
+        "plugins": [
+          {
+            "id": "lyrics",
+            "displayName": "Lyrics",
+            "iconKey": "music"
+          },
+          {
+            "id": "media",
+            "displayName": "Now Playing",
+            "iconKey": "disc"
+          },
+          {
+            "id": "nav",
+            "displayName": "Navigation",
+            "iconKey": "map"
+          },
+          {
+            "id": "transit",
+            "displayName": "Transit",
+            "iconKey": "bus"
+          },
+          {
+            "id": "relay",
+            "displayName": "Relay",
+            "iconKey": "send"
+          },
+          {
+            "id": "agents",
+            "displayName": "Agents",
+            "iconKey": "terminal"
+          },
+          {
+            "id": "lens",
+            "displayName": "Lens",
+            "iconKey": "lens"
+          },
+          {
+            "id": "tasker",
+            "displayName": "Tasker",
+            "iconKey": "bolt"
+          },
+          {
+            "id": "weather",
+            "displayName": "Weather",
+            "iconKey": "bolt"
+          },
+          {
+            "id": "notes",
+            "displayName": "Notes",
+            "iconKey": "terminal"
+          },
+          {
+            "id": "timer",
+            "displayName": "Timer",
+            "iconKey": "disc"
+          },
+          {
+            "id": "health",
+            "displayName": "Health",
+            "iconKey": "send"
+          },
+          {
+            "id": "translate",
+            "displayName": "Translate",
+            "iconKey": "lens"
+          },
+          {
+            "id": "camera2",
+            "displayName": "Fitness",
+            "iconKey": "map"
+          }
+        ]
+      }
+    }
+  ],
+  "onOpen": {
+    "lyrics": {
+      "delayMs": 350,
+      "envelopes": [
+        {
+          "path": "/surface/show",
+          "payload": {
+            "surfaceId": "lyrics:main",
+            "ownerPluginId": "lyrics",
+            "handlesBack": false,
+            "kind": "timed-lines",
+            "contentKey": "lyrics-demo",
+            "title": "Lyrics",
+            "subtitle": "Demo Artist",
+            "footer": "synced",
+            "lines": [
+              {
+                "timeMs": 0,
+                "text": "Take me down to the paradise city"
+              },
+              {
+                "timeMs": 4000,
+                "text": "Where the grass is green"
+              },
+              {
+                "timeMs": 8000,
+                "text": "And the girls are pretty"
+              },
+              {
+                "timeMs": 12000,
+                "text": "Oh, won't you please take me home"
+              },
+              {
+                "timeMs": 16000,
+                "text": "Just an echo in the dark"
+              },
+              {
+                "timeMs": 20000,
+                "text": "Carry the tune"
+              }
+            ],
+            "anchor": {
+              "positionMs": 2000,
+              "playing": true,
+              "sentAtElapsedRealtime": 0,
+              "durationMs": 180000,
+              "playbackSpeed": 1.0
+            }
+          }
+        }
+      ]
+    },
+    "media": {
+      "delayMs": 350,
+      "envelopes": [
+        {
+          "path": "/surface/show",
+          "payload": {
+            "surfaceId": "media:main",
+            "ownerPluginId": "media",
+            "handlesBack": false,
+            "kind": "media",
+            "contentKey": "media-demo",
+            "title": "Now Playing",
+            "subtitle": "Phone",
+            "mediaTitle": "Paradise City",
+            "mediaArtist": "Demo Artist",
+            "mediaAlbum": "Demo Album",
+            "anchor": {
+              "positionMs": 61000,
+              "playing": true,
+              "sentAtElapsedRealtime": 0,
+              "durationMs": 206000,
+              "playbackSpeed": 1.0
+            }
+          }
+        }
+      ]
+    },
+    "nav": {
+      "delayMs": 350,
+      "envelopes": [
+        {
+          "path": "/surface/show",
+          "payload": {
+            "surfaceId": "nav:main",
+            "ownerPluginId": "nav",
+            "handlesBack": false,
+            "kind": "card",
+            "contentKey": "nav-demo",
+            "title": "Turn right",
+            "subtitle": "in 150 m",
+            "footer": "ETA 12:40 \u00b7 4.2 km",
+            "lines": [
+              "Onto Avenida de la Constitucion",
+              "Then continue 1.1 km"
+            ]
+          }
+        }
+      ]
+    },
+    "transit": {
+      "delayMs": 350,
+      "envelopes": [
+        {
+          "path": "/surface/show",
+          "payload": {
+            "surfaceId": "transit:main",
+            "ownerPluginId": "transit",
+            "handlesBack": false,
+            "kind": "card",
+            "contentKey": "transit-demo",
+            "title": "Stop Plaza Mayor",
+            "subtitle": "Next departures",
+            "footer": "3 lines",
+            "lines": [
+              {
+                "text": "Line 27",
+                "sub": "Hospital",
+                "badge": "2 min",
+                "selected": true
+              },
+              {
+                "text": "Line 5",
+                "sub": "Central station",
+                "badge": "7 min"
+              },
+              {
+                "text": "Line C1",
+                "sub": "Airport",
+                "badge": "14 min",
+                "tone": "dim"
+              },
+              {
+                "text": "Line 12",
+                "sub": "Delayed",
+                "badge": "22 min",
+                "tone": "alert"
+              },
+              {
+                "text": "Line 9",
+                "sub": "University",
+                "badge": "31 min"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "relay": {
+      "delayMs": 350,
+      "envelopes": [
+        {
+          "path": "/surface/show",
+          "payload": {
+            "surfaceId": "relay:main",
+            "ownerPluginId": "relay",
+            "handlesBack": false,
+            "kind": "reader",
+            "contentKey": "relay-demo",
+            "title": "Conversation",
+            "subtitle": "3 messages",
+            "footer": "scroll with the ring",
+            "readerAnchor": "top",
+            "segments": [
+              {
+                "kind": "header",
+                "text": "Ana \u00b7 2 min ago",
+                "emphasis": true
+              },
+              {
+                "kind": "prose",
+                "text": "Are we still meeting at the station at six? I can bring the tickets if you send me the booking reference."
+              },
+              {
+                "kind": "header",
+                "text": "You \u00b7 1 min ago"
+              },
+              {
+                "kind": "prose",
+                "text": "Yes, six works. Reference is on the way."
+              },
+              {
+                "kind": "aside",
+                "text": "delivered"
+              },
+              {
+                "kind": "header",
+                "text": "Ana \u00b7 now",
+                "emphasis": true
+              },
+              {
+                "kind": "prose",
+                "text": "Perfect. See you there, and do not forget the umbrella, the forecast says rain after seven."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "agents": {
+      "delayMs": 350,
+      "envelopes": [
+        {
+          "path": "/surface/show",
+          "payload": {
+            "surfaceId": "agents:main",
+            "ownerPluginId": "agents",
+            "handlesBack": false,
+            "kind": "ink",
+            "contentKey": "agents-demo",
+            "title": "Agents",
+            "ink": {
+              "document": "@file:ink/agents.document.json"
+            }
+          }
+        }
+      ]
+    },
+    "lens": {
+      "delayMs": 350,
+      "envelopes": [
+        {
+          "path": "/surface/show",
+          "payload": {
+            "surfaceId": "lens:main",
+            "ownerPluginId": "lens",
+            "handlesBack": false,
+            "kind": "image",
+            "contentKey": "lens-demo-1",
+            "title": "Lens",
+            "caption": "Captured frame",
+            "footer": "320 x 200",
+            "imageVersion": 1,
+            "mimeType": "image/png",
+            "pixelWidth": 320,
+            "pixelHeight": 200,
+            "sha256": "@sha256"
+          },
+          "binaryFile": "assets/lens.png"
+        }
+      ]
+    },
+    "tasker": {
+      "delayMs": 350,
+      "envelopes": [
+        {
+          "path": "/surface/show",
+          "payload": {
+            "surfaceId": "tasker:main",
+            "ownerPluginId": "tasker",
+            "handlesBack": false,
+            "kind": "card",
+            "contentKey": "tasker-demo",
+            "title": "Tasker",
+            "subtitle": "Profiles",
+            "footer": "tap to run",
+            "lines": [
+              {
+                "text": "Home wifi",
+                "sub": "active",
+                "badge": "ON",
+                "selected": true
+              },
+              {
+                "text": "Driving mode",
+                "sub": "idle",
+                "badge": "OFF"
+              },
+              {
+                "text": "Night silence",
+                "sub": "idle",
+                "badge": "OFF",
+                "tone": "dim"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "weather": {
+      "never": true,
+      "envelopes": []
+    },
+    "notes": {
+      "never": true,
+      "envelopes": []
+    },
+    "timer": {
+      "never": true,
+      "envelopes": []
+    },
+    "health": {
+      "never": true,
+      "envelopes": []
+    },
+    "translate": {
+      "never": true,
+      "envelopes": []
+    },
+    "camera2": {
+      "never": true,
+      "envelopes": []
+    }
+  }
+}

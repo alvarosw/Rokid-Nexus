@@ -1,5 +1,6 @@
 package com.anezium.rokidbus.glasses
 
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.view.View
@@ -27,7 +28,17 @@ object CriticalBlink {
         fun cancel() = onCancel()
     }
 
-    fun animate(target: View, onSettled: (() -> Unit)? = null): Handle {
+    fun animate(target: View, onSettled: (() -> Unit)? = null): Handle =
+        animate(target.context, { target.alpha = it }, onSettled)
+
+    /** The same pattern on anything that can be faded: [setAlpha] receives each step's intensity. */
+    fun animate(context: Context, setAlpha: (Float) -> Unit, onSettled: (() -> Unit)? = null): Handle {
+        // Reduced motion: the steady end state, no blink (checked at animation start).
+        if (ReducedMotion.isEnabled(context)) {
+            setAlpha(SETTLED_ALPHA)
+            onSettled?.invoke()
+            return Handle {}
+        }
         val handler = Handler(Looper.getMainLooper())
         val totalSteps = BLINK_COUNT * 2
         var step = 0
@@ -36,11 +47,11 @@ object CriticalBlink {
         tick = {
             if (!cancelled) {
                 if (step < totalSteps) {
-                    target.alpha = if (step % 2 == 0) DIM_ALPHA else SETTLED_ALPHA
+                    setAlpha(if (step % 2 == 0) DIM_ALPHA else SETTLED_ALPHA)
                     step++
                     handler.postDelayed({ tick?.invoke() }, RokidHudTokens.DURATION_DEFAULT_MS)
                 } else {
-                    target.alpha = SETTLED_ALPHA
+                    setAlpha(SETTLED_ALPHA)
                     onSettled?.invoke()
                 }
             }

@@ -5,6 +5,8 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.KeyEvent
+import com.anezium.rokidbus.glasses.hud.HudController
+import com.anezium.rokidbus.glasses.hud.HudIntent
 import com.anezium.rokidbus.shared.ActivityCloseReason
 import com.anezium.rokidbus.shared.ActivitySurfaceContent
 import com.anezium.rokidbus.shared.ActivitySurfaceContract
@@ -417,16 +419,12 @@ internal object ActivityController {
     private val main = Handler(Looper.getMainLooper())
     private val state = ActivityStateMachine()
     private val listeners = CopyOnWriteArrayList<(ActivityRenderState) -> Unit>()
-    private val inputDedupe = DpadPairDedupe()
-    private val ringTapPolicy = RingTapPolicy()
-    private val ringTapExpiry = Runnable(::resolveRingTap)
     private var deadlineTask: Runnable? = null
     private var context: Context? = null
     private var surfaceUnsubscribe: (() -> Unit)? = null
     private var pinUnsubscribe: (() -> Unit)? = null
     private var cameraOverlayActive = false
     private var latestRender = ActivityRenderState()
-    private var pendingRingTapTarget: ActivityInputTarget? = null
     private var performRingBack: (() -> Unit)? = null
 
     fun onServiceConnected(context: Context, performRingBack: () -> Unit) {
@@ -447,7 +445,6 @@ internal object ActivityController {
             surfaceUnsubscribe = null
             pinUnsubscribe?.invoke()
             pinUnsubscribe = null
-            cancelRingInput()
             cancelDeadline()
             performRingBack = null
             context = null
@@ -503,71 +500,48 @@ internal object ActivityController {
             !cameraOverlayActive &&
             SurfaceController.activeSurface() == null &&
             NoticeController.visibleNotice() == null &&
-            !LauncherOverlayRenderer.isShown()
+            !HudController.isLauncherShown()
 
-    fun claimsRingKey(keyCode: Int): Boolean {
-        if (!claimsInput()) return false
-        return when (keyCode) {
-            RingSurfaceInputPolicy.RING_KEYCODE_TAP -> true
-            RingSurfaceInputPolicy.RING_KEYCODE_FORWARD,
-            RingSurfaceInputPolicy.RING_KEYCODE_BACKWARD,
-            -> latestRender.primary
-                ?.activity
-                ?.surfaceId
-                ?.let(state::hasActions) == true
-            else -> false
-        }
-    }
+    /** The primary activity has actions, so the directions move a selection (ring and generic). */
+    fun hasInputActions(): Boolean =
+        claimsInput() && latestRender.primary
+            ?.activity
+            ?.surfaceId
+            ?.let(state::hasActions) == true
+
+    /** The activity a tap made now would be for, captured by the first tap of a ring sequence. */
+    internal fun inputTargetSnapshot(): ActivityInputTarget? = currentInputTarget()
 
     /**
-     * Claims only activity directions and confirmation. BACK and unrelated keys
-     * continue down the pre-existing chain unchanged.
+     * Runs an intent [HudInput][com.anezium.rokidbus.glasses.hud.HudInput] aimed at the idle activity
+     * layer. A ring tap resolves against [capturedTap]: it fires only while that same activity is
+     * still primary and the layer is still ours (01 item 130). BACK is not claimed here; a ring
+     * double tap returns to the system, as it always has.
      */
-    fun handleKeyEvent(event: KeyEvent): Boolean {
-        if (!claimsInput()) return false
-        if (event.keyCode == TripleTapDetector.KEYCODE_NOTIFICATION) {
-            return event.action == KeyEvent.ACTION_DOWN || event.action == KeyEvent.ACTION_UP
-        }
-        if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount != 0) return false
-        when (inputDedupe.onKey(event.keyCode, event.action, event.repeatCount, event.eventTime)) {
-            DpadPairDedupe.Direction.FORWARD -> return moveSelection(1)
-            DpadPairDedupe.Direction.BACKWARD -> return moveSelection(-1)
-            null -> Unit
-        }
-        return when (event.keyCode) {
-            KeyEvent.KEYCODE_ENTER,
-            KeyEvent.KEYCODE_DPAD_CENTER,
-            -> fireOrOpen()
-            else -> false
-        }
-    }
-
-    fun handlePendingTempleTap(): Boolean =
-        if (claimsInput()) fireOrOpen() else false
-
-    fun handleRingKey(keyCode: Int, eventTimeMs: Long): Boolean {
-        if (!claimsRingKey(keyCode)) return false
-        return when (keyCode) {
-            RingSurfaceInputPolicy.RING_KEYCODE_FORWARD -> moveSelection(1)
-            RingSurfaceInputPolicy.RING_KEYCODE_BACKWARD -> moveSelection(-1)
-            RingSurfaceInputPolicy.RING_KEYCODE_TAP -> {
-                if (pendingRingTapTarget == null) {
-                    pendingRingTapTarget = currentInputTarget()
+    internal fun onHudIntent(intent: HudIntent, capturedTap: ActivityInputTarget?) {
+        runOnMain {
+            when (intent) {
+                HudIntent.Next -> moveSelection(1)
+                HudIntent.Prev -> moveSelection(-1)
+                HudIntent.Select ->
+                    if (capturedTap != null) {
+                        if (canResolveActivityTap(capturedTap, currentInputTarget(), claimsInput())) {
+                            fireCaptured(capturedTap)
+                        }
+                    } else {
+                        handlePendingTempleTap()
+                    }
+                HudIntent.Dismiss -> performRingBack?.invoke()
+                is HudIntent.Raw -> if (intent.key.keyCode == TripleTapDetector.KEYCODE_NOTIFICATION) {
+                    handlePendingTempleTap()
                 }
-                ringTapPolicy.onTap(eventTimeMs)
-                main.removeCallbacks(ringTapExpiry)
-                main.postDelayed(ringTapExpiry, RingTapPolicy.DEFAULT_WINDOW_MS + 1L)
-                true
+                is HudIntent.OpenLauncher -> Unit
             }
-            else -> false
         }
     }
 
-    fun cancelRingInput() {
-        main.removeCallbacks(ringTapExpiry)
-        ringTapPolicy.reset()
-        pendingRingTapTarget = null
-    }
+    private fun handlePendingTempleTap(): Boolean =
+        if (claimsInput()) fireOrOpen() else false
 
     private fun start(envelope: BusEnvelope) {
         val payload = envelope.payload
@@ -705,7 +679,7 @@ internal object ActivityController {
     private fun presentationContext(): ActivityPresentationContext = when {
         cameraOverlayActive -> ActivityPresentationContext.CAMERA_OVERLAY
         SurfaceController.activeSurface() != null -> ActivityPresentationContext.ACTIVE_SURFACE
-        LauncherOverlayRenderer.isShown() -> ActivityPresentationContext.NEXUS_LAUNCHER
+        HudController.isLauncherShown() -> ActivityPresentationContext.NEXUS_LAUNCHER
         else -> ActivityPresentationContext.IDLE_OR_NATIVE_HOME
     }
 
@@ -780,30 +754,6 @@ internal object ActivityController {
                 actionId = state.selectedAction(activity.surfaceId)?.id,
             )
         }
-
-    private fun resolveRingTap() {
-        val target = pendingRingTapTarget
-        pendingRingTapTarget = null
-        when (ringTapPolicy.resolveExpired(SystemClock.elapsedRealtime())) {
-            RingTapPolicy.Resolution.SINGLE -> {
-                if (
-                    canResolveActivityTap(
-                        captured = target,
-                        current = currentInputTarget(),
-                        idleLayerStillOwned = claimsInput(),
-                    )
-                ) {
-                    fireCaptured(target!!)
-                }
-            }
-            // Activities do not dismiss on BACK. Preserve the ring's existing
-            // double-tap translation by returning it to the system instead.
-            RingTapPolicy.Resolution.DOUBLE -> performRingBack?.invoke()
-            RingTapPolicy.Resolution.IGNORE,
-            null,
-            -> Unit
-        }
-    }
 
     private fun reportClosed(surfaceId: String, reason: ActivityCloseReason) {
         GlassesHub.sendToPhone(

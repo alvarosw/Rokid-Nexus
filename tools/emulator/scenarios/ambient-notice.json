@@ -1,0 +1,6 @@
+{
+  "description": "A plain notice band (45 s) over whatever is up; the phone hub would stamp seq.",
+  "envelopes": [
+    {"path": "/notice/show", "payload": {"kind": "notice", "surfaceId": "lyrics:notice", "ownerPluginId": "lyrics", "noticeInstanceId": "inst-a", "noticeQuestionId": "q-a", "title": "Build finished", "body": "All 412 tests passed in 3m 12s.", "ttlMs": 45000}}
+  ]
+}

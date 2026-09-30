@@ -11,6 +11,7 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import com.anezium.rokidbus.glasses.hud.HudController
 
 /** Screen-on-only Android edge around [DisplayStandbyPolicy]. */
 internal class DisplayStandbyWatchdog(
@@ -147,7 +148,7 @@ internal class DisplayStandbyWatchdog(
             noticePresenting = conservativeBoolean { NoticeController.activeNotice() != null },
             activityPresenting = conservativeBoolean(ActivityController::isPresenting),
             cameraSessionActive = conservativeBoolean(GlassesHub::isCameraSessionActive),
-            launcherOverlayShown = conservativeBoolean(LauncherOverlayRenderer::isShown),
+            launcherOverlayShown = conservativeBoolean(HudController::isLauncherShown),
             mainActivityInteractiveFlow = conservativeBoolean { MainActivity.isInteractiveFlowActive() },
             topWindow = topWindow,
             // STT capture is phone-local and has no glasses-side session edge. Its

@@ -108,15 +108,12 @@ internal class CameraOverlayView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        PinController.setCameraOverlayActive(true)
-        NoticeController.setCameraOverlayActive(true)
+        // The ambient layers live in the main process; the bridge carries the edge to them.
         CameraOverlayVisibilityBridge.report(context, activityVisibilityToken, true)
     }
 
     override fun onDetachedFromWindow() {
         CameraOverlayVisibilityBridge.report(context, activityVisibilityToken, false)
-        PinController.setCameraOverlayActive(false)
-        NoticeController.setCameraOverlayActive(false)
         super.onDetachedFromWindow()
     }
 

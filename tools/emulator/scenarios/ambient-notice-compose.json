@@ -1,0 +1,38 @@
+{
+  "description": "An inline-reply band (relay) with its editable card: the band draws the mirrored field.",
+  "envelopes": [
+    {
+      "path": "/surface/show",
+      "payload": {
+        "surfaceId": "relay:reply",
+        "ownerPluginId": "relay",
+        "handlesBack": false,
+        "kind": "card",
+        "contentKey": "reply",
+        "title": "Reply",
+        "lines": [],
+        "editable": {
+          "placeholder": "Type your reply",
+          "initialText": "See you at one",
+          "submitLabel": "Send",
+          "inNotice": true
+        }
+      }
+    },
+    {
+      "path": "/notice/show",
+      "delayMs": 600,
+      "payload": {
+        "kind": "notice",
+        "surfaceId": "relay:notice",
+        "ownerPluginId": "relay",
+        "noticeInstanceId": "inst-c",
+        "noticeQuestionId": "q-c",
+        "title": "Ana",
+        "body": "Are you free for lunch tomorrow at one?",
+        "interactive": true,
+        "ttlMs": 45000
+      }
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+> Current: the phone-side layout editor, `TileSize` and the packer remain in use. The glasses-side grid it feeds is superseded by docs/ui-rewrite/ (kept for history); the tile data pipeline (03) remains current.
+
 # Delivery 4 — Phone app layout editor
 
 ## Goal

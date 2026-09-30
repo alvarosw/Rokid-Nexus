@@ -1,0 +1,18 @@
+{
+  "description": "A second activity next to ambient-activity's.",
+  "envelopes": [
+    {
+      "path": "/activity/start",
+      "payload": {
+        "kind": "activity",
+        "surfaceId": "nav:activity",
+        "ownerPluginId": "nav",
+        "glyph": "bus",
+        "primary": "3 min",
+        "measure": "250 m",
+        "secondary": "Rue de Rivoli",
+        "badge": "38"
+      }
+    }
+  ]
+}

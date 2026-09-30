@@ -1,0 +1,19 @@
+{
+  "description": "A short information band without actions (45 s).",
+  "envelopes": [
+    {
+      "path": "/notice/show",
+      "payload": {
+        "kind": "notice",
+        "surfaceId": "lyrics:notice",
+        "ownerPluginId": "lyrics",
+        "noticeInstanceId": "inst-i",
+        "noticeQuestionId": "q-i",
+        "ttlMs": 45000,
+        "title": "Build finished",
+        "body": "All 412 tests passed in 3m 12s.",
+        "footer": "CI"
+      }
+    }
+  ]
+}

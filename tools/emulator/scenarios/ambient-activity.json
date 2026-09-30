@@ -1,0 +1,6 @@
+{
+  "description": "An activity (progress chip) in the top-left corner.",
+  "envelopes": [
+    {"path": "/activity/start", "payload": {"kind": "activity", "surfaceId": "media:activity", "ownerPluginId": "media", "glyph": "music", "primary": "Downloading", "secondary": "album.zip", "progress": 40}}
+  ]
+}

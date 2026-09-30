@@ -12,17 +12,21 @@ import android.widget.FrameLayout
 open class HudFrameLayout(context: Context) : FrameLayout(context) {
     init {
         setBackgroundColor(RokidHudTokens.GROUND)
-        applySafeAreaPadding(topInsetDp = 0)
+        applySafeAreaPadding(topInsetPx = 0)
     }
 
     /**
-     * Re-applies `safe-y` plus an extra top inset (dp) on top of it — the hook the glasses side
+     * Re-applies `safe-y` plus an extra top inset (pixels) on top of it — the hook the glasses side
      * uses to fold in [com.anezium.rokidbus.shared.HudModeContract]'s synced HUD position without
-     * duplicating the safe-area math at every call site.
+     * duplicating the safe-area math at every call site. Tokens are pixels, so the caller converts
+     * a dp inset itself.
      */
-    protected fun applySafeAreaPadding(topInsetDp: Int) {
-        val safeX = RokidHudTokens.dp(context, RokidHudTokens.SAFE_X)
-        val safeY = RokidHudTokens.dp(context, RokidHudTokens.SAFE_Y + topInsetDp)
-        setPadding(safeX, safeY, safeX, RokidHudTokens.dp(context, RokidHudTokens.SAFE_Y))
+    protected fun applySafeAreaPadding(topInsetPx: Int) {
+        setPadding(
+            RokidHudTokens.SAFE_X,
+            RokidHudTokens.SAFE_Y + topInsetPx,
+            RokidHudTokens.SAFE_X,
+            RokidHudTokens.SAFE_Y,
+        )
     }
 }

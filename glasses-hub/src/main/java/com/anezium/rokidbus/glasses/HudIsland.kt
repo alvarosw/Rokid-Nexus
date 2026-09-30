@@ -8,7 +8,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.view.View
 import android.widget.FrameLayout
-import com.anezium.rokidbus.client.ui.BusTheme
+import com.anezium.rokidbus.client.ui.RokidHudTokens
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.min
@@ -29,9 +29,6 @@ internal data class HudSpring(
     companion object {
         /** Everything that grows, shrinks, or changes form. */
         val STANDARD = HudSpring(responseSec = 0.42f, dampingRatio = 0.8f)
-
-        /** A beat on a settled island: a wobble that is hard to miss. */
-        val BEAT = HudSpring(responseSec = 0.46f, dampingRatio = 0.5f)
 
         /** Leaving never bounces. */
         val EXIT = HudSpring(responseSec = 0.3f, dampingRatio = 1f)
@@ -97,11 +94,11 @@ internal open class HudIslandView(context: Context) : FrameLayout(context) {
 
     private val forms = mutableListOf<View>()
     private val edges = List(4) { HudSpringValue(0f) }
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF000000.toInt() }
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = RokidHudTokens.GROUND }
     private val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val shape = RectF()
     private val clip = Path()
-    private val cornerRadius = BusTheme.dp(context, 7).toFloat()
+    private val cornerRadius = RokidHudTokens.RADIUS_PANEL.toFloat()
     private var current: View? = null
     val currentForm: View?
         get() = current
@@ -114,9 +111,19 @@ internal open class HudIslandView(context: Context) : FrameLayout(context) {
     private var running = false
     private val frame = Runnable { onFrame() }
 
+    private var blink: CriticalBlink.Handle? = null
+    private var blinkAlpha = 1f
+
+    /** True while the spring, a cross-fade or the critical blink still moves the island. */
+    val isAnimating: Boolean
+        get() = running || blink != null
+
+    /** Called when the island has come to rest, after a dismissal has finished. */
+    var onIdle: (() -> Unit)? = null
+
     init {
         setWillNotDraw(false)
-        setOutline(BusTheme.hairline, BusTheme.dp(context, 1).toFloat())
+        setOutline(RokidHudTokens.LINE, RokidHudTokens.BORDER_DEFAULT.toFloat())
     }
 
     fun addForm(view: View, params: LayoutParams) {
@@ -160,6 +167,35 @@ internal open class HudIslandView(context: Context) : FrameLayout(context) {
         if (capture) start()
     }
 
+    /**
+     * The design system's `critical` motion on the outline: three blinks at `duration-default`,
+     * then steady. Never a loop; [stopBlink] or a detach ends it early.
+     */
+    fun blinkOutline() {
+        stopBlink()
+        if (!HudMotion.enabled) return
+        var settled = false
+        val handle = CriticalBlink.animate(
+            context,
+            { alpha ->
+                blinkAlpha = alpha
+                invalidate()
+            },
+        ) {
+            settled = true
+            blink = null
+            onIdle?.invoke()
+        }
+        if (!settled) blink = handle
+    }
+
+    fun stopBlink() {
+        blink?.cancel()
+        blink = null
+        blinkAlpha = 1f
+        invalidate()
+    }
+
     /** A value refreshed in place: the outline swells and springs back. */
     fun bump(amountPx: Float, spring: HudSpring? = null) {
         if (!shaped || !HudMotion.enabled) return
@@ -196,6 +232,7 @@ internal open class HudIslandView(context: Context) : FrameLayout(context) {
     override fun onDetachedFromWindow() {
         removeCallbacks(frame)
         running = false
+        stopBlink()
         ghost?.bitmap?.recycle()
         ghost = null
         super.onDetachedFromWindow()
@@ -225,7 +262,7 @@ internal open class HudIslandView(context: Context) : FrameLayout(context) {
         // border drawable's stroke does.
         val inset = outline.strokeWidth / 2f
         shape.inset(inset, inset)
-        outline.alpha = alpha
+        outline.alpha = (alpha * blinkAlpha).toInt()
         canvas.drawRoundRect(shape, radius, radius, outline)
     }
 
@@ -307,6 +344,7 @@ internal open class HudIslandView(context: Context) : FrameLayout(context) {
         running = false
         edges.forEach { it.snap() }
         if (leaving) finishDismissal()
+        onIdle?.invoke()
     }
 
     private fun settleNow() {

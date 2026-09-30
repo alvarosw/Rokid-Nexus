@@ -2,8 +2,8 @@ package com.anezium.rokidbus.shared.motion
 
 /**
  * A plain, Android-independent rectangle so the geometry tween's math is a pure JVM unit test —
- * `android.graphics.Rect` requires Robolectric to exercise reliably, and this delivery's tween
- * math has nothing to do with the Android framework.
+ * `android.graphics.Rect` requires Robolectric to exercise reliably, and the tween math has
+ * nothing to do with the Android framework.
  */
 data class TileRect(val left: Int, val top: Int, val right: Int, val bottom: Int) {
     val width: Int get() = right - left
@@ -11,9 +11,9 @@ data class TileRect(val left: Int, val top: Int, val right: Int, val bottom: Int
 }
 
 /**
- * Interpolates between two [TileRect]s by a linear fraction — the geometry tween that Delivery
- * 2's `TileExpansionAnimator` drives over `left/top/width/height`, per
- * `docs/grid-hud-roadmap/02-delivery-2-motion-and-focus.md`.
+ * Interpolates between two [TileRect]s by a fraction — the geometry tween the glasses HUD's open/close
+ * morph (`HudMorph`) drives from an item's rect to the app safe area and back. The caller applies the
+ * easing; this is the linear interpolation of `left/top/width/height`.
  */
 object TileRectTween {
     fun at(from: TileRect, to: TileRect, fraction: Float): TileRect {

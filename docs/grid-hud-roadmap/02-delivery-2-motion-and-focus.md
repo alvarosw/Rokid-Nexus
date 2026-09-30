@@ -1,3 +1,5 @@
+> Superseded for the glasses UI by docs/ui-rewrite/ — kept for history; the tile data pipeline (03) remains current.
+
 # Delivery 2 — Expansion motion & focus polish
 
 ## Goal

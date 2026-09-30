@@ -1,0 +1,6 @@
+{
+  "description": "Hides the notice from ambient-notice.json (owner hide).",
+  "envelopes": [
+    {"path": "/notice/hide", "payload": {"surfaceId": "lyrics:notice", "ownerPluginId": "lyrics", "noticeInstanceId": "inst-a", "noticeQuestionId": "q-a"}}
+  ]
+}

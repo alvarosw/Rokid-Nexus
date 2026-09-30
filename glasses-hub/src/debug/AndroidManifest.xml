@@ -10,7 +10,7 @@
             android:theme="@style/Theme.RokidBus.Surface" />
 
         <activity
-            android:name=".GridLauncherScreenshotHostActivity"
+            android:name=".HomeScreenshotHostActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:launchMode="standard" />
@@ -29,6 +29,24 @@
             android:permission="android.permission.DUMP">
             <intent-filter>
                 <action android:name="com.anezium.rokidbus.glasses.DEBUG_INK" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".DebugFakePhoneReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="com.anezium.rokidbus.glasses.DEBUG_PHONE" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".DebugHudInputReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="com.anezium.rokidbus.glasses.DEBUG_HUD_INPUT" />
             </intent-filter>
         </receiver>
     </application>

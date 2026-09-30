@@ -1,0 +1,7 @@
+{
+  "path": "/glasses/hud-mode/config",
+  "payload": {
+    "version": 1,
+    "mode": "list"
+  }
+}

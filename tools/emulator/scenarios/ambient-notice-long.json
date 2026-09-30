@@ -1,0 +1,18 @@
+{
+  "description": "A long, pageable band (45 s); the ring pages it.",
+  "envelopes": [
+    {
+      "path": "/notice/show",
+      "payload": {
+        "kind": "notice",
+        "surfaceId": "lyrics:notice",
+        "ownerPluginId": "lyrics",
+        "noticeInstanceId": "inst-l",
+        "noticeQuestionId": "q-l",
+        "ttlMs": 45000,
+        "title": "Assistant",
+        "body": "The quarterly review is moved to Thursday afternoon because the conference room is booked by the design team until noon. Please confirm that the new slot works for you and forward the slides to the whole group beforehand so everyone can read them. If Thursday does not work, Friday morning is still open, and the room is free all day. Anything else you want added to the agenda, tell me. The catering order closes on Wednesday evening, so the headcount has to be final by then; last time we were four short and ended up sharing plates. Also note that the projector in that room needs the adapter from the front desk, and the desk closes at five, so collect it before the afternoon starts. Second thing: the travel budget for the offsite is still not approved, and finance wants the final numbers per person before Friday noon, including the train tickets, the hotel nights and the two dinners. Please send them to me as a short list, and I will forward everything in one message so nobody has to answer twice."
+      }
+    }
+  ]
+}

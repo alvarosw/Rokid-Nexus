@@ -10,6 +10,9 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.view.KeyEvent
+import com.anezium.rokidbus.client.ui.RokidHudTokens
+import com.anezium.rokidbus.glasses.hud.HudController
+import com.anezium.rokidbus.glasses.hud.RingSurfaceKeys
 import com.anezium.rokidbus.shared.BusEnvelope
 import com.anezium.rokidbus.shared.BusPaths
 import com.anezium.rokidbus.shared.ImageSurfaceContract
@@ -592,9 +595,6 @@ internal object NoticeController {
             }
         }
     }
-    private val ringInputPolicy = RingSurfaceInputPolicy()
-    private val ringTapExpiry = Runnable(::resolveRingTap)
-    private var pendingRingNotice: NexusNoticeSurface? = null
 
     fun activeNotice(): NexusNoticeSurface? = state.activeNotice()
 
@@ -784,63 +784,11 @@ internal object NoticeController {
      * paged, or backdrop notice owns the R08 bridge focus.
      */
     fun claimsRingKey(keyCode: Int): Boolean = when (keyCode) {
-        RingSurfaceInputPolicy.RING_KEYCODE_TAP -> claimsInput()
-        RingSurfaceInputPolicy.RING_KEYCODE_FORWARD,
-        RingSurfaceInputPolicy.RING_KEYCODE_BACKWARD,
+        RingSurfaceKeys.TAP -> claimsInput()
+        RingSurfaceKeys.FORWARD,
+        RingSurfaceKeys.BACKWARD,
         -> claimsDirection()
         else -> false
-    }
-
-    fun handleRingKey(keyCode: Int, eventTimeMs: Long): Boolean {
-        if (!claimsRingKey(keyCode)) return false
-        val expected = visibleNotice() ?: return false
-        return when (keyCode) {
-            RingSurfaceInputPolicy.RING_KEYCODE_FORWARD -> handleDirection(1)
-            RingSurfaceInputPolicy.RING_KEYCODE_BACKWARD -> handleDirection(-1)
-            else -> {
-                runOnMain {
-                    if (!state.isCurrentInteraction(expected)) return@runOnMain
-                    if (pendingRingNotice?.let { !state.isCurrentInteraction(it) } == true) {
-                        resetRingInput()
-                    }
-                    pendingRingNotice = expected
-                    ringInputPolicy.onKeyDown(keyCode, eventTimeMs)
-                    main.removeCallbacks(ringTapExpiry)
-                    main.postDelayed(ringTapExpiry, RingTapPolicy.DEFAULT_WINDOW_MS + 1L)
-                }
-                true
-            }
-        }
-    }
-
-    fun cancelRingInput() {
-        runOnMain(::resetRingInput)
-    }
-
-    private fun resetRingInput() {
-        main.removeCallbacks(ringTapExpiry)
-        ringInputPolicy.reset()
-        pendingRingNotice = null
-    }
-
-    private fun resolveRingTap() {
-        val expected = pendingRingNotice ?: return
-        if (!state.isCurrentInteraction(expected)) {
-            resetRingInput()
-            return
-        }
-        val resolution = ringInputPolicy.resolveExpired(SystemClock.elapsedRealtime()) ?: return
-        pendingRingNotice = null
-        when (resolution) {
-            is RingSurfaceInputPolicy.Resolution.Forward ->
-                applyDecision(state.answer(RingSurfaceInputPolicy.KEYCODE_ENTER, expected))
-            // A double tap on the ring is the wearer's dismiss, same as BACK.
-            RingSurfaceInputPolicy.Resolution.Back -> {
-                discardPendingImage(expected.interactionIdentity)
-                applyDecision(state.close(NoticeCloseReason.USER, expected))
-            }
-            RingSurfaceInputPolicy.Resolution.Ignore -> Unit
-        }
     }
 
     private fun forwardAction(notice: NexusNoticeSurface, actionId: String): Boolean =
@@ -865,7 +813,6 @@ internal object NoticeController {
         runOnMain {
             if (cameraOverlayActive == active) return@runOnMain
             cameraOverlayActive = active
-            if (active) resetRingInput()
             notifyChanged()
         }
     }
@@ -1031,7 +978,6 @@ internal object NoticeController {
     ) {
         when (decision) {
             is NoticeStateDecision.Shown -> {
-                resetRingInput()
                 AssistantDisplayEpisode.accept(
                     serviceContext,
                     assistantEpisodeNoticeShownSignal(
@@ -1049,9 +995,6 @@ internal object NoticeController {
                 notifyChanged()
             }
             is NoticeStateDecision.Updated -> {
-                if (pendingRingNotice?.let { !state.isCurrentInteraction(it) } == true) {
-                    resetRingInput()
-                }
                 val signal = if (genuineEngagement) {
                     assistantEpisodeNoticeShownSignal(
                         surfaceId = decision.notice.surfaceId,
@@ -1107,7 +1050,6 @@ internal object NoticeController {
                 )
                 clearPendingNoticeWake()
                 cancelExpiry()
-                resetRingInput()
                 log(
                     "notice state=closed seq=${decision.seq} ttlMs=${decision.ttlMs} " +
                         "reason=${decision.reason.wireValue}",
@@ -1116,7 +1058,7 @@ internal object NoticeController {
                 notifyChanged()
                 maybeSleepDisplay(decision.reason)
                 decision.imageBitmap?.let { released ->
-                    main.postDelayed({ released.recycleSafely() }, HudMotion.EXIT_MS + 1L)
+                    main.postDelayed({ released.recycleSafely() }, RokidHudTokens.DURATION_STRUCTURAL_MS + 1L)
                 }
             }
             NoticeStateDecision.DroppedStale -> log("notice dropped stale")
@@ -1267,7 +1209,7 @@ internal object NoticeController {
                     closeReason = closeReason,
                     episodeOwnsWake = episodeOwnsWake,
                     isInteractive = power.isInteractive,
-                    launcherShown = LauncherOverlayRenderer.isShown(),
+                    launcherShown = HudController.isLauncherShown(),
                     surfaceActive = surfaceActive,
                     assistantEpisodeActive = AssistantDisplayEpisode.isActive(),
                     activityPresenting = ActivityController.isPresenting(),
@@ -1302,7 +1244,7 @@ internal object NoticeController {
 
     private fun notifyChanged() {
         val visible = visibleNotice()
-        RingFocusBroadcastCoordinator.setNoticeOwnsRing(ownsRingInput())
+        HudController.onNoticeOwnsRingChanged(ownsRingInput())
         listeners.forEach { listener -> runCatching { listener(visible) } }
     }
 

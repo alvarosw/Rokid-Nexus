@@ -1,0 +1,6 @@
+{
+  "description": "Shows the remote pointer cursor at the right-middle of the screen (the phone hub owns the stream sequence; restart the hub or change streamId to reuse sequence 1).",
+  "envelopes": [
+    {"path": "/core/pointer/command", "payload": {"version": 1, "type": "pointer_command", "streamId": "emulator-pointer-stream-01", "sequence": 1, "action": "show", "x": 0.75, "y": 0.5}}
+  ]
+}

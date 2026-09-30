@@ -7,45 +7,52 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.KeyEvent
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.FrameLayout
 import android.widget.TextView
-import com.anezium.rokidbus.client.ui.BusTheme
+import com.anezium.rokidbus.client.ui.RokidHudTokens
+import com.anezium.rokidbus.glasses.hud.HudController
+import com.anezium.rokidbus.glasses.hud.LauncherTrigger
 import com.anezium.rokidbus.shared.BusConstants
 import com.anezium.rokidbus.shared.SetupStage
 
 class MainActivity : Activity() {
-    private lateinit var emptyView: TextView
-    private lateinit var listContainer: LinearLayout
-    private lateinit var launcherViewport: FrameLayout
-    private lateinit var launcherView: View
     private lateinit var onboardingView: View
     private lateinit var onboardingStepView: TextView
     private lateinit var onboardingTitleView: TextView
     private lateinit var onboardingBodyView: TextView
     private lateinit var onboardingDiagnosticView: TextView
     private lateinit var onboardingActionView: TextView
-    private var launcherEntries: List<GlassesHub.LauncherEntry> = emptyList()
-    private var selectedIndex = 0
-    private var scrollOffset = 0
     private var onboardingState = SelfArmOnboardingState(
         stage = SelfArmOnboardingState.Stage.ENABLE_ACCESSIBILITY,
         action = SelfArmOnboardingState.Action.OPEN_ACCESSIBILITY,
         detail = "",
     )
-    private var unsubscribeLauncher: (() -> Unit)? = null
     private var insetUnsubscribe: (() -> Unit)? = null
     private var onboardingReceiverRegistered = false
     private var confirmationShownForSession = ""
+
+    /**
+     * Set by every start of this activity (the app icon, a setup hand-back) and kept until the
+     * launcher actually opened. A plain resume or a store broadcast does not set it, so it never
+     * opens the launcher over an app screen the wearer is in.
+     */
+    private var openLauncherRequested = false
+
+    /** The launch was requested but the accessibility service is not running: the setup view says so. */
+    private var serviceStopped = false
+    // Straight to the handoff: a full render would flash the setup confirmation over the stopped screen.
+    private val recheckService = Runnable { if (serviceStopped && !isFinishing) handOffToLauncher() }
+    private val recheckHandler = Handler(Looper.getMainLooper())
     private val swipeDedupe = DpadPairDedupe()
     private val onboardingReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -55,24 +62,21 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        openLauncherRequested = true
         liveInstance = this
-        window.statusBarColor = BusTheme.glassesBg
-        window.navigationBarColor = BusTheme.glassesBg
+        window.statusBarColor = RokidHudTokens.GROUND
+        window.navigationBarColor = RokidHudTokens.GROUND
         buildUi()
         requestBluetoothConnectIfNeeded()
         GlassesHub.start(applicationContext)
         insetUnsubscribe = HudTopInset.observe(this, ::applyHudTopInset)
-        unsubscribeLauncher = GlassesHub.observeLauncher { entries ->
-            // The hub notifies listeners from the CXR receive thread. Touching views off the main
-            // thread throws (swallowed by the hub's runCatching), so a launcher list that arrives
-            // while this activity is already up would silently never render. Marshal to the UI.
-            runOnUiThread {
-                launcherEntries = entries
-                selectedIndex = selectedIndex.coerceIn(0, (entries.size - 1).coerceAtLeast(0))
-                renderLauncher()
-            }
-        }
         log("Launcher activity opened")
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openLauncherRequested = true
     }
 
     override fun onStart() {
@@ -103,6 +107,7 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        cancelServiceRecheck()
         if (resumedInstance === this) resumedInstance = null
         super.onPause()
     }
@@ -116,10 +121,9 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        cancelServiceRecheck()
         if (resumedInstance === this) resumedInstance = null
         if (liveInstance === this) liveInstance = null
-        unsubscribeLauncher?.invoke()
-        unsubscribeLauncher = null
         insetUnsubscribe?.invoke()
         insetUnsubscribe = null
         super.onDestroy()
@@ -131,7 +135,7 @@ class MainActivity : Activity() {
             return super.dispatchKeyEvent(event)
         }
         val direction = swipeDedupe.onKey(event.keyCode, event.action, event.repeatCount, event.eventTime)
-        if (onboardingState.stage != SelfArmOnboardingState.Stage.COMPLETE) {
+        if (onboardingState.stage != SelfArmOnboardingState.Stage.COMPLETE || serviceStopped) {
             if (direction != null) return true
             return when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_RIGHT,
@@ -148,114 +152,49 @@ class MainActivity : Activity() {
                 else -> super.dispatchKeyEvent(event)
             }
         }
-        when (direction) {
-            DpadPairDedupe.Direction.FORWARD -> {
-                moveSelection(1)
-                return true
-            }
-            DpadPairDedupe.Direction.BACKWARD -> {
-                moveSelection(-1)
-                return true
-            }
-            null -> Unit
-        }
-        return when (event.keyCode) {
-            KeyEvent.KEYCODE_DPAD_RIGHT,
-            KeyEvent.KEYCODE_DPAD_DOWN,
-            KeyEvent.KEYCODE_DPAD_LEFT,
-            KeyEvent.KEYCODE_DPAD_UP,
-            -> true
-            KeyEvent.KEYCODE_ENTER,
-            KeyEvent.KEYCODE_DPAD_CENTER,
-            -> {
-                openSelected()
-                true
-            }
-            else -> super.dispatchKeyEvent(event)
-        }
+        return super.dispatchKeyEvent(event)
     }
 
     private fun buildUi() {
-        emptyView = text(17f, BusTheme.dim).apply {
-            text = "No phone plugins synced"
-            gravity = Gravity.CENTER
-        }
-        listContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-        launcherViewport = FrameLayout(this).apply {
-            setBackgroundColor(BusTheme.glassesBg)
-            // The list can be taller than this viewport; it's scrolled via
-            // translationY and clipped here. No ScrollView (its layers dither
-            // grey grain on the AR waveguide).
-            addView(
-                listContainer,
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    Gravity.TOP,
-                ),
-            )
-        }
-        val launcherListViewport = launcherViewport
-        launcherView = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.TOP
-            setBackgroundColor(BusTheme.glassesBg)
-            setPadding(dp(22), dp(20), dp(22), dp(16))
-            addView(text(12f, BusTheme.phosphor, bold = true).apply {
-                text = "ROKID NEXUS"
-                gravity = Gravity.CENTER_HORIZONTAL
-            })
-            addView(gap(20))
-            addView(text(24f, BusTheme.text, bold = true).apply {
-                text = "Launcher"
-                gravity = Gravity.CENTER_HORIZONTAL
-            })
-            addView(gap(22))
-            addView(text(10.5f, BusTheme.dim).apply {
-                text = "PLUGINS"
-                gravity = Gravity.CENTER_HORIZONTAL
-            }, matchWrap())
-            addView(gap(10))
-            addView(launcherListViewport, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        }
-        onboardingStepView = text(11f, BusTheme.phosphor, bold = true).apply {
+        // The setup screen is the one screen: its title is the one `display`, its action the one
+        // primary button, in the focus chrome.
+        onboardingStepView = wrapped(SurfaceType.label(TextView(this))).apply {
+            isAllCaps = true
             gravity = Gravity.CENTER_HORIZONTAL
         }
-        onboardingTitleView = text(23f, BusTheme.text, bold = true).apply {
+        onboardingTitleView = wrapped(SurfaceType.display(TextView(this))).apply {
             gravity = Gravity.CENTER_HORIZONTAL
         }
-        onboardingBodyView = text(15f, BusTheme.muted).apply {
+        onboardingBodyView = wrapped(SurfaceType.body(TextView(this))).apply {
             gravity = Gravity.CENTER_HORIZONTAL
-            setLineSpacing(0f, 1.18f)
         }
-        onboardingDiagnosticView = text(12f, BusTheme.dim).apply {
+        onboardingDiagnosticView = wrapped(SurfaceType.mono(TextView(this))).apply {
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(0, 0, 0, dp(12))
+            setPadding(0, 0, 0, RokidHudTokens.SPACE_3)
             visibility = View.GONE
         }
-        onboardingActionView = text(17f, BusTheme.phosphor, bold = true).apply {
-            minHeight = dp(58)
+        onboardingActionView = wrapped(SurfaceType.body(TextView(this), RokidHudTokens.FOCUS)).apply {
+            minHeight = ACTION_MIN_HEIGHT
             gravity = Gravity.CENTER
-            setPadding(dp(10), 0, dp(10), 0)
-            background = outline(true)
+            setPadding(RokidHudTokens.SPACE_3, 0, RokidHudTokens.SPACE_3, 0)
+            background = SurfaceChrome.focused()
         }
         onboardingView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.TOP
-            setBackgroundColor(BusTheme.glassesBg)
-            setPadding(dp(24), dp(28), dp(24), dp(22))
+            visibility = View.GONE
+            setBackgroundColor(RokidHudTokens.GROUND)
+            setPadding(RokidHudTokens.SAFE_X, RokidHudTokens.SAFE_Y, RokidHudTokens.SAFE_X, RokidHudTokens.SAFE_Y)
             addView(onboardingStepView, matchWrap())
-            addView(gap(22))
+            addView(gap(RokidHudTokens.SPACE_6))
             addView(onboardingTitleView, matchWrap())
-            addView(gap(24))
+            addView(gap(RokidHudTokens.SPACE_6))
             addView(onboardingBodyView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
             addView(onboardingDiagnosticView, matchWrap())
             addView(onboardingActionView, matchWrap())
-            addView(gap(10))
+            addView(gap(RokidHudTokens.SPACE_3))
             addView(
-                text(11f, BusTheme.dim).apply {
+                wrapped(SurfaceType.bodySmall(TextView(this@MainActivity))).apply {
                     // Swipe is filtered out during onboarding, so promising it here was a lie.
                     text = getString(R.string.onb_footer)
                     gravity = Gravity.CENTER_HORIZONTAL
@@ -264,14 +203,7 @@ class MainActivity : Activity() {
             )
         }
         setContentView(FrameLayout(this).apply {
-            setBackgroundColor(BusTheme.glassesBg)
-            addView(
-                launcherView,
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                ),
-            )
+            setBackgroundColor(RokidHudTokens.GROUND)
             addView(
                 onboardingView,
                 FrameLayout.LayoutParams(
@@ -281,34 +213,35 @@ class MainActivity : Activity() {
             )
         })
         renderScreen()
-        renderLauncher()
     }
 
     private fun applyHudTopInset(value: Int) {
         val inset = HudTopInset.sanitize(value)
-        launcherView.setPadding(dp(22), dp(20 + inset), dp(22), dp(16))
-        onboardingView.setPadding(dp(24), dp(28 + inset), dp(24), dp(22))
-        launcherView.requestLayout()
+        onboardingView.setPadding(
+            RokidHudTokens.SAFE_X,
+            RokidHudTokens.SAFE_Y + HudTopInset.toPx(this, inset),
+            RokidHudTokens.SAFE_X,
+            RokidHudTokens.SAFE_Y,
+        )
         onboardingView.requestLayout()
-        launcherViewport.post { scrollToSelected() }
     }
 
     private fun renderScreen() {
-        if (!::launcherView.isInitialized) return
+        if (!::onboardingView.isInitialized) return
         val snapshot = SelfArmOnboardingStore.snapshot(applicationContext)
         onboardingState = SelfArmOnboardingStateMachine.evaluate(snapshot)
         val complete = onboardingState.stage == SelfArmOnboardingState.Stage.COMPLETE
         interactiveFlowActive = !complete
         if (complete) {
-            // Land on a moment of confirmation rather than blinking straight to a plugin list:
+            // Land on a moment of confirmation rather than blinking straight to the launcher:
             // the wearer just did the one thing we asked of them and deserves to see it took.
             if (showSetupConfirmation()) return
-            launcherView.visibility = View.VISIBLE
-            onboardingView.visibility = View.GONE
+            handOffToLauncher()
             return
         }
+        serviceStopped = false
+        cancelServiceRecheck()
         confirmationShownForSession = ""
-        launcherView.visibility = View.GONE
         onboardingView.visibility = View.VISIBLE
 
         val diagnostic = onboardingState.diagnostic.takeIf {
@@ -376,9 +309,8 @@ class MainActivity : Activity() {
         // the wearer never sits there pressing something that was never going to answer.
         val actionable = onboardingState.action != SelfArmOnboardingState.Action.NONE &&
             onboardingState.stage != SelfArmOnboardingState.Stage.RUNNING
-        onboardingActionView.background = if (actionable) outline(true) else null
-        onboardingActionView.setTextColor(if (actionable) BusTheme.phosphor else BusTheme.muted)
-        onboardingActionView.alpha = if (actionable) 1f else 0.85f
+        onboardingActionView.background = if (actionable) SurfaceChrome.focused() else null
+        onboardingActionView.setTextColor(if (actionable) RokidHudTokens.FOCUS else RokidHudTokens.TEXT_SECONDARY)
     }
 
     /** Returns true while the confirmation panel owns the screen. */
@@ -398,7 +330,6 @@ class MainActivity : Activity() {
         onboardingDiagnosticView.visibility = View.GONE
         onboardingActionView.text = ""
         onboardingActionView.background = null
-        launcherView.visibility = View.GONE
         onboardingView.visibility = View.VISIBLE
         onboardingView.postDelayed({ renderScreen() }, SETUP_CONFIRMATION_MS)
         return true
@@ -443,108 +374,81 @@ class MainActivity : Activity() {
         },
     )
 
-    private fun renderLauncher() {
-        if (!::listContainer.isInitialized) return
-        listContainer.removeAllViews()
-        val entries = launcherEntries
-        if (entries.isEmpty()) {
-            listContainer.translationY = 0f
-            listContainer.addView(emptyView, matchWrap())
-            return
+    /**
+     * The app icon opens the same launcher as every other entry point, in the configured mode, and
+     * gets out of the way: the launcher is the HUD's window, not this activity's. It only finishes
+     * when the launcher actually opened; with the service down it says so instead of leaving a blank
+     * screen, and opens the launcher as soon as the service is back.
+     */
+    private fun handOffToLauncher() {
+        val serviceUp = HudController.isServiceConnected()
+        when (LauncherHandoff.decide(openLauncherRequested, serviceUp)) {
+            LauncherHandoff.Outcome.OPEN -> {
+                val opened = HudController.openLauncher(LauncherTrigger.APP_ICON)
+                log("Launcher activity handed off to HUD opened=$opened")
+                if (opened) {
+                    openLauncherRequested = false
+                    serviceStopped = false
+                    cancelServiceRecheck()
+                    onboardingView.visibility = View.GONE
+                    finish()
+                } else {
+                    showServiceStopped()
+                }
+            }
+            LauncherHandoff.Outcome.SHOW_SERVICE_STOPPED -> showServiceStopped()
+            LauncherHandoff.Outcome.FINISH -> {
+                log("Launcher activity resumed without a launch request; not opening the launcher")
+                onboardingView.visibility = View.GONE
+                finish()
+            }
         }
-        entries.forEachIndexed { index, entry ->
-            listContainer.addView(
-                pluginRow(entry, selected = index == selectedIndex),
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(PLUGIN_ROW_HEIGHT_DP)).apply {
-                    topMargin = if (index == 0) 0 else dp(PLUGIN_ROW_MARGIN_DP)
-                },
+    }
+
+    /** Nothing tells this activity the service came back, so the stopped screen polls for it. */
+    private fun scheduleServiceRecheck() {
+        recheckHandler.removeCallbacks(recheckService)
+        recheckHandler.postDelayed(recheckService, SERVICE_RECHECK_MS)
+    }
+
+    private fun cancelServiceRecheck() = recheckHandler.removeCallbacks(recheckService)
+
+    private fun showServiceStopped() {
+        serviceStopped = true
+        scheduleServiceRecheck()
+        interactiveFlowActive = true
+        confirmationShownForSession = ""
+        onboardingStepView.setText(R.string.onb_stopped_eyebrow)
+        onboardingTitleView.setText(R.string.onb_stopped_title)
+        onboardingBodyView.setText(R.string.onb_stopped_body)
+        onboardingDiagnosticView.visibility = View.GONE
+        onboardingActionView.setText(R.string.onb_stopped_action)
+        onboardingActionView.background = SurfaceChrome.focused()
+        onboardingActionView.setTextColor(RokidHudTokens.FOCUS)
+        onboardingView.visibility = View.VISIBLE
+    }
+
+    private fun openAccessibilitySettings() {
+        val sessionId = SelfArmOnboardingStore.beginSession(applicationContext)
+        SelfArmOnboardingStore.markAwaitingAccessibility(applicationContext)
+        val landing = SelfArmAccessibilityHandoff.open(this)
+        if (landing == SelfArmAccessibilityHandoff.Landing.UNAVAILABLE) {
+            SelfArmOnboardingStore.finish(
+                context = applicationContext,
+                sessionId = sessionId,
+                setupState = "accessibility_settings_unavailable",
+                success = false,
             )
         }
-        val n = entries.size
-        // Force the exact content height so it isn't clamped to the viewport
-        // (a WRAP_CONTENT child gets measured AT_MOST the parent height).
-        (listContainer.layoutParams as FrameLayout.LayoutParams).height =
-            n * dp(PLUGIN_ROW_HEIGHT_DP) + (n - 1) * dp(PLUGIN_ROW_MARGIN_DP)
-        listContainer.requestLayout()
-        launcherViewport.post { scrollToSelected() }
-    }
-
-    private fun scrollToSelected() {
-        if (!::launcherViewport.isInitialized || !::listContainer.isInitialized) return
-        val viewport = launcherViewport.height
-        if (viewport <= 0) {
-            launcherViewport.post { scrollToSelected() }
-            return
-        }
-        val n = launcherEntries.size
-        val content =
-            if (n == 0) 0 else n * dp(PLUGIN_ROW_HEIGHT_DP) + (n - 1) * dp(PLUGIN_ROW_MARGIN_DP)
-        val maxOffset = (content - viewport).coerceAtLeast(0)
-        val stride = dp(PLUGIN_ROW_HEIGHT_DP) + dp(PLUGIN_ROW_MARGIN_DP)
-        val selTop = selectedIndex * stride
-        val selBottom = selTop + dp(PLUGIN_ROW_HEIGHT_DP)
-        // Scroll ONLY when the selected row is off-screen, and only by the
-        // minimum needed — the list stays put while the selection is visible,
-        // then jumps once when you reach a row past the fold (e.g. the last one).
-        var offset = scrollOffset
-        if (selTop < offset) offset = selTop
-        else if (selBottom > offset + viewport) offset = selBottom - viewport
-        offset = offset.coerceIn(0, maxOffset)
-        scrollOffset = offset
-        listContainer.translationY = -offset.toFloat()
-    }
-
-    private fun pluginRow(
-        entry: GlassesHub.LauncherEntry,
-        selected: Boolean,
-    ): View {
-        val icon = ImageView(this).apply {
-            setImageDrawable(GlassesHub.launcherDrawable(this@MainActivity, entry))
-            layoutParams = LinearLayout.LayoutParams(dp(24), dp(24)).apply { marginEnd = dp(14) }
-        }
-        val label = text(18f, if (selected) BusTheme.phosphor else BusTheme.text, bold = selected).apply {
-            text = entry.displayName
-            gravity = Gravity.CENTER_VERTICAL
-            paint.isDither = false
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-        }
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), 0, dp(12), 0)
-            background = outline(selected)
-            addView(icon)
-            addView(label)
-        }
-    }
-
-    private fun moveSelection(delta: Int) {
-        if (launcherEntries.isEmpty()) return
-        selectedIndex = (selectedIndex + delta + launcherEntries.size) % launcherEntries.size
-        renderLauncher()
-    }
-
-    private fun openSelected() {
-        val entry = launcherEntries.getOrNull(selectedIndex) ?: return
-        val result = GlassesHub.openLauncherEntry(entry.id)
-        log("Launcher open result: $result")
     }
 
     private fun performOnboardingAction() {
+        if (serviceStopped) {
+            openAccessibilitySettings()
+            return
+        }
         when (onboardingState.action) {
-            SelfArmOnboardingState.Action.OPEN_ACCESSIBILITY -> {
-                val sessionId = SelfArmOnboardingStore.beginSession(applicationContext)
-                SelfArmOnboardingStore.markAwaitingAccessibility(applicationContext)
-                val landing = SelfArmAccessibilityHandoff.open(this)
-                if (landing == SelfArmAccessibilityHandoff.Landing.UNAVAILABLE) {
-                    SelfArmOnboardingStore.finish(
-                        context = applicationContext,
-                        sessionId = sessionId,
-                        setupState = "accessibility_settings_unavailable",
-                        success = false,
-                    )
-                }
-            }
+            SelfArmOnboardingState.Action.OPEN_ACCESSIBILITY -> openAccessibilitySettings()
             SelfArmOnboardingState.Action.START_WIRELESS,
             SelfArmOnboardingState.Action.RETRY_WIRELESS,
             -> {
@@ -602,33 +506,23 @@ class MainActivity : Activity() {
         if (missing.isNotEmpty()) requestPermissions(missing.toTypedArray(), 10)
     }
 
-    private fun text(sizeSp: Float, color: Int, bold: Boolean = false): TextView =
-        TextView(this).apply {
-            textSize = sizeSp
-            setTextColor(color)
-            typeface = Typeface.create(Typeface.MONOSPACE, if (bold) Typeface.BOLD else Typeface.NORMAL)
-            includeFontPadding = false
-        }
+    /** The design styles are single-line; the setup texts wrap. */
+    private fun wrapped(view: TextView): TextView = view.apply {
+        isSingleLine = false
+        maxLines = Int.MAX_VALUE
+        ellipsize = null
+    }
 
     private fun gap(value: Int): View =
         View(this).apply {
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(value))
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, value)
         }
 
     private fun matchWrap(): LinearLayout.LayoutParams =
         LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
 
-    private fun outline(selected: Boolean): android.graphics.drawable.GradientDrawable =
-        android.graphics.drawable.GradientDrawable().apply {
-            setColor(android.graphics.Color.TRANSPARENT)
-            setStroke(dp(if (selected) 2 else 1), if (selected) BusTheme.phosphor else BusTheme.hairline)
-            cornerRadius = dp(4).toFloat()
-        }
-
-    private fun dp(value: Int): Int =
-        BusTheme.dp(this, value)
-
     companion object {
+        private const val ACTION_MIN_HEIGHT = 2 * RokidHudTokens.LIST_ITEM_HEIGHT
         @Volatile private var resumedInstance: MainActivity? = null
         // Alive (created, not yet destroyed) whether resumed, paused, or stopped —
         // unlike resumedInstance, which clears the moment something else takes the
@@ -655,10 +549,25 @@ class MainActivity : Activity() {
             liveInstance?.takeIf { it !== resumedInstance }?.finish()
         }
 
-        const val PLUGIN_ROW_HEIGHT_DP = 52
-        const val PLUGIN_ROW_MARGIN_DP = 8
         /** Long enough to read four words, short enough that nobody waits on it. */
         const val SETUP_CONFIRMATION_MS = 1_600L
+        internal const val SERVICE_RECHECK_MS = 2_000L
         const val CONFIRMATION_SESSIONLESS = "-"
+    }
+}
+
+/** What the app icon's activity does once setup is complete. Pure so the rule is testable. */
+internal object LauncherHandoff {
+    enum class Outcome { OPEN, SHOW_SERVICE_STOPPED, FINISH }
+
+    /**
+     * Only a start of the activity ([requested]) may open the launcher; a resume that brought no
+     * new intent must not put it over whatever the wearer is looking at. With the service down a
+     * requested open waits on a visible explanation.
+     */
+    fun decide(requested: Boolean, serviceConnected: Boolean): Outcome = when {
+        !requested -> Outcome.FINISH
+        serviceConnected -> Outcome.OPEN
+        else -> Outcome.SHOW_SERVICE_STOPPED
     }
 }

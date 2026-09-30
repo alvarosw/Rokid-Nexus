@@ -4,7 +4,7 @@ import android.content.Context
 import android.graphics.Rect
 import android.view.View
 import android.widget.FrameLayout
-import com.anezium.rokidbus.client.ui.BusTheme
+import com.anezium.rokidbus.client.ui.RokidHudTokens
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -25,7 +25,7 @@ class InkCardPresentationTest {
         val topPx = HudBandGeometry.topPx(context, hudTopInsetDp = 40)
 
         assertEquals(441, HudBandGeometry.widthPx(displayWidthPx = 480))
-        assertEquals(BusTheme.dp(context, 52), topPx)
+        assertEquals((52 * context.resources.displayMetrics.density).toInt(), topPx)
         assertEquals(640 - topPx, HudBandGeometry.availableHeightPx(640, topPx))
         assertEquals(0, HudBandGeometry.availableHeightPx(640, 700))
     }
@@ -100,7 +100,7 @@ class InkCardPresentationTest {
 
         val fullBleed = surfaceHostChrome(SurfaceHudMode.FULL_BLEED, hudTopInsetDp = 40)
 
-        assertEquals(BusTheme.glassesBg, fullBleed.backgroundColor)
+        assertEquals(RokidHudTokens.GROUND, fullBleed.backgroundColor)
         assertEquals(18, fullBleed.paddingLeftDp)
         assertEquals(16 + HudTopInset.sanitize(40), fullBleed.paddingTopDp)
         assertEquals(18, fullBleed.paddingRightDp)

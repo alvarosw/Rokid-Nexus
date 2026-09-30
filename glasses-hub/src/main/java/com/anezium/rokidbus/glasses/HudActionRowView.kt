@@ -1,16 +1,12 @@
 package com.anezium.rokidbus.glasses
 
 import android.content.Context
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
-import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import com.anezium.rokidbus.client.ui.BusTheme
 import com.anezium.rokidbus.client.ui.NexusGlyphs
+import com.anezium.rokidbus.client.ui.RokidHudTokens
 
 /** One drawable command in a [HudActionRowView], stripped of whose tier it came from. */
 internal data class HudActionChip(val glyph: String, val label: String)
@@ -23,6 +19,10 @@ internal data class HudActionChip(val glyph: String, val label: String)
  * one of them selected, stepped through with forward and backward and fired
  * with confirm. Two drawings of that would be two things for the wearer to
  * learn, so the drawing lives here and each tier only supplies its own list.
+ *
+ * Each chip is a `Button`: an outline in `line-control`, the icon and `body` label at
+ * `text-primary`. The selected chip is the row's one primary button, drawn in the focus chrome
+ * (`surface-selected`, 2 px `focus` border, `focus` text and icon).
  *
  * The row hides itself when there is nothing to offer, so a caller can render
  * unconditionally.
@@ -41,8 +41,8 @@ internal class HudActionRowView(context: Context) : LinearLayout(context) {
         actions.forEachIndexed { index, action ->
             addView(
                 chip(action, selected = index == selectedIndex),
-                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
-                    if (index > 0) marginStart = BusTheme.dp(context, CHIP_GAP_DP)
+                LayoutParams(LayoutParams.WRAP_CONTENT, CHIP_HEIGHT).apply {
+                    if (index > 0) marginStart = RokidHudTokens.SPACE_2
                 },
             )
         }
@@ -62,10 +62,9 @@ internal class HudActionRowView(context: Context) : LinearLayout(context) {
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val available = MeasureSpec.getSize(widthMeasureSpec)
         if (available > 0 && labels.isNotEmpty()) {
-            val gaps = BusTheme.dp(context, CHIP_GAP_DP) * (labels.size - 1)
-            val chrome = BusTheme.dp(context, CHIP_CHROME_DP)
-            val share = (available - gaps) / labels.size - chrome
-            val ceiling = share.coerceAtLeast(BusTheme.dp(context, MIN_LABEL_DP))
+            val gaps = RokidHudTokens.SPACE_2 * (labels.size - 1)
+            val share = (available - gaps) / labels.size - CHIP_CHROME
+            val ceiling = share.coerceAtLeast(MIN_LABEL)
             labels.forEach { it.maxWidth = ceiling }
         }
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
@@ -74,60 +73,37 @@ internal class HudActionRowView(context: Context) : LinearLayout(context) {
     private fun chip(action: HudActionChip, selected: Boolean) = LinearLayout(context).apply {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        val horizontal = BusTheme.dp(context, 6)
-        val vertical = BusTheme.dp(context, 4)
-        setPadding(horizontal, vertical, horizontal, vertical)
-        background = GradientDrawable().apply {
-            // Pure black, like every other HUD fill: the additive optics emit
-            // nothing for it, so only the border and the label light up.
-            setColor(0xFF000000.toInt())
-            setStroke(
-                BusTheme.dp(context, if (selected) 2 else 1),
-                if (selected) BusTheme.phosphor else BusTheme.hairline,
-            )
-            cornerRadius = BusTheme.dp(context, 5).toFloat()
-        }
+        setPadding(RokidHudTokens.SPACE_2, 0, RokidHudTokens.SPACE_2, 0)
+        background = if (selected) SurfaceChrome.focused() else SurfaceChrome.control()
+        val intensity = if (selected) RokidHudTokens.FOCUS else RokidHudTokens.TEXT_PRIMARY
         addView(
-            ImageView(context).apply {
-                setImageDrawable(
-                    requireNotNull(context.getDrawable(NexusGlyphs.drawableFor(action.glyph))),
-                )
-            },
-            LayoutParams(
-                BusTheme.dp(context, ACTION_GLYPH_DP),
-                BusTheme.dp(context, ACTION_GLYPH_DP),
+            AmbientStyle.icon(
+                context,
+                requireNotNull(context.getDrawable(NexusGlyphs.drawableFor(action.glyph))),
+                RokidHudTokens.ICON_SM,
+                intensity,
             ),
+            LayoutParams(RokidHudTokens.ICON_SM, RokidHudTokens.ICON_SM),
         )
         addView(
-            label(if (selected) BusTheme.phosphor else BusTheme.muted).apply {
+            SurfaceType.body(TextView(context), intensity).apply {
                 text = action.label
                 labels.add(this)
             },
             LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
-                marginStart = BusTheme.dp(context, 4)
+                marginStart = RokidHudTokens.SPACE_1
             },
         )
     }
 
-    private fun label(color: Int) = TextView(context).apply {
-        textSize = ACTION_LABEL_SP
-        setTextColor(color)
-        typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
-        includeFontPadding = false
-        maxLines = 1
-        isSingleLine = true
-        ellipsize = TextUtils.TruncateAt.END
-    }
-
     private companion object {
-        const val ACTION_GLYPH_DP = 18
-        const val ACTION_LABEL_SP = 10f
-        const val CHIP_GAP_DP = 6
+        /** `ListItem`'s 32 px row: the height of every control in the design system. */
+        const val CHIP_HEIGHT = RokidHudTokens.LIST_ITEM_HEIGHT
 
-        /** A chip's own width around the label: padding, glyph, and the gap after it. */
-        const val CHIP_CHROME_DP = 6 + ACTION_GLYPH_DP + 4 + 6
+        /** A chip's own width around the label: padding, icon, and the gap after it. */
+        const val CHIP_CHROME = 2 * RokidHudTokens.SPACE_2 + RokidHudTokens.ICON_SM + RokidHudTokens.SPACE_1
 
         /** Below this the label reads as noise, so the row overflows rather than lie. */
-        const val MIN_LABEL_DP = 24
+        const val MIN_LABEL = 36
     }
 }
