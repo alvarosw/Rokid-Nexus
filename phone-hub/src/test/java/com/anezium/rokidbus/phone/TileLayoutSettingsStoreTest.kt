@@ -25,6 +25,11 @@ class TileLayoutSettingsStoreTest {
         val entries = listOf(
             TileLayoutEntry("weather", TileSize.WIDE, col = 0, row = 0),
             TileLayoutEntry("clock", TileSize.SMALL, col = 2, row = 0),
+            TileLayoutEntry("banner", TileSize.BANNER, col = 0, row = 1),
+            TileLayoutEntry("panel", TileSize.PANEL, col = 1, row = 2),
+            TileLayoutEntry("jumbo", TileSize.JUMBO, col = 0, row = 4),
+            TileLayoutEntry("tall", TileSize.TALL, col = 3, row = 1),
+            TileLayoutEntry("large", TileSize.LARGE, col = 2, row = 5),
         )
         store.setEntries(entries)
         assertEquals(entries, TileLayoutSettingsStore(context).getEntries())
