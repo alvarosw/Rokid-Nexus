@@ -10,6 +10,7 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.view.KeyEvent
+import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.glasses.hud.HudController
 import com.anezium.rokidbus.shared.BusEnvelope
 import com.anezium.rokidbus.shared.BusPaths
@@ -1056,7 +1057,7 @@ internal object NoticeController {
                 notifyChanged()
                 maybeSleepDisplay(decision.reason)
                 decision.imageBitmap?.let { released ->
-                    main.postDelayed({ released.recycleSafely() }, HudMotion.EXIT_MS + 1L)
+                    main.postDelayed({ released.recycleSafely() }, RokidHudTokens.DURATION_STRUCTURAL_MS + 1L)
                 }
             }
             NoticeStateDecision.DroppedStale -> log("notice dropped stale")

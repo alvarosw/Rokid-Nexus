@@ -3,7 +3,6 @@ package com.anezium.rokidbus.glasses
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.view.Gravity
@@ -11,8 +10,9 @@ import android.view.View
 import android.view.WindowManager
 import com.anezium.rokidbus.glasses.hud.AmbientLayer
 import com.anezium.rokidbus.glasses.hud.AmbientStack
+import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.glasses.hud.AmbientWindow
-import kotlin.math.roundToInt
+import com.anezium.rokidbus.glasses.hud.HudGeometry
 
 internal data class GlassesPointerPosition(val x: Double, val y: Double)
 
@@ -66,12 +66,12 @@ internal object RemotePointerOverlayRenderer {
     fun show(position: GlassesPointerPosition): GlassesPointerPixel? {
         val owner = service ?: return null
         val manager = windowManager ?: owner.getSystemService(WindowManager::class.java) ?: return null
-        val metrics = owner.resources.displayMetrics
-        val radius = cursorRadiusPx(metrics.density)
+        val viewport = HudGeometry.DEFAULT.viewport
+        val radius = CURSOR_RADIUS_PX
         val point = RemotePointerGeometry.toPixels(
             position = position,
-            widthPixels = metrics.widthPixels,
-            heightPixels = metrics.heightPixels,
+            widthPixels = viewport.width,
+            heightPixels = viewport.height,
             radiusPixels = radius,
         ) ?: return null
         val currentRoot = root ?: PointerView(owner).also { next ->
@@ -128,15 +128,17 @@ internal object RemotePointerOverlayRenderer {
 
     internal class PointerView(context: Context) : View(context) {
         private val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.BLACK
+            color = RokidHudTokens.GROUND
             style = Paint.Style.STROKE
+            strokeWidth = HALO_STROKE_PX
         }
         private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
+            color = RokidHudTokens.FOCUS
             style = Paint.Style.STROKE
+            strokeWidth = RokidHudTokens.BORDER_STRONG.toFloat()
         }
         private val center = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = POINTER_GREEN
+            color = RokidHudTokens.FOCUS
             style = Paint.Style.FILL
         }
         private var point = GlassesPointerPixel(0f, 0f)
@@ -144,15 +146,12 @@ internal object RemotePointerOverlayRenderer {
 
         init {
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-            setBackgroundColor(Color.TRANSPARENT)
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
         }
 
         fun render(nextPoint: GlassesPointerPixel, nextRadius: Float) {
             point = nextPoint
             radius = nextRadius
-            val density = resources.displayMetrics.density
-            shadow.strokeWidth = dp(density, SHADOW_STROKE_DP).toFloat()
-            ring.strokeWidth = dp(density, RING_STROKE_DP).toFloat()
             invalidate()
         }
 
@@ -164,13 +163,10 @@ internal object RemotePointerOverlayRenderer {
         }
     }
 
-    internal fun cursorRadiusPx(density: Float): Float = dp(density, CURSOR_RADIUS_DP).toFloat()
+    /** An `icon-lg` ring: the cursor is as big as the largest icon in the set. */
+    internal const val CURSOR_RADIUS_PX = RokidHudTokens.ICON_LG / 2f
 
-    private fun dp(density: Float, value: Float): Int = (value * density).roundToInt().coerceAtLeast(1)
-
-    private const val CURSOR_RADIUS_DP = 11f
-    private const val SHADOW_STROKE_DP = 6f
-    private const val RING_STROKE_DP = 2.5f
+    /** The black halo that keeps the ring legible over whatever is under it; unlit on the optic. */
+    private const val HALO_STROKE_PX = 2 * RokidHudTokens.BORDER_STRONG + RokidHudTokens.BORDER_STRONG.toFloat()
     private const val CENTER_RADIUS_RATIO = 0.24f
-    private const val POINTER_GREEN = 0xff00e676.toInt()
 }

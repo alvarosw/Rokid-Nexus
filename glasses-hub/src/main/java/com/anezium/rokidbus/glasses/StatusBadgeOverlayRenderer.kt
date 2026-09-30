@@ -2,7 +2,6 @@ package com.anezium.rokidbus.glasses
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
-import android.content.res.ColorStateList
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.Typeface
@@ -18,7 +17,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.anezium.rokidbus.client.ui.NexusGlyphs
-import com.anezium.rokidbus.client.ui.NexusUi
+import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.glasses.hud.AmbientLayer
 import com.anezium.rokidbus.glasses.hud.AmbientStack
 import com.anezium.rokidbus.glasses.hud.AmbientWindow
@@ -385,10 +384,14 @@ internal object StatusBadgeOverlayRenderer {
      * Chip metrics match the ROM's own row — an 18px glyph beside its 20px
      * icons, regular-weight text like its clock and temperature. Bold was tried
      * and visibly out-weighed the row this chip is supposed to disappear into.
+     * That size is a hardware fact (HARDWARE D3, S6), so the glyph and the label keep their
+     * on-device dp/sp sizes instead of the token pixels; the colors are the design system's:
+     * `text-primary` for the glyph and the `mono` numerals.
      */
     internal class PhoneChipView(context: Context) : LinearLayout(context) {
         private val label = TextView(context).apply {
-            setTextColor(NexusUi.GREEN)
+            setTextColor(RokidHudTokens.TEXT_PRIMARY)
+            typeface = RokidHudTokens.monoTypeface()
             textSize = StatusBadgeGeometry.LABEL_SP
             includeFontPadding = false
             isSingleLine = true
@@ -402,8 +405,12 @@ internal object StatusBadgeOverlayRenderer {
             val density = resources.displayMetrics.density
             val size = StatusBadgeGeometry.px(StatusBadgeGeometry.GLYPH_SIZE_DP, density)
             val glyph = ImageView(context).apply {
-                setImageResource(NexusGlyphs.drawableFor("phone"))
-                imageTintList = ColorStateList.valueOf(NexusUi.GREEN)
+                setImageDrawable(
+                    AmbientStyle.tinted(
+                        requireNotNull(context.getDrawable(NexusGlyphs.drawableFor("phone"))),
+                        RokidHudTokens.TEXT_PRIMARY,
+                    ),
+                )
                 scaleType = ImageView.ScaleType.FIT_CENTER
             }
             addView(glyph, LayoutParams(size, size))

@@ -3,12 +3,9 @@ package com.anezium.rokidbus.glasses
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PixelFormat
-import android.graphics.Typeface
 import android.graphics.drawable.Drawable
-import android.graphics.drawable.GradientDrawable
 import android.text.Layout
 import android.text.SpannableString
 import android.text.Spanned
@@ -17,7 +14,6 @@ import android.text.TextPaint
 import android.text.TextUtils
 import android.text.style.BackgroundColorSpan
 import android.text.style.ForegroundColorSpan
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -25,10 +21,13 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import com.anezium.rokidbus.client.ui.BusTheme
+import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.glasses.hud.AmbientLayer
 import com.anezium.rokidbus.glasses.hud.AmbientStack
 import com.anezium.rokidbus.glasses.hud.AmbientWindow
+import com.anezium.rokidbus.glasses.hud.HudGeometry
+import com.anezium.rokidbus.glasses.hud.HudIconView
+import com.anezium.rokidbus.glasses.hud.HudStatusView
 import com.anezium.rokidbus.shared.ActivityTrack
 /**
  * The ROM sleeps the display five seconds after the last input (vendor-set
@@ -119,12 +118,17 @@ object NoticeOverlayRenderer {
     private var inkMorph: NoticeInkMorphToken? = null
     private var composeUnsubscribe: (() -> Unit)? = null
 
-    private val slide = HudMotionValue(0f) { offset -> band?.translationY = offset }
-        .also { it.onIdle = ::motionIdle }
-    private val fade = HudMotionValue(0f) { alpha ->
-        band?.alpha = alpha
-        scrim?.alpha = noticeBackdropAlpha(alpha, backdrop)
-    }.also { it.onIdle = ::motionIdle }
+    private val motion = AmbientStyle.motionDriver { service }
+    private val slide = AmbientMotionValue(motion, 0f, { offset -> band?.translationY = offset }, ::motionIdle)
+    private val fade = AmbientMotionValue(
+        motion,
+        0f,
+        { alpha ->
+            band?.alpha = alpha
+            scrim?.alpha = noticeBackdropAlpha(alpha, backdrop)
+        },
+        ::motionIdle,
+    )
 
     private fun motionIdle() {
         if (!ambientWindow.isAnimating) AmbientStack.main.animationEnded()
@@ -201,7 +205,7 @@ object NoticeOverlayRenderer {
         if (inkMorph != token || container == null || band == null) return false
         return runCatching {
             slide.snapTo(0f)
-            fade.animateTo(0f, HudMotion.MICRO_MS, HudMotion.enter)
+            fade.animateTo(0f, RokidHudTokens.DURATION_DEFAULT_MS)
             true
         }.onFailure {
             fade.snapTo(0f)
@@ -259,8 +263,8 @@ object NoticeOverlayRenderer {
                     if (band !== view || renderedSeq != notice.seq || exitRunning) return@post
                     bandHeightPx = view.height.takeIf { it > 0 } ?: bandHeightPx
                     slide.snapTo(-bandHeightPx.toFloat())
-                    slide.animateTo(0f, HudMotion.STANDARD_MS, HudMotion.enter)
-                    fade.animateTo(1f, HudMotion.STANDARD_MS, HudMotion.enter)
+                    slide.animateTo(0f, RokidHudTokens.DURATION_STRUCTURAL_MS)
+                    fade.animateTo(1f, RokidHudTokens.DURATION_STRUCTURAL_MS)
                 }
             }
             NoticeRenderMotion.REENTER -> {
@@ -268,8 +272,8 @@ object NoticeOverlayRenderer {
                 // Waiting for layout here leaves one main-loop turn in which the old
                 // fade can still reach zero and remove the live notice's window.
                 exitRunning = false
-                slide.animateTo(0f, HudMotion.STANDARD_MS, HudMotion.enter)
-                fade.animateTo(1f, HudMotion.STANDARD_MS, HudMotion.enter)
+                slide.animateTo(0f, RokidHudTokens.DURATION_STRUCTURAL_MS)
+                fade.animateTo(1f, RokidHudTokens.DURATION_STRUCTURAL_MS)
             }
             NoticeRenderMotion.UPDATE -> Unit
         }
@@ -279,8 +283,8 @@ object NoticeOverlayRenderer {
         if (container == null) return
         if (noticeDismissMotion(inkMorph != null) == NoticeDismissMotion.INK_FADE_IN_PLACE) return
         exitRunning = true
-        slide.animateTo(-bandHeightPx.toFloat(), HudMotion.EXIT_MS, HudMotion.exit)
-        fade.animateTo(0f, HudMotion.EXIT_MS, HudMotion.exit) { teardown() }
+        slide.animateTo(-bandHeightPx.toFloat(), RokidHudTokens.DURATION_STRUCTURAL_MS)
+        fade.animateTo(0f, RokidHudTokens.DURATION_STRUCTURAL_MS) { teardown() }
     }
 
     private fun ensureWindow(service: AccessibilityService): NoticeBandView? {
@@ -294,7 +298,7 @@ object NoticeOverlayRenderer {
         // occludes every window underneath. It rides the band's fade and, being
         // part of a NOT_TOUCHABLE window, blocks nothing but light.
         val shade = View(service).apply {
-            setBackgroundColor(0xFF000000.toInt())
+            setBackgroundColor(RokidHudTokens.GROUND)
             alpha = 0f
         }
         root.addView(
@@ -324,7 +328,7 @@ object NoticeOverlayRenderer {
     /** Where the band sits inside the notice window: top-centred, on the Ink card's width and top. */
     internal fun bandLayoutParams(context: Context, hudTopInsetDp: Int): FrameLayout.LayoutParams =
         FrameLayout.LayoutParams(
-            HudBandGeometry.widthPx(context.resources.displayMetrics.widthPixels),
+            HudBandGeometry.widthPx(HudGeometry.DEFAULT.viewport.width),
             FrameLayout.LayoutParams.WRAP_CONTENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
@@ -376,14 +380,50 @@ object NoticeOverlayRenderer {
         )
     }
 
-    /** Shared top-band geometry used unchanged by notices and activity flares. */
+    /**
+     * Shared top-band geometry used unchanged by notices and activity flares.
+     *
+     * A `Panel` (1 px `line`, `radius-panel`) with `space-3` padding: `heading` title, `body`
+     * message at `text-primary`, `body-small` footer and `mono` page counter at `text-secondary`,
+     * and a row of `Button`s whose selected member is the focus chrome.
+     */
     internal class NoticeBandView(
         context: Context,
         private val pageCountChanged: ((String, Long, Int) -> Unit)? = null,
         /** An activity island draws the band's outline itself. */
         chromeless: Boolean = false,
     ) : LinearLayout(context) {
-        private val title = row(bold = true, sizeSp = TITLE_SP, color = BusTheme.phosphor)
+        private val glyph = ImageView(context).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            visibility = View.GONE
+        }
+        private val title = SurfaceType.heading(TextView(context)).apply {
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.END
+        }
+
+        /** `Status critical`'s icon: shown only on an urgent flare. */
+        private val alert = HudIconView(context, HudIconView.Kind.ALERT).apply {
+            setIntensity(RokidHudTokens.CRITICAL)
+            visibility = View.GONE
+        }
+        private val titleRow = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(
+                glyph,
+                LayoutParams(RokidHudTokens.ICON_LG, RokidHudTokens.ICON_LG).apply {
+                    marginEnd = RokidHudTokens.SPACE_2
+                },
+            )
+            addView(title, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+            addView(
+                alert,
+                LayoutParams(RokidHudTokens.ICON_MD, RokidHudTokens.ICON_MD).apply {
+                    marginStart = RokidHudTokens.SPACE_2
+                },
+            )
+        }
         private val image = NoticeImageView(context)
         private val body = NoticeBodyView(context) { count ->
             if (measuredPageCount != count && noticeIdentity != null) {
@@ -392,41 +432,34 @@ object NoticeOverlayRenderer {
             measuredPageCount = count
             updateFooter()
         }
-        private val footer = row(bold = false, sizeSp = FOOTER_SP, color = BusTheme.muted)
-        private val pageIndicator = row(
-            bold = false,
-            sizeSp = FOOTER_SP,
-            color = BusTheme.muted,
-        ).apply {
+        private val footer = SurfaceType.bodySmall(TextView(context))
+        private val status = HudStatusView(context)
+        private val pageIndicator = SurfaceType.mono(TextView(context)).apply {
             gravity = Gravity.END
         }
         private val footerRow = LinearLayout(context).apply {
             orientation = HORIZONTAL
-            addView(
-                footer,
-                LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f),
-            )
+            // With no footer text the page counter is alone in the row, and belongs at its end.
+            gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            addView(footer, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+            addView(status, LayoutParams(0, HudStatusView.HEIGHT, 1f))
             addView(
                 pageIndicator,
-                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT),
+                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                    marginStart = RokidHudTokens.SPACE_2
+                },
             )
         }
-        private val compose = TextView(context).apply {
-            setTextColor(BusTheme.text)
-            textSize = BODY_SP
-            typeface = Typeface.MONOSPACE
-            includeFontPadding = false
+
+        /** The field being typed into is the focused control: `surface-selected`, 2 px `focus`. */
+        private val compose = SurfaceType.body(TextView(context)).apply {
+            ellipsize = null
             minLines = COMPOSE_LINES
             maxLines = COMPOSE_LINES
             isVerticalScrollBarEnabled = false
-            val padding = BusTheme.dp(context, 5)
+            val padding = RokidHudTokens.SPACE_2
             setPadding(padding, padding, padding, padding)
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                setColor(0xFF000000.toInt())
-                setStroke(BusTheme.dp(context, 1), BusTheme.dim)
-                cornerRadius = BusTheme.dp(context, 5).toFloat()
-            }
+            background = SurfaceChrome.focused()
             visibility = View.GONE
         }
         private val actions = HudActionRowView(context)
@@ -436,6 +469,7 @@ object NoticeOverlayRenderer {
         private var liveChips: List<HudActionChip> = emptyList()
         private var selectedChip = 0
         private var pluginFooter: String? = null
+        private var footerWarns = false
         private var renderedPageIndex = 0
         private var measuredPageCount = 1
         private var pageableNotice = false
@@ -446,31 +480,20 @@ object NoticeOverlayRenderer {
 
         init {
             orientation = VERTICAL
-            val horizontal = BusTheme.dp(context, 10)
-            val vertical = BusTheme.dp(context, 8)
-            setPadding(horizontal, vertical, horizontal, vertical)
-            if (!chromeless) {
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    // Pure black. The additive optics emit nothing for black, so the
-                    // fill reads as transparent and only the border and text light up.
-                    // A "nicer" translucent grey is a visible grey rectangle on-glasses.
-                    setColor(0xFF000000.toInt())
-                    setStroke(BusTheme.dp(context, 1), BusTheme.hairline)
-                    cornerRadius = BusTheme.dp(context, 7).toFloat()
-                }
-            }
-            addView(title, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+            val padding = RokidHudTokens.SPACE_3
+            setPadding(padding, padding, padding, padding)
+            if (!chromeless) background = AmbientStyle.panel()
+            addView(titleRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
             addView(
                 image,
                 LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                    topMargin = BusTheme.dp(context, 3)
+                    topMargin = RokidHudTokens.SPACE_1
                 },
             )
             addView(
                 body,
                 LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                    topMargin = BusTheme.dp(context, 3)
+                    topMargin = RokidHudTokens.SPACE_1
                 },
             )
             // Under the message it answers, the way an inline reply sits under
@@ -478,19 +501,19 @@ object NoticeOverlayRenderer {
             addView(
                 compose,
                 LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                    topMargin = BusTheme.dp(context, 6)
+                    topMargin = RokidHudTokens.SPACE_2
                 },
             )
             addView(
                 track,
                 LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                    topMargin = BusTheme.dp(context, 5)
+                    topMargin = RokidHudTokens.SPACE_2
                 },
             )
             addView(
                 footerRow,
                 LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                    topMargin = BusTheme.dp(context, 5)
+                    topMargin = RokidHudTokens.SPACE_1
                 },
             )
             // Under the footer, so the reading order is what the band says, then
@@ -498,7 +521,7 @@ object NoticeOverlayRenderer {
             addView(
                 actions,
                 LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
-                    topMargin = BusTheme.dp(context, 6)
+                    topMargin = RokidHudTokens.SPACE_2
                 },
             )
         }
@@ -510,7 +533,7 @@ object NoticeOverlayRenderer {
                 MAX_HEIGHT_FRACTION
             }
             val ceiling = noticeBandHeightCeiling(
-                displayHeightPx = resources.displayMetrics.heightPixels,
+                displayHeightPx = HudGeometry.DEFAULT.viewport.height,
                 heightFraction = heightFraction,
                 topInsetPx = hudTopInsetPx,
             )
@@ -553,7 +576,7 @@ object NoticeOverlayRenderer {
         }
 
         fun setHudTopInsetDp(value: Int) {
-            val next = BusTheme.dp(context, HudTopInset.sanitize(value))
+            val next = HudTopInset.toPx(context, value)
             if (hudTopInsetPx == next) return
             hudTopInsetPx = next
             requestLayout()
@@ -568,10 +591,11 @@ object NoticeOverlayRenderer {
             track.render(null)
             noticeIdentity = notice.surfaceId to notice.seq
             pluginFooter = noticeFooterText(notice)
+            footerWarns = notice.deliveryUnconfirmed
             renderedPageIndex = notice.pageIndex
             measuredPageCount = notice.pageCount
             pageCountReportPending = true
-            renderTitle(notice.content.title, null)
+            renderTitle(notice.content.title, null, critical = false)
             val hasImage = notice.imageBitmap?.takeUnless { it.isRecycled } != null
             val paging = notice.content.actions.size <= 1
             pageableNotice = paging
@@ -615,20 +639,20 @@ object NoticeOverlayRenderer {
             val render = noticeComposeRender(shown)
             compose.text = SpannableString(render.text).apply {
                 setSpan(
-                    BackgroundColorSpan(BusTheme.phosphor),
+                    BackgroundColorSpan(RokidHudTokens.FOCUS),
                     render.caretStart,
                     render.caretEnd,
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
                 )
                 setSpan(
-                    ForegroundColorSpan(Color.BLACK),
+                    ForegroundColorSpan(RokidHudTokens.ON_EMPHASIS),
                     render.caretStart,
                     render.caretEnd,
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
                 )
                 if (render.placeholderStart < render.text.length) {
                     setSpan(
-                        ForegroundColorSpan(BusTheme.dim),
+                        ForegroundColorSpan(RokidHudTokens.TEXT_SECONDARY),
                         render.placeholderStart,
                         render.text.length,
                         Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
@@ -656,7 +680,9 @@ object NoticeOverlayRenderer {
         /**
          * The text-only form the activity flare borrows. It carries no actions:
          * a flare is a moment of emphasis on something the wearer is already
-         * following, not a question, and its own row lives on the panel.
+         * following, not a question, and its own row lives on the panel. An
+         * [urgent] flare is the design system's `Status critical`: the alert
+         * icon at 100 % beside the title.
          */
         fun render(
             titleText: String?,
@@ -666,19 +692,21 @@ object NoticeOverlayRenderer {
             actionChips: List<HudActionChip> = emptyList(),
             selectedActionIndex: Int = 0,
             track: ActivityTrack? = null,
+            urgent: Boolean = false,
         ) {
             this.track.render(track)
             noticeIdentity = null
             noticeOwner = ""
             compose.visibility = View.GONE
             pluginFooter = footerText
+            footerWarns = false
             renderedPageIndex = 0
             measuredPageCount = 1
             pageableNotice = false
             noticeHasImage = false
             noticeActionCount = actionChips.size
             pageCountReportPending = false
-            renderTitle(titleText, leadingGlyph)
+            renderTitle(titleText, leadingGlyph, critical = urgent)
             image.render(null)
             body.render(
                 text = bodyText,
@@ -690,31 +718,28 @@ object NoticeOverlayRenderer {
             actions.render(actionChips, selectedActionIndex)
         }
 
-        private fun renderTitle(titleText: String?, leadingGlyph: Drawable?) {
+        private fun renderTitle(titleText: String?, leadingGlyph: Drawable?, critical: Boolean) {
             title.text = titleText.orEmpty()
-            title.visibility = visibleIf(!titleText.isNullOrEmpty())
-            leadingGlyph?.setBounds(
-                0,
-                0,
-                BusTheme.dp(context, GLYPH_SIZE_DP),
-                BusTheme.dp(context, GLYPH_SIZE_DP),
-            )
-            title.compoundDrawablePadding = if (leadingGlyph == null) 0 else BusTheme.dp(context, 7)
-            title.setCompoundDrawables(leadingGlyph, null, null, null)
+            titleRow.visibility = visibleIf(!titleText.isNullOrEmpty())
+            val intensity = if (critical) RokidHudTokens.CRITICAL else RokidHudTokens.TEXT_PRIMARY
+            title.setTextColor(intensity)
+            AmbientStyle.glyph(glyph, leadingGlyph, RokidHudTokens.ICON_LG, intensity)
+            alert.visibility = visibleIf(critical)
         }
 
         private fun updateFooter() {
-            footer.text = pluginFooter.orEmpty()
-            footer.visibility = visibleIf(!pluginFooter.isNullOrEmpty())
+            val text = pluginFooter.orEmpty()
+            val warn = footerWarns && text.isNotEmpty()
+            footer.text = text
+            footer.visibility = visibleIf(text.isNotEmpty() && !warn)
+            if (warn) status.show(HudStatusView.Kind.WARN, text) else status.hide()
             pageIndicator.text = if (measuredPageCount > 1) {
                 "${renderedPageIndex.coerceIn(0, measuredPageCount - 1) + 1}/$measuredPageCount"
             } else {
                 ""
             }
             pageIndicator.visibility = visibleIf(measuredPageCount > 1)
-            footerRow.visibility = visibleIf(
-                !pluginFooter.isNullOrEmpty() || measuredPageCount > 1,
-            )
+            footerRow.visibility = visibleIf(text.isNotEmpty() || measuredPageCount > 1)
         }
 
         private fun visibleImageHeightWithMargin(): Int {
@@ -731,20 +756,6 @@ object NoticeOverlayRenderer {
             }
         }
 
-        private fun row(bold: Boolean, sizeSp: Float, color: Int) =
-            TextView(context).apply {
-                setTextColor(color)
-                textSize = sizeSp
-                typeface = Typeface.create(
-                    Typeface.MONOSPACE,
-                    if (bold) Typeface.BOLD else Typeface.NORMAL,
-                )
-                includeFontPadding = false
-                isSingleLine = true
-                maxLines = 1
-                ellipsize = TextUtils.TruncateAt.END
-            }
-
         private fun visibleIf(visible: Boolean): Int =
             if (visible) View.VISIBLE else View.GONE
     }
@@ -754,7 +765,7 @@ object NoticeOverlayRenderer {
             adjustViewBounds = true
             scaleType = ImageView.ScaleType.FIT_CENTER
             maxHeight = MAX_IMAGE_HEIGHT_PX
-            setBackgroundColor(0xFF000000.toInt())
+            setBackgroundColor(RokidHudTokens.GROUND)
         }
 
         fun render(bitmap: android.graphics.Bitmap?) {
@@ -768,14 +779,12 @@ object NoticeOverlayRenderer {
         private val pageCountChanged: (Int) -> Unit,
     ) : View(context) {
         private val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = BusTheme.muted
-            textSize = TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_SP,
-                BODY_SP,
-                resources.displayMetrics,
-            )
-            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
+            color = RokidHudTokens.TEXT_PRIMARY
+            textSize = RokidHudTokens.BODY_TEXT_SIZE
+            typeface = RokidHudTokens.bodyTypeface()
         }
+        // `body` is 14 / 20: the font's own line is shorter, so each line is padded to the 20.
+        private val lineExtra = with(paint.fontMetricsInt) { SurfaceType.BODY_LINE - (descent - ascent) }.toFloat()
         private var text: String? = null
         private var pageIndex = 0
         private var capacities = NoticePageCapacities(MIN_BODY_LINES, MIN_BODY_LINES)
@@ -826,6 +835,7 @@ object NoticeOverlayRenderer {
             val builder = StaticLayout.Builder.obtain(content, 0, content.length, paint, width)
                 .setAlignment(Layout.Alignment.ALIGN_NORMAL)
                 .setIncludePad(false)
+                .setLineSpacing(lineExtra, 1f)
                 .setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE)
                 .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
             if (!paging) {
@@ -895,9 +905,5 @@ object NoticeOverlayRenderer {
     private const val GROWN_HEIGHT_FRACTION = 0.92f
     private const val CAPACITY_MEASURE_PASSES = 3
     private const val MAX_IMAGE_HEIGHT_PX = 150
-    private const val TITLE_SP = 15f
-    private const val BODY_SP = 12f
-    private const val FOOTER_SP = 11f
     private const val COMPOSE_LINES = 2
-    private const val GLYPH_SIZE_DP = 36
 }

@@ -2,27 +2,25 @@ package com.anezium.rokidbus.glasses
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
-import android.content.res.ColorStateList
 import android.graphics.PixelFormat
-import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.os.Looper
 import android.text.TextPaint
 import android.text.TextUtils
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ProgressBar
 import android.widget.TextView
-import com.anezium.rokidbus.client.ui.BusTheme
+import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.glasses.hud.AmbientLayer
 import com.anezium.rokidbus.glasses.hud.AmbientStack
 import com.anezium.rokidbus.glasses.hud.AmbientWindow
+import com.anezium.rokidbus.glasses.hud.HudGeometry
+import com.anezium.rokidbus.glasses.hud.HudLoaderView
 import com.anezium.rokidbus.shared.ActivityProgress
 import com.anezium.rokidbus.shared.ActivitySurfaceContent
 import com.anezium.rokidbus.shared.PinSurfaceLine
@@ -155,7 +153,7 @@ internal object ActivityOverlayRenderer {
             if (!flareInProgress) island.showSteady(item.presentation)
             when (item.presentation) {
                 ActivityPresentation.PULSE -> {
-                    if (newMotion) island.bump(dp(activeService, PULSE_DP).toFloat())
+                    if (newMotion) island.bump(PULSE_PX.toFloat())
                 }
                 ActivityPresentation.FLARE -> {
                     if (newMotion) pendingFlare = item to island
@@ -286,17 +284,19 @@ internal object ActivityOverlayRenderer {
         private val panel = ActivityPanelView(context)
         private val flare = NoticeOverlayRenderer.NoticeBandView(context, chromeless = true)
         private val renderedKeys = mutableMapOf<View, Any?>()
+        private var lastItem: ActivityRenderItem? = null
+        private var flareUrgent = false
         var corner = PinSurfacePosition.TOP_LEFT
             private set
         private var topInsetDp = -1
 
         init {
-            val width = resources.displayMetrics.widthPixels
+            val width = HudGeometry.DEFAULT.viewport.width
             addForm(chip, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
             addForm(panel, LayoutParams((width * PANEL_WIDTH_FRACTION).toInt(), LayoutParams.WRAP_CONTENT))
             addForm(
                 flare,
-                LayoutParams((width * BAND_WIDTH_FRACTION).toInt(), LayoutParams.WRAP_CONTENT).apply {
+                LayoutParams(HudBandGeometry.widthPx(width), LayoutParams.WRAP_CONTENT).apply {
                     gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
                 },
             )
@@ -306,8 +306,7 @@ internal object ActivityOverlayRenderer {
             if (corner == this.corner && topInsetDp == this.topInsetDp) return
             this.corner = corner
             this.topInsetDp = topInsetDp
-            val edge = dp(context, EDGE_MARGIN_DP)
-            val topEdge = dp(context, EDGE_MARGIN_DP + topInsetDp)
+            val topEdge = RokidHudTokens.SAFE_Y + HudTopInset.toPx(context, topInsetDp)
             val top = corner == PinSurfacePosition.TOP_LEFT || corner == PinSurfacePosition.TOP_RIGHT
             val gravity = when (corner) {
                 PinSurfacePosition.TOP_LEFT -> Gravity.TOP or Gravity.START
@@ -318,14 +317,23 @@ internal object ActivityOverlayRenderer {
             listOf(chip, panel).forEach { form ->
                 form.layoutParams = (form.layoutParams as LayoutParams).apply {
                     this.gravity = gravity
-                    setMargins(edge, if (top) topEdge else edge, edge, edge)
+                    setMargins(
+                        RokidHudTokens.SAFE_X,
+                        if (top) topEdge else RokidHudTokens.SAFE_Y,
+                        RokidHudTokens.SAFE_X,
+                        RokidHudTokens.SAFE_Y,
+                    )
                 }
             }
             flare.setHudTopInsetDp(topInsetDp)
-            flare.layoutParams = (flare.layoutParams as LayoutParams).apply { topMargin = topEdge }
+            // The flare is the notice band: it shares the band's width and top, as the Ink card does.
+            flare.layoutParams = (flare.layoutParams as LayoutParams).apply {
+                topMargin = HudBandGeometry.topPx(context, topInsetDp)
+            }
         }
 
         fun render(item: ActivityRenderItem) {
+            lastItem = item
             val content = item.activity.content
             val owner = item.activity.ownerPluginId
             update(chip, listOf(content.primary, content.measure, content.secondary, content.glyph)) {
@@ -338,7 +346,8 @@ internal object ActivityOverlayRenderer {
                         ?.let { listOf(PinSurfaceLine(it)) }
                         .orEmpty(),
                     size = PinSurfaceSize.MEDIUM,
-                    leadingGlyph = GlassesHub.activityGlyphDrawable(context, owner, content.glyph),
+                    leadingGlyph = content.badge?.let { ActivityBadgeDrawable(it) }
+                        ?: GlassesHub.activityGlyphDrawable(context, owner, content.glyph),
                 )
             }
             update(panel, content to item.activity.selectedActionIndex) {
@@ -348,7 +357,13 @@ internal object ActivityOverlayRenderer {
                     selectedActionIndex = item.activity.selectedActionIndex,
                 )
             }
-            update(flare, content) {
+            renderFlare(item)
+        }
+
+        private fun renderFlare(item: ActivityRenderItem) {
+            val content = item.activity.content
+            val owner = item.activity.ownerPluginId
+            update(flare, content to flareUrgent) {
                 flare.render(
                     titleText = content.primaryWithMeasure(),
                     bodyText = buildList {
@@ -356,38 +371,45 @@ internal object ActivityOverlayRenderer {
                         addAll(content.detail)
                     }.joinToString("  •  ").takeIf(String::isNotEmpty),
                     footerText = content.eta,
-                    leadingGlyph = content.badge?.let { ActivityBadgeDrawable(context, it) }
+                    leadingGlyph = content.badge?.let { ActivityBadgeDrawable(it) }
                         ?: GlassesHub.activityGlyphDrawable(context, owner, content.glyph),
                     track = content.track,
+                    urgent = flareUrgent,
                 )
             }
         }
 
         fun showSteady(presentation: ActivityPresentation) {
-            removeCallbacks(urgentBeat)
-            setOutline(BusTheme.hairline, dp(context, 1).toFloat())
+            removeCallbacks(urgentBlink)
+            stopBlink()
+            setOutline(RokidHudTokens.LINE, RokidHudTokens.BORDER_DEFAULT.toFloat())
             show(if (presentation == ActivityPresentation.PANEL) panel else chip)
         }
 
         /**
-         * The urgent flare is the same notice band with a bright outline that
-         * beats once it has arrived: noticeable on additive optics without
-         * lighting a whole block of the wearer's view. The beat waits for the
-         * morph, so the band's own travel never overshoots the screen edge.
+         * The urgent flare is the design system's `Status critical`: the same notice band with
+         * the alert icon and a 2 px `focus` outline that blinks three times once the band has
+         * arrived, then stays. The blink waits for the morph, so it never fights the band's own
+         * travel.
          */
         fun showFlare(urgent: Boolean) {
-            removeCallbacks(urgentBeat)
+            removeCallbacks(urgentBlink)
+            stopBlink()
+            if (urgent != flareUrgent) {
+                flareUrgent = urgent
+                lastItem?.let(::renderFlare)
+            }
             if (urgent) {
-                setOutline(BusTheme.phosphor, dp(context, URGENT_OUTLINE_DP).toFloat())
-                postDelayed(urgentBeat, URGENT_BEAT_DELAY_MS)
+                setOutline(RokidHudTokens.CRITICAL, RokidHudTokens.BORDER_STRONG.toFloat())
+                postDelayed(urgentBlink, URGENT_BLINK_DELAY_MS)
             } else {
-                setOutline(BusTheme.hairline, dp(context, 1).toFloat())
+                setOutline(RokidHudTokens.LINE, RokidHudTokens.BORDER_DEFAULT.toFloat())
             }
             show(flare)
         }
 
-        private val urgentBeat = Runnable {
-            if (currentForm === flare) bump(dp(context, URGENT_BEAT_DP).toFloat(), HudSpring.BEAT)
+        private val urgentBlink = Runnable {
+            if (currentForm === flare) blinkOutline()
         }
 
         private fun update(form: View, key: Any?, change: () -> Unit) {
@@ -397,30 +419,42 @@ internal object ActivityOverlayRenderer {
         }
     }
 
-    /** The platform-owned expanded geometry; no plugin field controls it. */
+    /**
+     * The platform-owned expanded geometry; no plugin field controls it. A `Panel`'s content: the
+     * primary is the panel's one `display` value, the ETA a `data` readout, the measure of progress
+     * a `Loader`, the choices `Button`s.
+     */
     private class ActivityPanelView(context: Context) : LinearLayout(context) {
-        private val glyph = ImageView(context)
-        private val primary = text(PRIMARY_SP, BusTheme.phosphor, bold = true)
-        private val eta = text(ETA_SP, BusTheme.muted)
-        // The contract allows 28 characters, about 21 of which fit one line of
-        // the text column; a stop or street name wraps rather than losing its end.
-        private val secondary = text(SECONDARY_SP, BusTheme.muted).apply {
-            isSingleLine = false
-            maxLines = SECONDARY_MAX_LINES
+        private val glyph = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
+        private val primary = SurfaceType.display(TextView(context)).apply {
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.END
         }
-        private val etaBelow = text(ETA_SP, BusTheme.muted)
-        private val progress = ProgressBar(
-            context,
-            null,
-            android.R.attr.progressBarStyleHorizontal,
-        ).apply {
-            progressTintList = ColorStateList.valueOf(BusTheme.phosphor)
-            progressBackgroundTintList = ColorStateList.valueOf(BusTheme.hairline)
-            indeterminateTintList = ColorStateList.valueOf(BusTheme.phosphor)
-            max = 100
+        private val eta = SurfaceType.data(TextView(context))
+        // The contract allows 28 characters, about 30 of which fit one line of
+        // the text column; a stop or street name wraps rather than losing its end.
+        private val secondary = SurfaceType.wrap(
+            SurfaceType.body(TextView(context), RokidHudTokens.TEXT_SECONDARY),
+            SECONDARY_MAX_LINES,
+        )
+        private val etaBelow = SurfaceType.data(TextView(context))
+        private val bar = MediaProgressView(context)
+        private val scan = HudLoaderView(context)
+        private val percent = SurfaceType.mono(TextView(context))
+        private val progress = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(bar, LayoutParams(0, MediaProgressView.HEIGHT_PX, 1f))
+            addView(scan, LayoutParams(0, MediaProgressView.HEIGHT_PX, 1f))
+            addView(
+                percent,
+                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                    marginStart = RokidHudTokens.SPACE_2
+                },
+            )
         }
         private val track = ActivityTrackView(context)
-        private val details = List(2) { text(DETAIL_SP, BusTheme.muted) }
+        private val details = List(2) { SurfaceType.bodySmall(TextView(context)) }
         private val actions = HudActionRowView(context)
         private val secondaryRow = LinearLayout(context).apply {
             orientation = HORIZONTAL
@@ -429,21 +463,20 @@ internal object ActivityOverlayRenderer {
             addView(
                 etaBelow,
                 LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
-                    .apply { marginStart = dp(context, 8) },
+                    .apply { marginStart = RokidHudTokens.SPACE_2 },
             )
         }
 
         init {
             orientation = HORIZONTAL
             gravity = Gravity.TOP
-            val horizontal = dp(context, 12)
-            val vertical = dp(context, 10)
-            setPadding(horizontal, vertical, horizontal, vertical)
+            val padding = RokidHudTokens.SPACE_3
+            setPadding(padding, padding, padding, padding)
 
             addView(
                 glyph,
-                LayoutParams(dp(context, GLYPH_DP), dp(context, GLYPH_DP)).apply {
-                    marginEnd = dp(context, GLYPH_GAP_DP)
+                LayoutParams(RokidHudTokens.ICON_LG, RokidHudTokens.ICON_LG).apply {
+                    marginEnd = RokidHudTokens.SPACE_3
                 },
             )
             addView(
@@ -457,41 +490,39 @@ internal object ActivityOverlayRenderer {
                             addView(
                                 eta,
                                 LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
-                                    .apply { marginStart = dp(context, ETA_GAP_DP) },
+                                    .apply { marginStart = RokidHudTokens.SPACE_2 },
                             )
                         },
                         LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT),
                     )
                     addView(
                         secondaryRow,
-                        LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                            topMargin = dp(context, 2)
-                        },
+                        LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT),
                     )
                     addView(
                         progress,
-                        LayoutParams(LayoutParams.MATCH_PARENT, dp(context, PROGRESS_HEIGHT_DP)).apply {
-                            topMargin = dp(context, 7)
+                        LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                            topMargin = RokidHudTokens.SPACE_2
                         },
                     )
                     addView(
                         track,
                         LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                            topMargin = dp(context, 6)
+                            topMargin = RokidHudTokens.SPACE_2
                         },
                     )
                     details.forEach { detail ->
                         addView(
                             detail,
                             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                                topMargin = dp(context, 4)
+                                topMargin = RokidHudTokens.SPACE_1
                             },
                         )
                     }
                     addView(
                         actions,
                         LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                            topMargin = dp(context, 8)
+                            topMargin = RokidHudTokens.SPACE_2
                         },
                     )
                 },
@@ -504,13 +535,16 @@ internal object ActivityOverlayRenderer {
             mainGlyph: Drawable,
             selectedActionIndex: Int,
         ) {
-            glyph.setImageDrawable(
-                content.badge?.let { ActivityBadgeDrawable(context, it) } ?: mainGlyph,
+            AmbientStyle.glyph(
+                glyph,
+                content.badge?.let { ActivityBadgeDrawable(it) } ?: mainGlyph,
+                RokidHudTokens.ICON_LG,
+                RokidHudTokens.TEXT_PRIMARY,
             )
             val primaryText = content.primaryWithMeasure()
             primary.text = primaryText
             val fit = fitPrimary(primaryText, content.eta)
-            primary.setTextSize(TypedValue.COMPLEX_UNIT_SP, fit.sizeSp)
+            RokidHudTokens.applyTextSize(primary, fit.sizePx)
             eta.text = content.eta.orEmpty()
             eta.visibility = visibleIf(content.eta != null && !fit.etaBelow)
             etaBelow.text = content.eta.orEmpty()
@@ -525,12 +559,19 @@ internal object ActivityOverlayRenderer {
                 null -> progress.visibility = View.GONE
                 ActivityProgress.Indeterminate -> {
                     progress.visibility = View.VISIBLE
-                    progress.isIndeterminate = true
+                    bar.visibility = View.GONE
+                    percent.visibility = View.GONE
+                    scan.visibility = View.VISIBLE
+                    scan.setActive(true)
                 }
                 is ActivityProgress.Percent -> {
                     progress.visibility = View.VISIBLE
-                    progress.isIndeterminate = false
-                    progress.progress = value.value
+                    scan.setActive(false)
+                    scan.visibility = View.GONE
+                    bar.visibility = View.VISIBLE
+                    bar.setProgress(value.value / 100f)
+                    percent.text = "${value.value}%"
+                    percent.visibility = View.VISIBLE
                 }
             }
             details.forEachIndexed { index, view ->
@@ -549,38 +590,19 @@ internal object ActivityOverlayRenderer {
          * computed from it rather than from a layout pass that has not run yet.
          */
         private fun fitPrimary(text: String, etaText: String?): ActivityPrimaryFit {
-            val metrics = resources.displayMetrics
-            val panelWidth = metrics.widthPixels * PANEL_WIDTH_FRACTION
+            val panelWidth = HudGeometry.DEFAULT.viewport.width * PANEL_WIDTH_FRACTION
             val available = panelWidth - paddingLeft - paddingRight -
-                dp(context, GLYPH_DP) - dp(context, GLYPH_GAP_DP) - dp(context, FIT_SLACK_DP)
+                glyph.layoutParams.width - RokidHudTokens.SPACE_3 - FIT_SLACK
             val measure = TextPaint(primary.paint)
             return fitActivityPrimary(
                 availablePx = available,
-                inlineEtaPx = etaText?.let { eta.paint.measureText(it) + dp(context, ETA_GAP_DP) },
-                widthAtSp = { sizeSp ->
-                    measure.textSize = TypedValue.applyDimension(
-                        TypedValue.COMPLEX_UNIT_SP,
-                        sizeSp,
-                        metrics,
-                    )
+                inlineEtaPx = etaText?.let { eta.paint.measureText(it) + RokidHudTokens.SPACE_2 },
+                widthAtPx = { sizePx ->
+                    measure.textSize = sizePx
                     measure.measureText(text)
                 },
             )
         }
-
-        private fun text(sizeSp: Float, color: Int, bold: Boolean = false) =
-            TextView(context).apply {
-                textSize = sizeSp
-                setTextColor(color)
-                typeface = Typeface.create(
-                    Typeface.MONOSPACE,
-                    if (bold) Typeface.BOLD else Typeface.NORMAL,
-                )
-                includeFontPadding = false
-                maxLines = 1
-                isSingleLine = true
-                ellipsize = TextUtils.TruncateAt.END
-            }
 
         private fun visibleIf(visible: Boolean): Int =
             if (visible) View.VISIBLE else View.GONE
@@ -600,24 +622,10 @@ internal object ActivityOverlayRenderer {
         setPadding(left, top, right, bottom)
     }
 
-    private fun dp(context: Context, value: Int): Int = BusTheme.dp(context, value)
-
     private const val MATCH = FrameLayout.LayoutParams.MATCH_PARENT
-    private const val EDGE_MARGIN_DP = 12
-    private const val BAND_WIDTH_FRACTION = 0.92f
     private const val PANEL_WIDTH_FRACTION = 0.78f
-    private const val PULSE_DP = 8
-    private const val URGENT_OUTLINE_DP = 2
-    private const val URGENT_BEAT_DP = 10
-    private const val URGENT_BEAT_DELAY_MS = 380L
-    private const val GLYPH_DP = 48
-    private const val PROGRESS_HEIGHT_DP = 4
-    private const val PRIMARY_SP = ACTIVITY_PRIMARY_MAX_SP
-    private const val GLYPH_GAP_DP = 12
-    private const val ETA_GAP_DP = 8
-    private const val FIT_SLACK_DP = 2
-    private const val SECONDARY_SP = 13f
+    private const val PULSE_PX = RokidHudTokens.SPACE_3
+    private const val URGENT_BLINK_DELAY_MS = 380L
+    private const val FIT_SLACK = 2
     private const val SECONDARY_MAX_LINES = 2
-    private const val ETA_SP = 13f
-    private const val DETAIL_SP = 11f
 }
