@@ -154,10 +154,10 @@ internal class ListHome(
 
     private fun applyFocus(prev: HomeViewModel?, model: HomeViewModel, all: Boolean) {
         if (all) {
-            rows.forEach { (id, row) -> row.setFocused(id == model.selectedId) }
+            rows.forEach { (id, row) -> row.setFocused(id == model.focusedId) }
         } else {
-            prev?.selectedId?.let { rows[it]?.setFocused(false, animateMoves) }
-            model.selectedId?.let { rows[it]?.setFocused(true, animateMoves) }
+            prev?.focusedId?.let { rows[it]?.setFocused(false, animateMoves) }
+            model.focusedId?.let { rows[it]?.setFocused(true, animateMoves) }
         }
     }
 

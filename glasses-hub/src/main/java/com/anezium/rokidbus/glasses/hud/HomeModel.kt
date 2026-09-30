@@ -29,8 +29,13 @@ internal data class HomeViewModel(
     val status: HomeStatus = HomeStatus.None,
     /** Only plugins that have a snapshot; every other entry is a fallback tile. Grid mode only. */
     val tileData: Map<String, HomeTile> = emptyMap(),
+    /** A notice band owns the ring and draws the one focus frame; the selection rests. */
+    val noticeOwnsRing: Boolean = false,
 ) {
     val selectedIndex: Int get() = entries.indexOfFirst { it.id == selectedId }
+
+    /** The item that draws the focus chrome: the selection, unless the notice has the one frame. */
+    val focusedId: String? get() = selectedId.takeUnless { noticeOwnsRing }
 }
 
 /** What a list row or grid tile has to do to be a home item. */

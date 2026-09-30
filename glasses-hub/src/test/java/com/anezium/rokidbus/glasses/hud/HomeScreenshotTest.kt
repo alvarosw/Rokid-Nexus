@@ -153,6 +153,16 @@ class HomeScreenshotTest {
     }
 
     @Test
+    fun list_notice_owns_the_ring_selection_at_rest() = capture("list-07-notice-owns-ring") {
+        it.show(HomeMode.LIST, withIcons(8), "plugin2"); it.setNoticeOwnsRing(true)
+    }
+
+    @Test
+    fun grid_notice_owns_the_ring_selection_at_rest() = capture("grid-09-notice-owns-ring", live = liveTiles) {
+        it.show(HomeMode.GRID, withIcons(8), "plugin1"); it.setNoticeOwnsRing(true)
+    }
+
+    @Test
     fun grid_empty() = capture("grid-08-empty") { it.show(HomeMode.GRID, emptyList(), null) }
 
     // ---- live tiles: identity, sizes and the one-critical rule ----------------------------

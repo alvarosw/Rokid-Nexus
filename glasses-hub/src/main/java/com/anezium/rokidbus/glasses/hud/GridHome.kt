@@ -53,7 +53,7 @@ internal class GridHome(
                 if (prev.tileData[id] != model.tileData[id]) refreshData(id, model)
             }
         }
-        val focusedId = model.selectedId
+        val focusedId = model.focusedId
         val openingId = (model.status as? HomeStatus.Opening)?.pluginId
         if (entriesChanged) {
             tiles.forEach { (id, tile) ->
@@ -61,8 +61,8 @@ internal class GridHome(
                 tile.item.setOpening(id == openingId)
             }
         } else {
-            if (prev.selectedId != focusedId) {
-                prev.selectedId?.let { tiles[it]?.item?.setFocused(false, animateMoves) }
+            if (prev.focusedId != focusedId) {
+                prev.focusedId?.let { tiles[it]?.item?.setFocused(false, animateMoves) }
                 focusedId?.let { tiles[it]?.item?.setFocused(true, animateMoves) }
             }
             val prevOpening = (prev.status as? HomeStatus.Opening)?.pluginId
@@ -82,7 +82,7 @@ internal class GridHome(
      */
     private fun assignCriticalRoles(model: HomeViewModel) {
         val critical = placements.map { it.pluginId }.filter { tiles[it]?.live?.snapshot?.tone == TileTone.CRITICAL }
-        val primary = critical.firstOrNull { it == model.selectedId } ?: critical.firstOrNull()
+        val primary = critical.firstOrNull { it == model.focusedId } ?: critical.firstOrNull()
         tiles.forEach { (id, tile) ->
             (tile.view as? LiveTileView)?.setCriticalPrimary(id == primary || id !in critical)
         }
@@ -157,7 +157,7 @@ internal class GridHome(
         val index = strip.indexOfChild(tile.view)
         strip.removeViewAt(index)
         strip.addView(next.view, index)
-        next.item.setFocused(id == model.selectedId)
+        next.item.setFocused(id == model.focusedId)
         next.item.setOpening((model.status as? HomeStatus.Opening)?.pluginId == id)
         tiles[id] = next
     }

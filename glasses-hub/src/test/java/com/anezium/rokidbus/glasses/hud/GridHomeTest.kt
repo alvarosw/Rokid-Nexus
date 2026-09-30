@@ -175,7 +175,38 @@ class GridHomeTest {
         show(2, 0)
         layer.showOpening("plugin0")
         assertTrue((grid.tileViewForTest("plugin0") as HomeItemView).homeOpening)
-        layer.clearStatus()
+        layer.showStatus("Could not open")
         assertFalse((grid.tileViewForTest("plugin0") as HomeItemView).homeOpening)
+    }
+
+    @Test
+    fun a_hidden_layer_binds_no_live_data_and_catches_up_when_it_is_shown() {
+        layer.visibility = android.view.View.GONE
+        live["plugin0"] = HomeTile(snapshot("plugin0", tone = com.anezium.rokidbus.shared.tile.TileTone.CRITICAL), stale = false)
+        show(2, 0)
+        assertTrue(grid.tileViewForTest("plugin0") is FallbackTileView)
+        live["plugin1"] = HomeTile(snapshot("plugin1"), stale = false)
+        layer.onTileChanged("plugin1")
+        assertTrue("a write under a hidden layer is not bound", grid.tileViewForTest("plugin1") is FallbackTileView)
+
+        layer.visibility = android.view.View.VISIBLE
+        assertTrue(grid.tileViewForTest("plugin0") is LiveTileView)
+        assertTrue(grid.tileViewForTest("plugin1") is LiveTileView)
+    }
+
+    @Test
+    fun while_a_notice_owns_the_ring_no_tile_draws_the_focus_chrome_and_it_returns_after() {
+        live["plugin0"] = HomeTile(snapshot("plugin0"), stale = false)
+        show(3, 0)
+        val focused = grid.tileViewForTest("plugin0") as HomeItemView
+        val fallback = grid.tileViewForTest("plugin1") as HomeItemView
+        assertTrue(focused.homeFocused)
+        layer.setNoticeOwnsRing(true)
+        assertFalse(focused.homeFocused)
+        layer.select("plugin1")
+        assertFalse("a selection move under a notice stays at rest", fallback.homeFocused)
+        layer.setNoticeOwnsRing(false)
+        assertTrue(fallback.homeFocused)
+        assertFalse(focused.homeFocused)
     }
 }

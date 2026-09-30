@@ -155,4 +155,16 @@ class ListHomeTest {
         assertNotNull(focused.single().background)
         assertNotSame(focused.single().background, list.rowsForTest().getValue("plugin0").background)
     }
+
+    @Test
+    fun while_a_notice_owns_the_ring_the_selected_row_rests_and_focus_returns_after() {
+        show(3, 1)
+        val rows = list.rowsForTest()
+        assertTrue(rows.getValue("plugin1").homeFocused)
+        layer.setNoticeOwnsRing(true)
+        assertTrue(rows.values.none { it.homeFocused })
+        layer.setNoticeOwnsRing(false)
+        assertTrue(rows.getValue("plugin1").homeFocused)
+        assertFalse(rows.getValue("plugin0").homeFocused)
+    }
 }

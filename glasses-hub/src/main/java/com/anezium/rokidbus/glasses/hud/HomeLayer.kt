@@ -60,12 +60,13 @@ internal class HomeLayer(
     /** A new mode swaps the rendering; the same mode keeps it, so a re-show never rebuilds it. */
     fun show(mode: HomeMode, entries: List<GlassesHub.LauncherEntry>, selectedId: String?) {
         handler.removeCallbacks(expireFailure)
-        val tileData = if (mode == HomeMode.GRID) loadTileData(entries, emptyMap()) else emptyMap()
-        apply(HomeViewModel(entries, selectedId, mode, HomeStatus.None, tileData))
+        val tileData = if (mode == HomeMode.GRID && isOnScreen) loadTileData(entries, emptyMap()) else emptyMap()
+        apply(HomeViewModel(entries, selectedId, mode, HomeStatus.None, tileData, model.noticeOwnsRing))
     }
 
     fun update(entries: List<GlassesHub.LauncherEntry>, selectedId: String?) {
-        val tileData = if (model.mode == HomeMode.GRID) loadTileData(entries, model.tileData) else emptyMap()
+        val tileData =
+            if (model.mode == HomeMode.GRID && isOnScreen) loadTileData(entries, model.tileData) else emptyMap()
         apply(model.copy(entries = entries, selectedId = selectedId, tileData = tileData))
     }
 
@@ -90,15 +91,16 @@ internal class HomeLayer(
         handler.postDelayed(expireFailure, FAILURE_MS)
     }
 
-    fun clearStatus() {
-        handler.removeCallbacks(expireFailure)
-        if (model.status != HomeStatus.None) apply(model.copy(status = HomeStatus.None))
+    /** While a notice owns the ring the selection rests: the notice draws the screen's one focus frame. */
+    fun setNoticeOwnsRing(owns: Boolean) {
+        if (model.noticeOwnsRing == owns) return
+        apply(model.copy(noticeOwnsRing = owns))
     }
 
     /** Drops the rendered content so nothing stale is drawn when the layer is next shown. */
     fun clear() {
         handler.removeCallbacks(expireFailure)
-        apply(HomeViewModel(mode = model.mode))
+        apply(HomeViewModel(mode = model.mode, noticeOwnsRing = model.noticeOwnsRing))
     }
 
     fun setHudTopInsetDp(value: Int) {
@@ -108,7 +110,7 @@ internal class HomeLayer(
 
     /** A tile snapshot was written: refresh that one tile if the grid is up. Main thread. */
     fun onTileChanged(pluginId: String) {
-        if (model.mode != HomeMode.GRID || model.entries.none { it.id == pluginId }) return
+        if (!isOnScreen || model.mode != HomeMode.GRID || model.entries.none { it.id == pluginId }) return
         val data = tileSource(pluginId)
         val next = if (data == null) model.tileData - pluginId else model.tileData + (pluginId to data)
         if (next != model.tileData) apply(model.copy(tileData = next))
@@ -154,17 +156,50 @@ internal class HomeLayer(
     // Dimming the home is a plain alpha on children that never overlap: no offscreen layer.
     override fun hasOverlappingRendering(): Boolean = false
 
+    /**
+     * Live tile data is bound only while the layer is visible. A tile binds its critical blink
+     * once, so a snapshot bound under an app or a hidden host would spend the blink where nobody
+     * sees it; the tiles catch up from the cache when the layer is next shown.
+     */
+    private val isOnScreen: Boolean get() = visibility == VISIBLE
+
+    override fun setVisibility(visibility: Int) {
+        val was = this.visibility
+        super.setVisibility(visibility)
+        if (this.visibility == was) return
+        syncTileObservation()
+        if (isOnScreen) refreshTileData()
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        stopObservingTiles?.invoke()
-        stopObservingTiles = TileCache.observe { id -> handler.post { onTileChanged(id) } }
+        syncTileObservation()
     }
 
     override fun onDetachedFromWindow() {
-        stopObservingTiles?.invoke()
-        stopObservingTiles = null
+        stopTileObservation()
         handler.removeCallbacks(expireFailure)
         super.onDetachedFromWindow()
+    }
+
+    private fun syncTileObservation() {
+        if (!isOnScreen) {
+            stopTileObservation()
+        } else if (stopObservingTiles == null && isAttachedToWindow) {
+            stopObservingTiles = TileCache.observe { id -> handler.post { onTileChanged(id) } }
+        }
+    }
+
+    private fun stopTileObservation() {
+        stopObservingTiles?.invoke()
+        stopObservingTiles = null
+    }
+
+    /** The layer came on screen: every tile shows what the cache holds now. */
+    private fun refreshTileData() {
+        if (model.mode != HomeMode.GRID) return
+        val next = loadTileData(model.entries, emptyMap())
+        if (next != model.tileData) apply(model.copy(tileData = next))
     }
 
     private fun apply(next: HomeViewModel, animate: Boolean = false) {
