@@ -20,7 +20,7 @@ import com.anezium.rokidbus.shared.tile.TileSize
  * permanent fallback for any plugin that never adopts the tile-data contract, which is also what
  * would fill the box below the header.
  *
- * Every color here comes from [RokidHudTokens] — never [com.anezium.rokidbus.client.ui.BusTheme]
+ * Every color here comes from [RokidHudTokens]
  * and never a literal, per the design system's single-hue rule. Sizes are token pixels.
  */
 internal class FallbackTileView(

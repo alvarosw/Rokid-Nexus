@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Rect
 import android.view.View
 import android.widget.FrameLayout
-import com.anezium.rokidbus.client.ui.BusTheme
 import com.anezium.rokidbus.client.ui.RokidHudTokens
 import kotlin.math.roundToInt
 
@@ -16,8 +15,10 @@ internal object HudBandGeometry {
     fun widthPx(displayWidthPx: Int): Int =
         (displayWidthPx.coerceAtLeast(0) * WIDTH_FRACTION).toInt()
 
+    // dp, not the design-token pixels: the Ink rpx layout is measured on this width and top, so the
+    // card's metrics stay what they were, and the notice band that morphs into it shares them.
     fun topPx(context: Context, hudTopInsetDp: Int): Int =
-        BusTheme.dp(context, EDGE_MARGIN_DP + HudTopInset.sanitize(hudTopInsetDp))
+        ((EDGE_MARGIN_DP + HudTopInset.sanitize(hudTopInsetDp)) * context.resources.displayMetrics.density).toInt()
 
     fun availableHeightPx(displayHeightPx: Int, topPx: Int): Int =
         (displayHeightPx - topPx).coerceAtLeast(0)

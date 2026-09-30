@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -18,7 +17,7 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.FrameLayout
 import android.widget.TextView
-import com.anezium.rokidbus.client.ui.BusTheme
+import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.glasses.hud.HudController
 import com.anezium.rokidbus.glasses.hud.LauncherTrigger
 import com.anezium.rokidbus.shared.BusConstants
@@ -49,8 +48,8 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         liveInstance = this
-        window.statusBarColor = BusTheme.glassesBg
-        window.navigationBarColor = BusTheme.glassesBg
+        window.statusBarColor = RokidHudTokens.GROUND
+        window.navigationBarColor = RokidHudTokens.GROUND
         buildUi()
         requestBluetoothConnectIfNeeded()
         GlassesHub.start(applicationContext)
@@ -133,43 +132,45 @@ class MainActivity : Activity() {
     }
 
     private fun buildUi() {
-        onboardingStepView = text(11f, BusTheme.phosphor, bold = true).apply {
+        // The setup screen is the one screen: its title is the one `display`, its action the one
+        // primary button, in the focus chrome.
+        onboardingStepView = wrapped(SurfaceType.label(TextView(this))).apply {
+            isAllCaps = true
             gravity = Gravity.CENTER_HORIZONTAL
         }
-        onboardingTitleView = text(23f, BusTheme.text, bold = true).apply {
+        onboardingTitleView = wrapped(SurfaceType.display(TextView(this))).apply {
             gravity = Gravity.CENTER_HORIZONTAL
         }
-        onboardingBodyView = text(15f, BusTheme.muted).apply {
+        onboardingBodyView = wrapped(SurfaceType.body(TextView(this))).apply {
             gravity = Gravity.CENTER_HORIZONTAL
-            setLineSpacing(0f, 1.18f)
         }
-        onboardingDiagnosticView = text(12f, BusTheme.dim).apply {
+        onboardingDiagnosticView = wrapped(SurfaceType.mono(TextView(this))).apply {
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(0, 0, 0, dp(12))
+            setPadding(0, 0, 0, RokidHudTokens.SPACE_3)
             visibility = View.GONE
         }
-        onboardingActionView = text(17f, BusTheme.phosphor, bold = true).apply {
-            minHeight = dp(58)
+        onboardingActionView = wrapped(SurfaceType.body(TextView(this), RokidHudTokens.FOCUS)).apply {
+            minHeight = ACTION_MIN_HEIGHT
             gravity = Gravity.CENTER
-            setPadding(dp(10), 0, dp(10), 0)
-            background = outline(true)
+            setPadding(RokidHudTokens.SPACE_3, 0, RokidHudTokens.SPACE_3, 0)
+            background = SurfaceChrome.focused()
         }
         onboardingView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.TOP
             visibility = View.GONE
-            setBackgroundColor(BusTheme.glassesBg)
-            setPadding(dp(24), dp(28), dp(24), dp(22))
+            setBackgroundColor(RokidHudTokens.GROUND)
+            setPadding(RokidHudTokens.SAFE_X, RokidHudTokens.SAFE_Y, RokidHudTokens.SAFE_X, RokidHudTokens.SAFE_Y)
             addView(onboardingStepView, matchWrap())
-            addView(gap(22))
+            addView(gap(RokidHudTokens.SPACE_6))
             addView(onboardingTitleView, matchWrap())
-            addView(gap(24))
+            addView(gap(RokidHudTokens.SPACE_6))
             addView(onboardingBodyView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
             addView(onboardingDiagnosticView, matchWrap())
             addView(onboardingActionView, matchWrap())
-            addView(gap(10))
+            addView(gap(RokidHudTokens.SPACE_3))
             addView(
-                text(11f, BusTheme.dim).apply {
+                wrapped(SurfaceType.bodySmall(TextView(this@MainActivity))).apply {
                     // Swipe is filtered out during onboarding, so promising it here was a lie.
                     text = getString(R.string.onb_footer)
                     gravity = Gravity.CENTER_HORIZONTAL
@@ -178,7 +179,7 @@ class MainActivity : Activity() {
             )
         }
         setContentView(FrameLayout(this).apply {
-            setBackgroundColor(BusTheme.glassesBg)
+            setBackgroundColor(RokidHudTokens.GROUND)
             addView(
                 onboardingView,
                 FrameLayout.LayoutParams(
@@ -192,7 +193,12 @@ class MainActivity : Activity() {
 
     private fun applyHudTopInset(value: Int) {
         val inset = HudTopInset.sanitize(value)
-        onboardingView.setPadding(dp(24), dp(28 + inset), dp(24), dp(22))
+        onboardingView.setPadding(
+            RokidHudTokens.SAFE_X,
+            RokidHudTokens.SAFE_Y + HudTopInset.toPx(this, inset),
+            RokidHudTokens.SAFE_X,
+            RokidHudTokens.SAFE_Y,
+        )
         onboardingView.requestLayout()
     }
 
@@ -278,9 +284,8 @@ class MainActivity : Activity() {
         // the wearer never sits there pressing something that was never going to answer.
         val actionable = onboardingState.action != SelfArmOnboardingState.Action.NONE &&
             onboardingState.stage != SelfArmOnboardingState.Stage.RUNNING
-        onboardingActionView.background = if (actionable) outline(true) else null
-        onboardingActionView.setTextColor(if (actionable) BusTheme.phosphor else BusTheme.muted)
-        onboardingActionView.alpha = if (actionable) 1f else 0.85f
+        onboardingActionView.background = if (actionable) SurfaceChrome.focused() else null
+        onboardingActionView.setTextColor(if (actionable) RokidHudTokens.FOCUS else RokidHudTokens.TEXT_SECONDARY)
     }
 
     /** Returns true while the confirmation panel owns the screen. */
@@ -426,33 +431,23 @@ class MainActivity : Activity() {
         if (missing.isNotEmpty()) requestPermissions(missing.toTypedArray(), 10)
     }
 
-    private fun text(sizeSp: Float, color: Int, bold: Boolean = false): TextView =
-        TextView(this).apply {
-            textSize = sizeSp
-            setTextColor(color)
-            typeface = Typeface.create(Typeface.MONOSPACE, if (bold) Typeface.BOLD else Typeface.NORMAL)
-            includeFontPadding = false
-        }
+    /** The design styles are single-line; the setup texts wrap. */
+    private fun wrapped(view: TextView): TextView = view.apply {
+        isSingleLine = false
+        maxLines = Int.MAX_VALUE
+        ellipsize = null
+    }
 
     private fun gap(value: Int): View =
         View(this).apply {
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(value))
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, value)
         }
 
     private fun matchWrap(): LinearLayout.LayoutParams =
         LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
 
-    private fun outline(selected: Boolean): android.graphics.drawable.GradientDrawable =
-        android.graphics.drawable.GradientDrawable().apply {
-            setColor(android.graphics.Color.TRANSPARENT)
-            setStroke(dp(if (selected) 2 else 1), if (selected) BusTheme.phosphor else BusTheme.hairline)
-            cornerRadius = dp(4).toFloat()
-        }
-
-    private fun dp(value: Int): Int =
-        BusTheme.dp(this, value)
-
     companion object {
+        private const val ACTION_MIN_HEIGHT = 2 * RokidHudTokens.LIST_ITEM_HEIGHT
         @Volatile private var resumedInstance: MainActivity? = null
         // Alive (created, not yet destroyed) whether resumed, paused, or stopped —
         // unlike resumedInstance, which clears the moment something else takes the
