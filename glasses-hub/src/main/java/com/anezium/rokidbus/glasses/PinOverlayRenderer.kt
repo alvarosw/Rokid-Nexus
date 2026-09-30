@@ -124,25 +124,36 @@ object PinOverlayRenderer {
         position: PinSurfacePosition,
         context: Context,
     ) {
-        params.gravity = when (position) {
-            PinSurfacePosition.TOP_LEFT -> Gravity.TOP or Gravity.START
-            PinSurfacePosition.TOP_RIGHT -> Gravity.TOP or Gravity.END
-            PinSurfacePosition.BOTTOM_LEFT -> Gravity.BOTTOM or Gravity.START
-            PinSurfacePosition.BOTTOM_RIGHT -> Gravity.BOTTOM or Gravity.END
-        }
-        params.x = BusTheme.dp(context, EDGE_MARGIN_DP)
-        params.y = BusTheme.dp(
-            context,
-            EDGE_MARGIN_DP + if (
-                position == PinSurfacePosition.TOP_LEFT ||
-                position == PinSurfacePosition.TOP_RIGHT
-            ) {
-                hudTopInsetDp
-            } else {
-                0
-            },
-        )
+        val placement = placementFor(position, hudTopInsetDp, context)
+        params.gravity = placement.gravity
+        params.x = placement.x
+        params.y = placement.y
     }
+
+    /** Where a pin window sits: the gravity of its corner and the offsets from that corner. */
+    internal data class Placement(val gravity: Int, val x: Int, val y: Int)
+
+    internal fun placementFor(position: PinSurfacePosition, hudTopInsetDp: Int, context: Context): Placement =
+        Placement(
+            gravity = when (position) {
+                PinSurfacePosition.TOP_LEFT -> Gravity.TOP or Gravity.START
+                PinSurfacePosition.TOP_RIGHT -> Gravity.TOP or Gravity.END
+                PinSurfacePosition.BOTTOM_LEFT -> Gravity.BOTTOM or Gravity.START
+                PinSurfacePosition.BOTTOM_RIGHT -> Gravity.BOTTOM or Gravity.END
+            },
+            x = BusTheme.dp(context, EDGE_MARGIN_DP),
+            y = BusTheme.dp(
+                context,
+                EDGE_MARGIN_DP + if (
+                    position == PinSurfacePosition.TOP_LEFT ||
+                    position == PinSurfacePosition.TOP_RIGHT
+                ) {
+                    hudTopInsetDp
+                } else {
+                    0
+                },
+            ),
+        )
 
     /**
      * The shared medium chip geometry. Activities instantiate this same view;

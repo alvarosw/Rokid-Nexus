@@ -281,7 +281,7 @@ internal object ActivityOverlayRenderer {
      * One activity: the medium chip and the expanded panel at its corner, and
      * the notice-band flare at the top, all drawn inside one island outline.
      */
-    private class ActivityIsland(context: Context) : HudIslandView(context) {
+    internal class ActivityIsland(context: Context) : HudIslandView(context) {
         private val chip = PinOverlayRenderer.PinPanelView(context).apply { dropChrome() }
         private val panel = ActivityPanelView(context)
         private val flare = NoticeOverlayRenderer.NoticeBandView(context, chromeless = true)

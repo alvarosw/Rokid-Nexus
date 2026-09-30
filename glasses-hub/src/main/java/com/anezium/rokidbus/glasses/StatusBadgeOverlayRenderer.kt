@@ -386,7 +386,7 @@ internal object StatusBadgeOverlayRenderer {
      * icons, regular-weight text like its clock and temperature. Bold was tried
      * and visibly out-weighed the row this chip is supposed to disappear into.
      */
-    private class PhoneChipView(context: Context) : LinearLayout(context) {
+    internal class PhoneChipView(context: Context) : LinearLayout(context) {
         private val label = TextView(context).apply {
             setTextColor(NexusUi.GREEN)
             textSize = StatusBadgeGeometry.LABEL_SP

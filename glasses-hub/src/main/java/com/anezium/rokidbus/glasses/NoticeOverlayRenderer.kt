@@ -307,17 +307,7 @@ object NoticeOverlayRenderer {
         val view = NoticeBandView(service, NoticeController::setPageCount).apply {
             setHudTopInsetDp(hudTopInsetDp)
         }
-        val metrics = service.resources.displayMetrics
-        root.addView(
-            view,
-            FrameLayout.LayoutParams(
-                HudBandGeometry.widthPx(metrics.widthPixels),
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-            ).apply {
-                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                topMargin = HudBandGeometry.topPx(service, hudTopInsetDp)
-            },
-        )
+        root.addView(view, bandLayoutParams(service, hudTopInsetDp))
         if (runCatching { manager.addView(root, params(service)) }.isFailure) {
             logError("Notice overlay window could not be added")
             return null
@@ -330,6 +320,16 @@ object NoticeOverlayRenderer {
         AmbientStack.main.added(ambientWindow)
         return view
     }
+
+    /** Where the band sits inside the notice window: top-centred, on the Ink card's width and top. */
+    internal fun bandLayoutParams(context: Context, hudTopInsetDp: Int): FrameLayout.LayoutParams =
+        FrameLayout.LayoutParams(
+            HudBandGeometry.widthPx(context.resources.displayMetrics.widthPixels),
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            topMargin = HudBandGeometry.topPx(context, hudTopInsetDp)
+        }
 
     private fun applyHudTopInset(value: Int) {
         hudTopInsetDp = HudTopInset.sanitize(value)

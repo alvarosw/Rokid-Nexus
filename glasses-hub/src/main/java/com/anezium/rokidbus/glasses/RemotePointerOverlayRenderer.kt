@@ -67,7 +67,7 @@ internal object RemotePointerOverlayRenderer {
         val owner = service ?: return null
         val manager = windowManager ?: owner.getSystemService(WindowManager::class.java) ?: return null
         val metrics = owner.resources.displayMetrics
-        val radius = dp(metrics.density, CURSOR_RADIUS_DP).toFloat()
+        val radius = cursorRadiusPx(metrics.density)
         val point = RemotePointerGeometry.toPixels(
             position = position,
             widthPixels = metrics.widthPixels,
@@ -126,7 +126,7 @@ internal object RemotePointerOverlayRenderer {
         PixelFormat.TRANSLUCENT,
     ).apply { gravity = Gravity.TOP or Gravity.START }
 
-    private class PointerView(context: Context) : View(context) {
+    internal class PointerView(context: Context) : View(context) {
         private val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.BLACK
             style = Paint.Style.STROKE
@@ -163,6 +163,8 @@ internal object RemotePointerOverlayRenderer {
             canvas.drawCircle(point.x, point.y, radius * CENTER_RADIUS_RATIO, center)
         }
     }
+
+    internal fun cursorRadiusPx(density: Float): Float = dp(density, CURSOR_RADIUS_DP).toFloat()
 
     private fun dp(density: Float, value: Float): Int = (value * density).roundToInt().coerceAtLeast(1)
 
