@@ -12,10 +12,11 @@ import com.anezium.rokidbus.glasses.hud.HomeItemView
 import com.anezium.rokidbus.glasses.hud.HudLoaderView
 import com.anezium.rokidbus.glasses.hud.HudMotionDriver
 import com.anezium.rokidbus.glasses.hud.TileHeaderView
+import com.anezium.rokidbus.shared.tile.TileContentRules
 import com.anezium.rokidbus.shared.tile.TileSize
 
 /**
- * The generic closed-state tile: an icon and a `label`-styled, uppercase plugin name pinned to the
+ * The generic closed-state tile: an icon and a `label`-styled, uppercase plugin name on one line in the
  * top-left corner on every declared [TileSize] — a 1x1 tile is not exempted from it. It stays the
  * permanent fallback for any plugin that never adopts the tile-data contract, which is also what
  * would fill the box below the header.
@@ -33,7 +34,7 @@ internal class FallbackTileView(
     override var homeOpening: Boolean = false
         private set
 
-    private val header = TileHeaderView(context, nameLines = 2)
+    private val header = TileHeaderView(context, nameLines = TileContentRules.NAME_LINES)
     private val loader = HudLoaderView(context).apply { visibility = GONE }
     private val focusTransition = FocusTransition(motion) { amount ->
         header.setFocusAmount(amount)
