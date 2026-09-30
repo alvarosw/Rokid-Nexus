@@ -194,7 +194,6 @@ class GridColorLiteralLintTest {
         "ActivityExtrasViews.kt",
         "HudIsland.kt",
         "HudActionRowView.kt",
-        "HudWaveformView.kt",
         "RemotePointerOverlayRenderer.kt",
     )
 

@@ -33,14 +33,6 @@ class LiveTileViewTest {
     }
 
     @Test
-    fun `critical uses the strong border width`() {
-        val view = LiveTileView(context, TileSize.SMALL)
-        view.bind(snapshot(TileTone.CRITICAL), stale = false)
-        assertTrue(true) // Robolectric's shadow GradientDrawable doesn't expose stroke width readably;
-        // the emphasis hook firing is what's actually verified below.
-    }
-
-    @Test
     fun `critical emphasis hook fires only for the critical tone`() {
         val view = LiveTileView(context, TileSize.SMALL)
         var fired = 0

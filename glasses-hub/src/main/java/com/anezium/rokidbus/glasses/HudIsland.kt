@@ -30,9 +30,6 @@ internal data class HudSpring(
         /** Everything that grows, shrinks, or changes form. */
         val STANDARD = HudSpring(responseSec = 0.42f, dampingRatio = 0.8f)
 
-        /** A beat on a settled island: a wobble that is hard to miss. */
-        val BEAT = HudSpring(responseSec = 0.46f, dampingRatio = 0.5f)
-
         /** Leaving never bounces. */
         val EXIT = HudSpring(responseSec = 0.3f, dampingRatio = 1f)
     }

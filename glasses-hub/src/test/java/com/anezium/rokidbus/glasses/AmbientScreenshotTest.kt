@@ -423,26 +423,6 @@ class AmbientScreenshotTest {
     }
 
     @Test
-    fun waveform() = capture("waveform") { a, r ->
-        val wave = HudWaveformView(a)
-        r.addView(
-            wave,
-            FrameLayout.LayoutParams(448, 40).apply {
-                gravity = android.view.Gravity.TOP
-                setMargins(16, 200, 16, 0)
-            },
-        )
-        wave.measure(
-            View.MeasureSpec.makeMeasureSpec(448, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(40, View.MeasureSpec.EXACTLY),
-        )
-        wave.layout(0, 0, 448, 40)
-        repeat(120) { wave.push(((it % 17) / 16f).coerceIn(0f, 1f)) }
-    }
-
-    // ---- stack -------------------------------------------------------------------------------
-
-    @Test
     fun stack_all() = capture("stack") { a, r ->
         pin(
             a, r,
