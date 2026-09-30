@@ -15,6 +15,7 @@ import android.provider.Settings
 import com.anezium.rokidbus.client.IBusCallback
 import com.anezium.rokidbus.client.IBusService
 import com.anezium.rokidbus.client.PluginRegistrationResult
+import com.anezium.rokidbus.client.ui.HudGridMetrics
 import com.anezium.rokidbus.client.ui.NexusGlyphs
 import com.anezium.rokidbus.client.ui.NexusPluginIcons
 import com.anezium.rokidbus.shared.ActivitySurfaceContract
@@ -142,6 +143,9 @@ object GlassesHub {
     private var manualSetupScreenLock: PowerManager.WakeLock? = null
     @Volatile private var launcherEntries: List<LauncherEntry> = emptyList()
     @Volatile private var appContext: Context? = null
+
+    /** The home grid row count of the last capabilities announcement that went out; -1 before any. */
+    @Volatile private var announcedHomeGridRows = -1
     @Volatile private var cxrUp = false
     @Volatile private var phoneConnected = false
     @Volatile private var remotePhoneCapabilities = PhoneHubCapabilities(0, null)
@@ -220,9 +224,25 @@ object GlassesHub {
             AccessibilityRearmWatcher.start(context.applicationContext, "hub_start")
             MediaSyncEngine.start(context.applicationContext)
             requestWifiOwnershipReconciliation(applicationContext, "hub_start")
+            observeHomeGridRows(applicationContext)
         }
         applyTileSubsystemMode(applicationContext, HudModeStore.isGridModeEnabled(applicationContext))
     }
+
+    /**
+     * The phone's layout preview draws its fold line from the row count announced in the
+     * capabilities, so a change of the HUD inset that changes the count is re-announced. Nothing is
+     * sent while the link is down or before a first announcement: that one carries the current value.
+     */
+    internal fun observeHomeGridRows(context: Context): () -> Unit =
+        HudTopInset.observe(context) { insetDp ->
+            val rows = homeGridVisibleRows(context, insetDp)
+            val announced = announcedHomeGridRows
+            if (announced >= 0 && rows != announced) resendCapabilitiesNow()
+        }
+
+    private fun homeGridVisibleRows(context: Context, insetDp: Int): Int =
+        HudGridMetrics.visibleRows(HudTopInset.toPx(context, insetDp))
 
     /**
      * Starts or stops the tile-data pipeline (`TileController`/`TileCache`/`TileRateLimiter`) to
@@ -709,6 +729,7 @@ object GlassesHub {
             SelfArmOnboardingState.Stage.ENABLE_ACCESSIBILITY -> SetupStage.WAITING_FOR_ACCESSIBILITY
             else -> SetupStage.normalize(onboarding.stage)
         }
+        val homeGridRows = homeGridVisibleRows(context, HudTopInset.current(context))
         val capabilities = GlassesHubCapabilitiesContract.create(
             features = BusCapabilityBits.IMAGE_SURFACE or
                 BusCapabilityBits.PIN_SURFACE or
@@ -741,6 +762,7 @@ object GlassesHub {
             coreReady = onboarding.coreReady,
             maintenanceReady = onboarding.maintenanceReady,
             ttsVersion = if (ttsAvailable) TtsContract.VERSION else 0,
+            homeGridVisibleRows = homeGridRows,
         )
         val error = sendRemote(
             BusEnvelope(
@@ -749,6 +771,7 @@ object GlassesHub {
             ),
         )
         if (error == null) {
+            announcedHomeGridRows = homeGridRows
             log(
                 "renderer capabilities announced imageVersion=${ImageSurfaceContract.VERSION} " +
                     "pinVersion=${PinSurfaceContract.VERSION} " +
