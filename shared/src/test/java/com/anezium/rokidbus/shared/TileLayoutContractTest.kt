@@ -49,4 +49,39 @@ class TileLayoutContractTest {
         val entries = TileLayoutContract.entriesFromConfig(payload)
         assertTrue(entries != null && entries.size == 1 && entries.single().pluginId == "weather")
     }
+
+    @Test
+    fun `version 1 payloads are still accepted`() {
+        val payload = JSONObject()
+            .put("version", 1)
+            .put(
+                "entries",
+                JSONArray().put(
+                    JSONObject().put("pluginId", "weather").put("size", "2x1").put("col", 2).put("row", 1),
+                ),
+            )
+        assertEquals(
+            listOf(TileLayoutEntry("weather", TileSize.WIDE, col = 2, row = 1)),
+            TileLayoutContract.entriesFromConfig(payload),
+        )
+    }
+
+    @Test
+    fun `config is written as version 2 and keeps positions`() {
+        val json = TileLayoutContract.configToJson(listOf(TileLayoutEntry("a", TileSize.SMALL, col = 3, row = 5)))
+        assertEquals(2, json.getInt("version"))
+        val item = json.getJSONArray("entries").getJSONObject(0)
+        assertEquals(3, item.getInt("col"))
+        assertEquals(5, item.getInt("row"))
+    }
+
+    @Test
+    fun `the 3-wide sizes round-trip`() {
+        val entries = listOf(
+            TileLayoutEntry("a", TileSize.BANNER, col = 0, row = 0),
+            TileLayoutEntry("b", TileSize.PANEL, col = 1, row = 1),
+            TileLayoutEntry("c", TileSize.JUMBO, col = 0, row = 3),
+        )
+        assertEquals(entries, TileLayoutContract.entriesFromConfig(TileLayoutContract.configToJson(entries)))
+    }
 }

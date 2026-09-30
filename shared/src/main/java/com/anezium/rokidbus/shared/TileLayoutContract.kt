@@ -16,7 +16,11 @@ import org.json.JSONObject
  * mechanism this mirrors.
  */
 object TileLayoutContract {
-    const val VERSION = 1
+    /**
+     * v2: same payload shape as v1, but `col`/`row` are authoritative and `entries` are written in
+     * reading order. v1 payloads are still accepted; their positions came from the packer.
+     */
+    const val VERSION = 2
 
     fun configToJson(entries: List<TileLayoutEntry>): JSONObject = JSONObject()
         .put("version", VERSION)
