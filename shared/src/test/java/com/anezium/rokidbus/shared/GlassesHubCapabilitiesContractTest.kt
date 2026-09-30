@@ -252,4 +252,24 @@ class GlassesHubCapabilitiesContractTest {
             setupComplete = payload.optBoolean("setupComplete", false),
         )
     }
+
+    @Test
+    fun `home grid visible rows round-trip, default to unknown, and are clamped`() {
+        fun roundTrip(rows: Int) = GlassesHubCapabilitiesContract.parse(
+            GlassesHubCapabilitiesContract.toJson(
+                GlassesHubCapabilitiesContract.create(
+                    features = 0,
+                    imageSurfaceVersion = 0,
+                    maxImageBytes = 0,
+                    versionName = null,
+                    homeGridVisibleRows = rows,
+                ),
+            ),
+        ).homeGridVisibleRows
+
+        assertEquals(5, roundTrip(5))
+        assertEquals(0, roundTrip(-3))
+        assertEquals(GlassesHubCapabilitiesContract.MAX_HOME_GRID_VISIBLE_ROWS, roundTrip(10_000))
+        assertEquals(0, GlassesHubCapabilitiesContract.parse(JSONObject()).homeGridVisibleRows)
+    }
 }
