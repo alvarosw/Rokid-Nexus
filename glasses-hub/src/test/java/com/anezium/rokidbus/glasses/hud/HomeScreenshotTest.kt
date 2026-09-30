@@ -14,6 +14,7 @@ import com.anezium.rokidbus.shared.tile.TileSize
 import com.anezium.rokidbus.shared.tile.TileTone
 import com.github.takahirom.roborazzi.captureRoboImage
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -270,8 +271,6 @@ class HomeScreenshotTest {
             it.show(HomeMode.GRID, withIcons(5), "plugin2")
         }
 
-    // A focused JUMBO alone is about 36 % of the canvas, past the single-hue check's bloom limit, so
-    // the scrolled capture focuses the small tile under it.
     @Test
     fun grid_scrolled_to_a_tile_below_a_jumbo_and_a_hole() =
         capture(
@@ -281,6 +280,15 @@ class HomeScreenshotTest {
         ) {
             it.show(HomeMode.GRID, withIcons(3), "plugin2")
         }
+
+    @Test
+    fun grid_jumbo_focused_fills_with_surface_selected() {
+        capture("grid-20-jumbo-focused", stored = freeLayout, live = freeLive) {
+            it.show(HomeMode.GRID, withIcons(5), "plugin4")
+        }
+        // Inside the focused JUMBO, away from its text: the dim focus fill, which the bloom guard ignores.
+        assertEquals(SURFACE_SELECTED_GREEN, greenAt(File("build/outputs/roborazzi/grid-20-jumbo-focused.png"), 300, 450))
+    }
 
     @Test
     fun grid_one_by_one_live_tile_with_progress_and_badge() =
