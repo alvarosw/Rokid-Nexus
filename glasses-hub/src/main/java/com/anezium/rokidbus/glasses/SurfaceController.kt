@@ -14,6 +14,7 @@ import com.anezium.rokidbus.glasses.hud.CloseReason
 import com.anezium.rokidbus.glasses.hud.DisplayPath
 import com.anezium.rokidbus.glasses.hud.HudController
 import com.anezium.rokidbus.glasses.hud.HudIntent
+import com.anezium.rokidbus.glasses.hud.forwardsBackToPlugin
 import com.anezium.rokidbus.shared.BusEnvelope
 import com.anezium.rokidbus.shared.BusPaths
 import com.anezium.rokidbus.shared.EditableSurfaceContract
@@ -300,10 +301,17 @@ object SurfaceController {
         runOnMain {
             val surface = active?.takeIf { it.surfaceId == surfaceId } ?: return@runOnMain
             when (reason) {
-                CloseReason.WEARER_DISMISSED, CloseReason.OPEN_CANCELLED -> {
-                    if (reason == CloseReason.OPEN_CANCELLED) log("Surface closed unseen: its open was cancelled id=$surfaceId")
-                    forwardSurfaceInput(KeyEvent.KEYCODE_BACK, KeyEvent.ACTION_DOWN)
+                CloseReason.WEARER_DISMISSED -> {
+                    if (reason.forwardsBackToPlugin()) forwardSurfaceInput(KeyEvent.KEYCODE_BACK, KeyEvent.ACTION_DOWN)
                     closeAsWearer(surface)
+                }
+                CloseReason.OPEN_CANCELLED -> {
+                    // Never displayed, never dismissed: nothing is sent to a plugin that has no closed
+                    // event for a surface, so a re-show cannot start a loop. An Ink surface does have
+                    // one, and still ends its session.
+                    log("Surface closed unseen: its open was cancelled id=$surfaceId")
+                    if (surface.isInk) sendInkClosed(surfaceId, InkSurfaceContract.CLOSE_USER)
+                    hideLocalOnMain(DisplayHoldReleaseReason.SESSION_CLOSED)
                 }
                 CloseReason.BACK_FAILSAFE -> closeAsWearer(surface)
                 CloseReason.SUPERSEDED -> {

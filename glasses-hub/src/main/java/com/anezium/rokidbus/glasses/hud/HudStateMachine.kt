@@ -28,7 +28,8 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
             when (event) {
                 HudEvent.ServiceConnected -> onConnected()
                 HudEvent.ServiceDestroyed -> onDestroyed()
-                is HudEvent.LauncherEntriesChanged -> onEntries(event.entries)
+                is HudEvent.LauncherEntriesChanged -> onEntries(event.entries, event.appearance)
+                HudEvent.HostAttachFailed -> onHostAttachFailed()
                 is HudEvent.ModeChanged -> s = s.copy(configuredMode = event.mode)
                 is HudEvent.NoticeOwnsRingChanged -> s = s.copy(noticeOwnsRing = event.owns)
                 else -> if (s.serviceConnected) online(event) else offline(event)
@@ -113,6 +114,16 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
             s = s.copy(screen = Hidden, serviceConnected = false, suspended = keep)
         }
 
+        /**
+         * A launcher with no window would own every key invisibly. Step back to what it was opened
+         * over, or to Hidden, which releases the ring focus and lets keys reach the system again.
+         */
+        fun onHostAttachFailed() {
+            val sc = s.screen
+            val home = when (sc) { is Home -> sc; is Opening -> sc.home; else -> return }
+            s = s.copy(screen = home.beneath?.takeIf { it is External } ?: Hidden)
+        }
+
         fun beneathSurface(b: HudScreen?): HudScreen? = when {
             b is App -> b.copy(backToken = null)
             b is External && b.kind == ExternalKind.ACTIVITY_SURFACE -> b.copy(backToken = null)
@@ -121,15 +132,21 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
 
         // ---- entries and selection ---------------------------------------------------------
 
-        fun onEntries(raw: List<String>) {
+        fun onEntries(raw: List<String>, appearance: Map<String, String>) {
             val list = raw.distinct()
-            if (list == s.entries) return
-            val old = s.entries
             val sc = s.screen
             val home = when (sc) { is Home -> sc; is Opening -> sc.home; else -> null }
+            if (list == s.entries) {
+                if (appearance != s.entryAppearance) {
+                    s = s.copy(entryAppearance = appearance)
+                    if (home != null) fx += RefreshHomeEntries(list, home.selectedId)
+                }
+                return
+            }
+            val old = s.entries
             val base = home?.selectedId ?: s.lastSelectedId
             val sel = if (home != null || base != null) resolveSelection(old, list, base) else null
-            s = s.copy(entries = list, lastSelectedId = sel)
+            s = s.copy(entries = list, entryAppearance = appearance, lastSelectedId = sel)
             when (sc) {
                 is Home -> s = s.copy(screen = sc.copy(selectedId = sel))
                 is Opening -> s = s.copy(screen = sc.copy(home = sc.home.copy(selectedId = sel)))
@@ -428,6 +445,8 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
                 is External -> if (sc.kind == kind) return
                 is Opening ->
                     if (kind == ExternalKind.CAMERA && sc.pluginId == CAMERA_ENTRY_ID) {
+                        // The launcher may have been opened over a surface; the camera takes the display.
+                        closeVisibleSurfaces(sc)
                         s = s.copy(screen = External(kind, Origin.HOME))
                         return
                     }

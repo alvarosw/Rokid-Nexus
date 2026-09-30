@@ -32,7 +32,15 @@ enum class OpenFailure { SEND_FAILED, REJECTED, TIMEOUT }
 sealed interface HudEvent {
     data class Intent(val intent: HudIntent) : HudEvent
 
-    data class LauncherEntriesChanged(val entries: List<String>) : HudEvent
+    /**
+     * The launcher entry ids in display order. [appearance] maps an id to whatever the home draws for
+     * it besides the id (name, icon key), so a rename of an entry that keeps its id still refreshes
+     * the home.
+     */
+    data class LauncherEntriesChanged(
+        val entries: List<String>,
+        val appearance: Map<String, String> = emptyMap(),
+    ) : HudEvent
 
     data class ModeChanged(val mode: HomeMode) : HudEvent
 
@@ -67,6 +75,9 @@ sealed interface HudEvent {
     data class NoticeOwnsRingChanged(val owns: Boolean) : HudEvent
 
     data object ServiceConnected : HudEvent
+
+    /** The host window could not be added while the machine was showing the launcher over it. */
+    data object HostAttachFailed : HudEvent
 
     data object ServiceDestroyed : HudEvent
 }

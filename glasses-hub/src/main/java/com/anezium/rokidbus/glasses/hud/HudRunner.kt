@@ -30,6 +30,8 @@ class HudRunner(
     private val sink: HudEffectSink,
     private val onError: (Throwable) -> Unit = { throw it },
 ) {
+    /** Written on the main thread only; volatile because other components read it from their own. */
+    @Volatile
     var state: HudState = HudState()
         private set
 

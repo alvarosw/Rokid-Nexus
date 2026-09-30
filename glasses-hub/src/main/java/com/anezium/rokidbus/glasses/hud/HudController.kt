@@ -9,6 +9,7 @@ import android.view.KeyEvent
 import android.view.WindowManager
 import com.anezium.rokidbus.glasses.ActivityController
 import com.anezium.rokidbus.glasses.ActivityInputTarget
+import com.anezium.rokidbus.glasses.BuildConfig
 import com.anezium.rokidbus.glasses.GlassesHub
 import com.anezium.rokidbus.glasses.HudModeStore
 import com.anezium.rokidbus.glasses.HudTopInset
@@ -64,6 +65,11 @@ internal object HudController {
         onError = { logError("HUD effect failed", it) },
     )
 
+    /** The window host of a connection; a test swaps it to run against a window manager that refuses. */
+    internal var hostFactory: (AccessibilityService, WindowManager) -> HudHost = { service, manager ->
+        HudHost(service, manager)
+    }
+
     val state: HudState get() = runner.state
 
     fun isServiceConnected(): Boolean = runner.state.serviceConnected
@@ -76,22 +82,30 @@ internal object HudController {
     // ---- service lifecycle -----------------------------------------------------------------
 
     fun onServiceConnected(service: AccessibilityService) {
+        // A second connect with no destroy between would leave the first one's host window and
+        // observers alive beside the new ones.
+        if (this.service != null) {
+            log("Accessibility service connected again without a destroy; releasing the previous connection")
+            release()
+        }
         this.service = service
         val context = service.applicationContext
         appContext = context
         val manager = service.getSystemService(WindowManager::class.java)
-        val nextHost = HudHost(service, manager)
+        val nextHost = hostFactory(service, manager)
         host = nextHost
-        stopObservingInset?.invoke()
         stopObservingInset = HudTopInset.observe(service) { nextHost.home.setHudTopInsetDp(it) }
-        stopObservingLauncher?.invoke()
         stopObservingLauncher = GlassesHub.observeLauncher { entries ->
             runOnMain {
                 entriesById = entries.associateBy { it.id }
-                dispatch(HudEvent.LauncherEntriesChanged(entries.map { it.id }))
+                dispatch(
+                    HudEvent.LauncherEntriesChanged(
+                        entries = entries.map { it.id },
+                        appearance = entries.associate { it.id to "${it.displayName}|${it.iconKey.orEmpty()}" },
+                    ),
+                )
             }
         }
-        stopObservingNotice?.invoke()
         stopObservingNotice = NoticeController.observe { notice ->
             // A ring tap in flight was aimed at the notice that was up when it began (01 item 129).
             val identity = notice?.interactionIdentity
@@ -100,13 +114,18 @@ internal object HudController {
                 input.cancelPendingRingTaps()
             }
         }
-        HudInputSeam.sink = { raw -> runOnMain { onRawKey(raw, null) } }
+        if (BuildConfig.DEBUG) HudInputSeam.sink = { raw -> runOnMain { onRawKey(raw, null) } }
         dispatch(HudEvent.NoticeOwnsRingChanged(NoticeController.ownsRingInput()))
         dispatch(HudEvent.ServiceConnected)
     }
 
     fun onServiceDestroyed(service: AccessibilityService) {
         if (this.service !== service) return
+        release()
+    }
+
+    /** Ends the current connection: the machine loses its windows, and every observer and timer goes. */
+    private fun release() {
         HudInputSeam.sink = null
         dispatch(HudEvent.ServiceDestroyed)
         main.removeCallbacks(inputTick)
@@ -120,7 +139,7 @@ internal object HudController {
         lastNoticeIdentity = null
         activityTapTarget = null
         host = null
-        this.service = null
+        service = null
     }
 
     // ---- entry points ----------------------------------------------------------------------
@@ -137,6 +156,10 @@ internal object HudController {
 
     /** `OPEN_LAUNCHER` broadcast: toggles. The result string is for the log only. */
     fun toggleLauncherFromBroadcast(): String {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            main.post { log("Open launcher broadcast result: ${toggleLauncherFromBroadcast()}") }
+            return "queued"
+        }
         if (!isServiceConnected()) return "show failed: accessibility service not connected"
         val wasShown = isLauncherShown()
         dispatch(HudEvent.Intent(HudIntent.OpenLauncher(LauncherTrigger.BROADCAST_TOGGLE)))
@@ -182,11 +205,6 @@ internal object HudController {
             dispatch(event)
             presentInAppLayer(surface)
         }
-    }
-
-    /** Content of the surface changed; draws it if the app layer is where the surface lives. */
-    fun onSurfaceContentChanged(surface: NexusSurface) {
-        runOnMain { presentInAppLayer(surface) }
     }
 
     fun onSurfaceHidden(surfaceId: String) {
@@ -292,7 +310,7 @@ internal object HudController {
     // ---- machine plumbing ------------------------------------------------------------------
 
     /** Returns true when the event ended in a swallowed BACK. */
-    fun dispatch(event: HudEvent): Boolean {
+    private fun dispatch(event: HudEvent): Boolean {
         syncMode()
         return runner.dispatch(event)
     }
@@ -347,7 +365,10 @@ internal object HudController {
             val host = host
             val context = appContext
             when (effect) {
-                HudEffect.AttachHost -> host?.attach()
+                HudEffect.AttachHost -> if (host?.attach() != true) {
+                    log("HUD host window unavailable; closing the launcher")
+                    dispatch(HudEvent.HostAttachFailed)
+                }
                 HudEffect.DetachHost -> host?.detach()
                 is HudEffect.ShowHome -> {
                     if (host == null || context == null) return
@@ -374,6 +395,7 @@ internal object HudController {
 
         override fun settled(state: HudState) {
             host?.sync(state.screen)
+            host?.home?.setNoticeOwnsRing(state.noticeOwnsRing)
             val shown = isLauncherScreen(state.screen)
             if (shown != launcherShown) {
                 launcherShown = shown
@@ -456,13 +478,7 @@ internal object HudController {
         override fun noticeClaimsRing(keyCode: Int) = NoticeController.claimsRingKey(keyCode)
 
         override fun noticeHandlesKey(event: RawKeyEvent): Boolean {
-            val framework = currentKeyEvent ?: KeyEvent(
-                event.eventTime,
-                event.eventTime,
-                event.action,
-                event.keyCode,
-                event.repeatCount,
-            )
+            val framework = currentKeyEvent ?: HudKeyEventAdapter.toKeyEvent(event)
             return NoticeKeyDispatcher.handleKeyEvent(framework)
         }
     }

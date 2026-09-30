@@ -11,11 +11,15 @@ enum class CloseReason {
     SUPERSEDED,
 
     /**
-     * The surface answers an open the wearer had already cancelled. It was never drawn; the plugin
-     * hears the same BACK a dismissal sends, so no new wire value exists for it.
+     * The surface answers an open the wearer had already cancelled. It was never drawn and the
+     * wearer never pressed BACK on it, so the plugin is not sent one: it is hidden locally, and an Ink
+     * surface gets the closed event it always gets. No wire value exists for "never displayed".
      */
     OPEN_CANCELLED,
 }
+
+/** Whether the plugin hears a `KEYCODE_BACK` for this close: only when the wearer actually pressed it. */
+fun CloseReason.forwardsBackToPlugin(): Boolean = this == CloseReason.WEARER_DISMISSED
 
 sealed interface HudStatus {
     data class OpenFailed(val pluginId: String, val reason: OpenFailure) : HudStatus
