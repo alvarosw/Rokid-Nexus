@@ -51,13 +51,32 @@ class DebugHudInputReceiver : BroadcastReceiver() {
             log("HUD_INPUT dropped key=$key device=$device: no HudInput is wired")
             return
         }
+        // The notice matches an UP to its DOWN by (device, keycode, downTime), so a pair shares one downTime.
+        val downTime = if (actions.first() == RawKeyEvent.ACTION_DOWN) {
+            SystemClock.uptimeMillis().also { lastDownTimes[key to device] = it }
+        } else {
+            lastDownTimes[key to device] ?: SystemClock.uptimeMillis()
+        }
         for (action in actions) {
-            sink(RawKeyEvent(key, action, if (action == RawKeyEvent.ACTION_DOWN) repeat else 0, SystemClock.uptimeMillis(), device))
+            sink(
+                RawKeyEvent(
+                    keyCode = key,
+                    action = action,
+                    repeatCount = if (action == RawKeyEvent.ACTION_DOWN) repeat else 0,
+                    eventTime = SystemClock.uptimeMillis(),
+                    deviceClass = device,
+                    downTime = downTime,
+                    deviceId = INJECTED_DEVICE_ID,
+                ),
+            )
         }
         log("HUD_INPUT injected key=$key device=$device actions=$actions repeat=$repeat")
     }
 
     private companion object {
+        /** `KeyEvent.VIRTUAL_KEYBOARD`: the id the framework gives events with no physical device. */
+        const val INJECTED_DEVICE_ID = -1
+        val lastDownTimes = HashMap<Pair<Int, DeviceClass>, Long>()
         const val ACTION = "com.anezium.rokidbus.glasses.DEBUG_HUD_INPUT"
         const val EXTRA_KEY = "key"
         const val EXTRA_DEVICE = "device"

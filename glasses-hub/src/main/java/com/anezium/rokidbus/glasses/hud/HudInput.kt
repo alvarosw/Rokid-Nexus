@@ -15,6 +15,9 @@ data class RawKeyEvent(
     /** `KeyEvent.getEventTime()`: the uptime clock, the single clock of [HudInput] (see there). */
     val eventTime: Long,
     val deviceClass: DeviceClass,
+    /** `KeyEvent.getDownTime()`: with [deviceId] and the keycode, the identity of one press. */
+    val downTime: Long = eventTime,
+    val deviceId: Int = 0,
 ) {
     val isDown get() = action == ACTION_DOWN
     val isUp get() = action == ACTION_UP
@@ -120,11 +123,13 @@ class HudInput(private val context: HudInputContext) {
     private var contactAt: Long? = null
 
     /**
-     * Pipeline-qualified keycodes whose DOWN was consumed, with how many UPs are therefore owed (R3).
-     * A count, not a flag: a swipe's duplicated pair can interleave as DOWN DOWN UP UP, and both UPs
-     * belong to consumed DOWNs. Repeats never add to it (one physical press, one UP).
+     * Pipeline-qualified keycodes whose DOWN was consumed, with the event time of each UP therefore
+     * owed (R3). A queue, not a flag: a swipe's duplicated pair can interleave as DOWN DOWN UP UP, and
+     * both UPs belong to consumed DOWNs. Repeats never add to it (one physical press, one UP) but
+     * keep the newest entry alive. An entry older than [OWED_UP_TTL_MS] is dropped: its UP went
+     * missing, and it must not swallow the UP of a later press whose DOWN passed through.
      */
-    private val consumedDowns = HashMap<Int, Int>()
+    private val consumedDowns = HashMap<Int, ArrayDeque<Long>>()
 
     fun onKey(event: RawKeyEvent): HudInputResult {
         if (event.keyCode == HudKeys.PROG_BLUE) return PASS
@@ -321,11 +326,12 @@ class HudInput(private val context: HudInputContext) {
 
     private fun surfaceKey(e: RawKeyEvent, reader: Boolean, out: MutableList<RoutedIntent>): Boolean {
         val key = e.keyCode
+        val forwarded = if (reader) READER_FORWARDED else SURFACE_FORWARDED
         if (e.isUp) {
             // An UP only gets here when its DOWN was not consumed (see R3); forward it so the plugin
             // still sees the pair.
             if (reader && (key in DPAD_DIRECTIONS || key in MEDIA_SCROLL)) return true
-            if (key !in SURFACE_FORWARDED) return false
+            if (key !in forwarded) return false
             out += RoutedIntent(HudIntent.Raw(RawKey(key, isDown = false)))
             return true
         }
@@ -347,7 +353,7 @@ class HudInput(private val context: HudInputContext) {
                 }
                 true
             }
-            key in SURFACE_FORWARDED -> {
+            key in forwarded -> {
                 out += RoutedIntent(HudIntent.Raw(RawKey(key, true, e.repeatCount)))
                 true
             }
@@ -408,16 +414,32 @@ class HudInput(private val context: HudInputContext) {
     }
 
     private fun owe(e: RawKeyEvent) {
-        val key = pairKey(e)
-        val owed = consumedDowns[key] ?: 0
-        consumedDowns[key] = if (e.repeatCount == 0) minOf(owed + 1, MAX_OWED_UPS) else maxOf(owed, 1)
+        val owed = consumedDowns.getOrPut(pairKey(e)) { ArrayDeque() }
+        dropStale(owed, e.eventTime)
+        if (e.repeatCount == 0) {
+            if (owed.size >= MAX_OWED_UPS) owed.removeFirst()
+            owed.addLast(e.eventTime)
+        } else {
+            if (owed.isNotEmpty()) owed.removeLast()
+            owed.addLast(e.eventTime)
+        }
     }
 
     private fun payUp(e: RawKeyEvent): Boolean {
         val key = pairKey(e)
         val owed = consumedDowns[key] ?: return false
-        if (owed <= 1) consumedDowns.remove(key) else consumedDowns[key] = owed - 1
+        dropStale(owed, e.eventTime)
+        if (owed.isEmpty()) {
+            consumedDowns.remove(key)
+            return false
+        }
+        owed.removeFirst()
+        if (owed.isEmpty()) consumedDowns.remove(key)
         return true
+    }
+
+    private fun dropStale(owed: ArrayDeque<Long>, nowMs: Long) {
+        while (owed.isNotEmpty() && nowMs - owed.first() > OWED_UP_TTL_MS) owed.removeFirst()
     }
 
     private fun pairKey(e: RawKeyEvent): Int =
@@ -439,6 +461,9 @@ class HudInput(private val context: HudInputContext) {
         const val CONTACT_DEADLINE_MS = TripleTapDetector.DEFAULT_WINDOW_MS + 1L
 
         private const val MAX_OWED_UPS = 2
+
+        /** Longer than any press the pad or ring produces; repeats of a held key refresh the entry. */
+        private const val OWED_UP_TTL_MS = 5_000L
         private const val RING_PIPELINE_BIT = 1 shl 16
         private val PASS = HudInputResult(false)
 
@@ -449,6 +474,9 @@ class HudInput(private val context: HudInputContext) {
             DpadPairDedupe.KEYCODE_DPAD_RIGHT,
         )
         private val MEDIA_SCROLL = setOf(RING_FORWARD, RING_BACKWARD)
+
+        /** `SurfaceController.READER_FORWARDED_KEYS`: a reader leaves SPACE and the media keys to the system. */
+        private val READER_FORWARDED = setOf(KEY_BACK, KEY_ENTER, KEY_DPAD_CENTER)
 
         /** `SurfaceController.FORWARDED_KEYS`. */
         private val SURFACE_FORWARDED = DPAD_DIRECTIONS + setOf(

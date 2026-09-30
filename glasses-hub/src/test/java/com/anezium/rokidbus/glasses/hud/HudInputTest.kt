@@ -245,6 +245,23 @@ class HudInputRingTest {
         assertFalse(r.up(ENTER, OTHER, 1_050).consumed)
     }
 
+    @Test fun R3_a_missing_up_cannot_swallow_the_up_of_a_later_press() {
+        val r = rig()
+        assertTrue(r.down(ENTER, TOUCHPAD, 1_000).consumed)      // its UP never arrives
+        r.ctx.owner = InputOwner.NONE
+        // Much later a press whose DOWN passed through: its UP is not owed to the lost one.
+        assertFalse(r.down(ENTER, TOUCHPAD, 30_000).consumed)
+        assertFalse(r.up(ENTER, TOUCHPAD, 30_050).consumed)
+    }
+
+    @Test fun R3_a_held_key_keeps_its_debt_alive_through_repeats() {
+        val r = rig()
+        assertTrue(r.down(ENTER, TOUCHPAD, 1_000).consumed)
+        for (n in 1..12) r.down(ENTER, TOUCHPAD, 1_000L + n * 1_000L, repeat = n)
+        r.ctx.owner = InputOwner.NONE
+        assertTrue(r.up(ENTER, TOUCHPAD, 13_100).consumed)
+    }
+
     @Test fun R3_notice_consumed_down_owes_its_up_even_when_the_notice_is_gone() {
         val r = rig(InputOwner.NONE)
         r.ctx.noticeGeneric += ENTER
@@ -344,6 +361,17 @@ class HudInputGenericTest {
         assertEquals(listOf(raw(ENTER)), r.intents(r.down(ENTER, TOUCHPAD, 1_500)))
         assertEquals(listOf(raw(CENTER)), r.intents(r.down(CENTER, TOUCHPAD, 1_510)))
         assertEquals(listOf(HudIntent.Dismiss), r.intents(r.down(BACK, TOUCHPAD, 1_520)))
+    }
+
+    @Test fun reader_leaves_space_and_media_play_pause_to_the_system() {
+        val r = rig(InputOwner.READER)
+        for ((i, k) in listOf(SPACE, TAP).withIndex()) {
+            val t = 1_000L + i * 300
+            assertFalse(k.toString(), r.down(k, KEYBOARD_DPAD, t).consumed)
+            assertFalse(k.toString(), r.up(k, KEYBOARD_DPAD, t + 20).consumed)
+        }
+        assertTrue(r.down(ENTER, KEYBOARD_DPAD, 2_000).consumed)
+        assertTrue(r.up(ENTER, KEYBOARD_DPAD, 2_020).consumed)
     }
 
     @Test fun item111_surface_forwards_its_key_set_and_passes_the_rest() {

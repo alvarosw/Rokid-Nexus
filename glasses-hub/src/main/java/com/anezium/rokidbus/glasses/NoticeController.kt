@@ -12,6 +12,7 @@ import android.os.SystemClock
 import android.view.KeyEvent
 import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.glasses.hud.HudController
+import com.anezium.rokidbus.glasses.hud.RingSurfaceKeys
 import com.anezium.rokidbus.shared.BusEnvelope
 import com.anezium.rokidbus.shared.BusPaths
 import com.anezium.rokidbus.shared.ImageSurfaceContract
@@ -783,9 +784,9 @@ internal object NoticeController {
      * paged, or backdrop notice owns the R08 bridge focus.
      */
     fun claimsRingKey(keyCode: Int): Boolean = when (keyCode) {
-        RingSurfaceInputPolicy.RING_KEYCODE_TAP -> claimsInput()
-        RingSurfaceInputPolicy.RING_KEYCODE_FORWARD,
-        RingSurfaceInputPolicy.RING_KEYCODE_BACKWARD,
+        RingSurfaceKeys.TAP -> claimsInput()
+        RingSurfaceKeys.FORWARD,
+        RingSurfaceKeys.BACKWARD,
         -> claimsDirection()
         else -> false
     }

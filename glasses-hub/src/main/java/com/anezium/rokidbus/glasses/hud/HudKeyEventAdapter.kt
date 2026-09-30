@@ -17,7 +17,24 @@ object HudKeyEventAdapter {
             repeatCount = event.repeatCount,
             eventTime = event.eventTime,
             deviceClass = classify(event.device?.name, event.source),
+            downTime = event.downTime,
+            deviceId = event.deviceId,
         )
+
+    /**
+     * The framework event for a [RawKeyEvent] that did not come from one (the debug seam). The notice
+     * matches an UP to its DOWN by device, keycode and down time, so those survive the trip.
+     */
+    fun toKeyEvent(raw: RawKeyEvent): KeyEvent = KeyEvent(
+        raw.downTime,
+        raw.eventTime,
+        raw.action,
+        raw.keyCode,
+        raw.repeatCount,
+        0,
+        raw.deviceId,
+        0,
+    )
 
     /**
      * By name first (HARDWARE R1): a name containing `R08`, any case, is the ring and nothing else
