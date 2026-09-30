@@ -128,7 +128,6 @@ internal object HudController {
         release()
     }
 
-    /** Ends the current connection: the machine loses its windows, and every observer and timer goes. */
     /**
      * What the home draws for each entry besides its place in the list: name, icon and the tile's
      * grid cell and size, so a layout change that keeps the reading order still refreshes the home.
@@ -141,6 +140,7 @@ internal object HudController {
         }
     }
 
+    /** Ends the current connection: the machine loses its windows, and every observer and timer goes. */
     private fun release() {
         HudInputSeam.sink = null
         dispatch(HudEvent.ServiceDestroyed)
