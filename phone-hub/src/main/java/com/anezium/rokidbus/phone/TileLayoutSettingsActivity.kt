@@ -1,300 +1,600 @@
 package com.anezium.rokidbus.phone
 
 import android.app.Activity
+import android.content.Context
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.DashPathEffect
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
+import android.graphics.Path
+import android.graphics.Typeface
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.StateListDrawable
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import com.anezium.rokidbus.client.ui.BusTheme
+import com.anezium.rokidbus.client.ui.NexusPluginIcons
 import com.anezium.rokidbus.client.ui.NexusUi
-import com.anezium.rokidbus.shared.tile.TileLayoutEntry
-import com.anezium.rokidbus.shared.tile.TileGridPacker
+import com.anezium.rokidbus.client.ui.PluginCustomIcon
+import com.anezium.rokidbus.shared.plugin.PluginCapability
+import com.anezium.rokidbus.shared.tile.GridRect
+import com.anezium.rokidbus.shared.tile.TileGridLayout
 import com.anezium.rokidbus.shared.tile.TileSize
 
 /**
- * The ordered-list tile-layout editor: Delivery 4's override of Delivery 1's auto-pack default.
- *
- * Per the roadmap's option 1 (recommended): position is implied by list order, not by a
- * drag-and-drop canvas — reordering a row moves it in the list, and the glasses re-run
- * [TileGridPacker] over that order on next sync. No collision UI is needed because the packer
- * already guarantees no overlap by construction.
+ * The free-placement tile-layout editor: a preview of the glasses' home grid the wearer drags
+ * tiles around in, and the size picker for the selected tile. Saving stores the layout in reading
+ * order and pushes it to the glasses; the glasses resolve it with the same [TileGridLayout] this
+ * screen previews with, from the same inputs, so they show what this screen shows.
  */
-class TileLayoutSettingsActivity : Activity() {
-    private data class Row(
-        val pluginId: String,
-        val displayName: String,
-        val availableSizes: List<TileSize>,
-        var selectedSize: TileSize,
-    )
-
-    private val rows = mutableListOf<Row>()
-    private lateinit var rowsColumn: LinearLayout
+open class TileLayoutSettingsActivity : Activity() {
+    private lateinit var state: TileLayoutEditorState
+    private lateinit var canvasView: TileLayoutCanvasView
+    private lateinit var gridLabel: TextView
+    private lateinit var cardHost: LinearLayout
+    private lateinit var saveButton: Button
+    private val entryById = HashMap<String, PluginCatalogEntry?>()
+    private val handler = Handler(Looper.getMainLooper())
+    private val restoreSaveLabel = Runnable { saveButton.text = SAVE_LABEL }
+    private var cardSignature: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        rows += buildInitialRows()
+        val catalog = launchableEntries().filter { it.id != null }
+        val cameraName = cameraTileName()
+        val tiles = buildList {
+            if (cameraName != null) {
+                add(EditorTile(CAMERA_TILE_ID, cameraName, TileSize.entries.toSet(), live = false))
+                entryById[CAMERA_TILE_ID] = null
+            }
+            catalog.forEach { entry ->
+                val id = entry.id.orEmpty()
+                val descriptor = entry.principal?.descriptor
+                add(
+                    EditorTile(
+                        id = id,
+                        name = entry.displayName,
+                        sizes = TileSizeOptions.forPlugin(descriptor?.supportedTileSizes.orEmpty()).toSet(),
+                        live = descriptor?.requestedCapabilities?.contains(PluginCapability.WIDGET_TILE) == true,
+                    ),
+                )
+                entryById[id] = entry
+            }
+        }
+        // The glasses resolve over the camera entry and then the launcher order, with no declared sizes.
+        val entries = tiles.map { it.id to null }
+        val initial = TileLayoutEditorState.layoutOf(
+            TileGridLayout.resolve(entries, TileLayoutSettingsStore(this).getEntries()),
+        )
+        val default = TileLayoutEditorState.layoutOf(TileGridLayout.resolve(entries, emptyList()))
+        state = TileLayoutEditorState(tiles, initial, default)
         buildUi()
+        onEditorChanged()
     }
 
-    /**
-     * Initial order: the stored layout's order for plugins it already placed, then every other
-     * currently-launchable plugin appended in the catalog's own order — the same "unplaced
-     * plugin lands after the custom-ordered ones" rule the glasses apply when merging a synced
-     * layout against the live launcher list.
-     */
-    private fun buildInitialRows(): List<Row> {
-        val catalog = BusHubService.pluginCatalog(this).launchableEntries
-        val availableSizesById = catalog.associate { entry ->
-            entry.id.orEmpty() to TileSizeOptions.forPlugin(
-                entry.principal?.descriptor?.supportedTileSizes.orEmpty(),
-            )
-        }
-        val storedById = TileLayoutSettingsStore(this).getEntries().associateBy { it.pluginId }
-        val storedOrder = storedById.keys.filter { it in availableSizesById }
-        val remaining = catalog.map { it.id.orEmpty() }.filter { it !in storedById }
-        return (storedOrder + remaining).mapNotNull { pluginId ->
-            val entry = catalog.firstOrNull { it.id == pluginId } ?: return@mapNotNull null
-            val available = availableSizesById[pluginId] ?: return@mapNotNull null
-            val stored = storedById[pluginId]?.size?.takeIf { it in available }
-            Row(
-                pluginId = pluginId,
-                displayName = entry.displayName,
-                availableSizes = available,
-                selectedSize = stored ?: available.first(),
-            )
-        }
+    internal open fun launchableEntries(): List<PluginCatalogEntry> =
+        BusHubService.pluginCatalog(this).launchableEntries
+
+    internal open fun cameraTileName(): String? = BusHubService.cameraTileName()
+
+    override fun onDestroy() {
+        handler.removeCallbacks(restoreSaveLabel)
+        super.onDestroy()
+    }
+
+    private fun dp(value: Int) = NexusUi.dp(this, value)
+
+    internal open fun glyphFor(tileId: String): Drawable {
+        val entry = entryById[tileId]
+        return NexusPluginIcons.resolve(
+            context = this,
+            iconKey = if (tileId == CAMERA_TILE_ID) CAMERA_ICON_KEY else entry?.iconKey,
+            customIcon = entry?.iconDrawableResId?.let { resId ->
+                entry.principal?.packageName?.let { PluginCustomIcon(it, resId) }
+            },
+            pluginId = tileId,
+        )
     }
 
     private fun buildUi() {
         window.statusBarColor = NexusUi.BG
         window.navigationBarColor = NexusUi.BG
 
-        rowsColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        renderRows()
+        val reported = BusHubService.glassesHomeGridVisibleRows()
+        val hudPosition = PhoneHudPositionStore(this)
+        val visibleRows = TileLayoutEditorState.visibleRows(
+            glassesReported = reported,
+            topInsetDp = hudPosition.hudTopInsetDp(),
+            autoPosition = hudPosition.hudPositionAuto(),
+        )
 
-        val content = NexusUi.contentColumn(this).apply {
+        canvasView = TileLayoutCanvasView(this).apply {
+            bind(
+                state,
+                state.tiles.associate { tile ->
+                    tile.id to TileVisual(glyphFor(tile.id), TileSnapshotCache.get(tile.id))
+                },
+                visibleRows,
+            )
+            onChanged = ::onEditorChanged
+        }
+        gridLabel = mono("", 9.5f, 0.22f, NexusUi.GREEN_DIM)
+        cardHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
+        val preview = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             addView(
-                NexusUi.cardBody(
-                    this@TileLayoutSettingsActivity,
-                    "Order and size the plugins that show up in the grid launcher. New plugins " +
-                        "appear at the end until placed.",
-                ),
+                LinearLayout(this@TileLayoutSettingsActivity).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(2), 0, dp(2), 0)
+                    addView(
+                        mono("GLASSES HUD", 9.5f, 0.22f, NexusUi.INK3),
+                        LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+                    )
+                    addView(gridLabel)
+                },
                 NexusUi.block(),
             )
-            addView(BusTheme.gap(this@TileLayoutSettingsActivity, 18))
-            addView(rowsColumn, NexusUi.block())
-            addView(BusTheme.gap(this@TileLayoutSettingsActivity, 18))
+            addView(canvasView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
             addView(
-                NexusUi.pillButton(this@TileLayoutSettingsActivity, "Save layout").apply {
-                    setOnClickListener { save() }
+                LinearLayout(this@TileLayoutSettingsActivity).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(2), 0, dp(2), 0)
+                    addView(DashedLineView(this@TileLayoutSettingsActivity), LinearLayout.LayoutParams(dp(18), dp(1)))
+                    addView(
+                        mono(
+                            if (reported > 0) {
+                                "First view on the glasses · rows below scroll"
+                            } else {
+                                "Estimated first view · rows below scroll"
+                            },
+                            10.5f,
+                            0f,
+                            NexusUi.INK3,
+                            upper = false,
+                        ),
+                        LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) },
+                    )
                 },
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) },
             )
         }
 
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(16), dp(20), dp(20))
+            addView(intro(), NexusUi.block())
+            addView(preview, NexusUi.block().apply { topMargin = dp(14) })
+            addView(cardHost, NexusUi.block().apply { topMargin = dp(14) })
+        }
         val scroll = ScrollView(this).apply {
             setBackgroundColor(NexusUi.BG)
             isFillViewport = true
             isVerticalScrollBarEnabled = false
-            addView(
-                content,
-                ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
-            )
+            addView(content, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
 
         setContentView(
             NexusUi.fixedRoot(this).apply {
-                addView(titleHeader("TILE LAYOUT"), NexusUi.block())
+                addView(header(), NexusUi.block())
                 addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+                addView(footer(), NexusUi.block())
             },
         )
     }
 
-    private fun renderRows() {
-        rowsColumn.removeAllViews()
-        rows.forEachIndexed { index, row ->
-            if (index > 0) rowsColumn.addView(BusTheme.gap(this, 10))
-            rowsColumn.addView(pluginRow(row, index), NexusUi.block())
-        }
-    }
-
-    private fun pluginRow(row: Row, index: Int): LinearLayout =
-        LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = NexusUi.bordered(this@TileLayoutSettingsActivity, NexusUi.PANEL, NexusUi.LINE, 15)
-            setPadding(
-                NexusUi.dp(this@TileLayoutSettingsActivity, 15),
-                NexusUi.dp(this@TileLayoutSettingsActivity, 12),
-                NexusUi.dp(this@TileLayoutSettingsActivity, 15),
-                NexusUi.dp(this@TileLayoutSettingsActivity, 12),
+    private fun intro(): TextView =
+        NexusUi.cardBody(
+            this,
+            "Drag a tile to move it — the others slide into the nearest space that fits. " +
+                "Tap a tile to change its size.",
+        ).apply {
+            val target = android.util.TypedValue.applyDimension(
+                android.util.TypedValue.COMPLEX_UNIT_SP, 13f * 1.55f, resources.displayMetrics,
             )
-            addView(
-                LinearLayout(this@TileLayoutSettingsActivity).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    addView(
-                        NexusUi.rowTitle(this@TileLayoutSettingsActivity, row.displayName),
-                        LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
-                    )
-                    addView(
-                        reorderButton("▲", enabled = index > 0) { move(index, index - 1) },
-                    )
-                    addView(
-                        reorderButton("▼", enabled = index < rows.size - 1) { move(index, index + 1) },
-                    )
-                },
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
-            )
-            addView(BusTheme.gap(this@TileLayoutSettingsActivity, 8))
-            addView(
-                LinearLayout(this@TileLayoutSettingsActivity).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    row.availableSizes.forEach { size ->
-                        if (childCount > 0) addView(BusTheme.gap(this@TileLayoutSettingsActivity, 8))
-                        addView(sizeChip(row, size))
-                    }
-                },
-            )
+            setLineSpacing(target - paint.getFontMetricsInt(null), 1f)
         }
 
-    private fun reorderButton(label: String, enabled: Boolean, onClick: () -> Unit): TextView =
+    private fun mono(
+        value: String,
+        sizeSp: Float,
+        tracking: Float,
+        color: Int,
+        upper: Boolean = true,
+    ): TextView =
         TextView(this).apply {
-            text = label
-            textSize = 14f
-            gravity = Gravity.CENTER
-            isEnabled = enabled
-            setTextColor(if (enabled) NexusUi.INK else NexusUi.INK4)
-            isClickable = enabled
-            isFocusable = enabled
-            if (enabled) {
-                background = NexusUi.pressed(this@TileLayoutSettingsActivity, Color.TRANSPARENT, 18)
-                setOnClickListener { onClick() }
-            }
-            layoutParams = LinearLayout.LayoutParams(
-                NexusUi.dp(this@TileLayoutSettingsActivity, 36),
-                NexusUi.dp(this@TileLayoutSettingsActivity, 36),
-            ).apply { marginStart = NexusUi.dp(this@TileLayoutSettingsActivity, 4) }
-        }
-
-    private fun sizeChip(row: Row, size: TileSize): Button {
-        val selected = row.selectedSize == size
-        return Button(this).apply {
-            text = size.wireValue
-            textSize = 11f
-            setAllCaps(false)
-            stateListAnimator = null
-            minHeight = NexusUi.dp(this@TileLayoutSettingsActivity, 34)
-            minimumHeight = NexusUi.dp(this@TileLayoutSettingsActivity, 34)
-            minWidth = 0
-            minimumWidth = 0
+            text = if (upper) value.uppercase() else value
+            textSize = sizeSp
+            typeface = Typeface.MONOSPACE
+            letterSpacing = tracking
+            setTextColor(color)
             includeFontPadding = false
-            setPadding(
-                NexusUi.dp(this@TileLayoutSettingsActivity, 12),
-                0,
-                NexusUi.dp(this@TileLayoutSettingsActivity, 12),
-                0,
-            )
-            setTextColor(if (selected) NexusUi.ON_ACCENT else NexusUi.GREEN)
-            background = if (selected) {
-                NexusUi.rounded(this@TileLayoutSettingsActivity, NexusUi.GREEN, 12)
-            } else {
-                StateListDrawable().apply {
-                    addState(
-                        intArrayOf(android.R.attr.state_pressed),
-                        NexusUi.bordered(this@TileLayoutSettingsActivity, NexusUi.alpha(NexusUi.GREEN, 0x18), NexusUi.alpha(NexusUi.GREEN, 0x60), 12),
-                    )
-                    addState(
-                        intArrayOf(),
-                        NexusUi.bordered(this@TileLayoutSettingsActivity, NexusUi.alpha(NexusUi.GREEN, 0x0A), NexusUi.alpha(NexusUi.GREEN, 0x38), 12),
-                    )
-                }
-            }
-            setOnClickListener {
-                row.selectedSize = size
-                renderRows()
-            }
         }
+
+    /** Re-renders everything that mirrors the editor state, after any change to it. */
+    private fun onEditorChanged() {
+        gridLabel.text = "4 cols · ${state.gridRows()} rows".uppercase()
+        handler.removeCallbacks(restoreSaveLabel)
+        saveButton.text = SAVE_LABEL
+        renderCard()
     }
 
-    private fun move(from: Int, to: Int) {
-        if (to !in rows.indices) return
-        val row = rows.removeAt(from)
-        rows.add(to, row)
-        renderRows()
-    }
-
-    private fun save() {
-        val placements = TileGridPacker.pack(rows.map { it.pluginId to it.selectedSize })
-        val placementByPluginId = placements.associateBy { it.pluginId }
-        val entries = rows.map { row ->
-            val placement = placementByPluginId[row.pluginId]
-            TileLayoutEntry(
-                pluginId = row.pluginId,
-                size = row.selectedSize,
-                col = placement?.col ?: 0,
-                row = placement?.row ?: 0,
+    private fun renderCard() {
+        val id = state.selectedId
+        val rect = id?.let { state.layout[it] }
+        val signature = "$id|$rect|${state.message}"
+        if (signature == cardSignature) return
+        cardSignature = signature
+        cardHost.removeAllViews()
+        val tile = state.tiles.firstOrNull { it.id == id }
+        if (tile == null || rect == null) {
+            cardHost.addView(
+                TextView(this).apply {
+                    text = "Tap a tile to pick its size."
+                    textSize = 13f
+                    setTextColor(NexusUi.INK2)
+                    background = NexusUi.bordered(this@TileLayoutSettingsActivity, Color.TRANSPARENT, EMPTY_BORDER, 13, 1, 4, 3)
+                    setPadding(dp(14), dp(16), dp(14), dp(16))
+                },
+                NexusUi.block(),
             )
+            return
         }
-        TileLayoutSettingsStore(this).setEntries(entries)
-        BusHubService.onTileLayoutSettingChanged()
-        finish()
+        cardHost.addView(selectedCard(tile, rect), NexusUi.block())
     }
 
-    private fun titleHeader(title: String): LinearLayout =
-        LinearLayout(this).apply {
+    private fun selectedCard(tile: EditorTile, rect: GridRect): LinearLayout {
+        val supported = TileSize.PICKER_ORDER.count { it in tile.sizes }
+        return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            contentDescription = "Selected tile"
+            background = NexusUi.bordered(this@TileLayoutSettingsActivity, NexusUi.PANEL, NexusUi.LINE2, 15)
+            setPadding(dp(15), dp(14), dp(15), dp(14))
             addView(
                 LinearLayout(this@TileLayoutSettingsActivity).apply {
-                    orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    setPadding(
-                        NexusUi.dp(this@TileLayoutSettingsActivity, 10),
-                        NexusUi.dp(this@TileLayoutSettingsActivity, 12),
-                        NexusUi.dp(this@TileLayoutSettingsActivity, 22),
-                        NexusUi.dp(this@TileLayoutSettingsActivity, 12),
-                    )
-                    addView(backButton())
                     addView(
-                        NexusUi.metaLabel(this@TileLayoutSettingsActivity, title, NexusUi.INK).apply {
-                            textSize = 12f
-                            letterSpacing = 0.2f
+                        FrameLayout(this@TileLayoutSettingsActivity).apply {
+                            background = NexusUi.rounded(this@TileLayoutSettingsActivity, NexusUi.alpha(NexusUi.GREEN, 0x12), 8)
+                            addView(
+                                ImageView(this@TileLayoutSettingsActivity).apply {
+                                    setImageDrawable(
+                                        glyphFor(tile.id).mutate().apply { colorFilter = PorterDuffColorFilter(NexusUi.GREEN, PorterDuff.Mode.SRC_IN) },
+                                    )
+                                },
+                                FrameLayout.LayoutParams(dp(15), dp(15), Gravity.CENTER),
+                            )
                         },
-                        LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+                        LinearLayout.LayoutParams(dp(30), dp(30)),
+                    )
+                    addView(
+                        LinearLayout(this@TileLayoutSettingsActivity).apply {
+                            orientation = LinearLayout.VERTICAL
+                            addView(
+                                TextView(this@TileLayoutSettingsActivity).apply {
+                                    text = tile.name
+                                    textSize = 15f
+                                    typeface = Typeface.SANS_SERIF
+                                    setTextColor(NexusUi.INK)
+                                    includeFontPadding = false
+                                    maxLines = 1
+                                    ellipsize = android.text.TextUtils.TruncateAt.END
+                                },
+                            )
+                            addView(
+                                mono(
+                                    "${TileLayoutEditorState.sizeLabel(rect)} · col ${rect.col + 1} · row ${rect.row + 1}",
+                                    10.5f, 0f, NexusUi.INK3, upper = false,
+                                ),
+                                NexusUi.block().apply { topMargin = dp(4) },
+                            )
+                        },
+                        LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                            marginStart = dp(12)
+                            marginEnd = dp(12)
+                        },
+                    )
+                    addView(
+                        mono(if (tile.live) "LIVE" else "APP", 9.5f, 0.12f, NexusUi.GREEN).apply {
+                            background = NexusUi.bordered(
+                                this@TileLayoutSettingsActivity, Color.TRANSPARENT, NexusUi.alpha(NexusUi.GREEN, 0x61), 10,
+                            )
+                            setPadding(dp(8), dp(4), dp(8), dp(4))
+                        },
                     )
                 },
                 NexusUi.block(),
             )
             addView(
-                View(this@TileLayoutSettingsActivity).apply {
-                    setBackgroundColor(NexusUi.LINE)
-                    layoutParams = LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        NexusUi.dp(this@TileLayoutSettingsActivity, 1),
+                LinearLayout(this@TileLayoutSettingsActivity).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(
+                        mono("TILE SIZE", 9.5f, 0.22f, NexusUi.INK3),
+                        LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+                    )
+                    addView(mono("$supported of ${TileSize.PICKER_ORDER.size} supported", 9.5f, 0.22f, NexusUi.GREEN_DIM))
+                },
+                NexusUi.block().apply { topMargin = dp(14) },
+            )
+            addView(sizeGrid(tile, rect), NexusUi.block().apply { topMargin = dp(10) })
+            if (state.message.isNotEmpty()) {
+                addView(
+                    mono(state.message, 10.5f, 0f, NexusUi.AMBER, upper = false).apply {
+                        setLineSpacing(0f, 1.2f)
+                        accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                    },
+                    NexusUi.block().apply { topMargin = dp(10) },
+                )
+            }
+        }
+    }
+
+    private fun sizeGrid(tile: EditorTile, rect: GridRect): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            TileSize.PICKER_ORDER.chunked(4).forEachIndexed { rowIndex, sizes ->
+                addView(
+                    LinearLayout(this@TileLayoutSettingsActivity).apply {
+                        sizes.forEachIndexed { index, size ->
+                            addView(
+                                sizeChip(tile, size, on = size.cols == rect.cols && size.rows == rect.rows),
+                                LinearLayout.LayoutParams(0, dp(56), 1f).apply { if (index > 0) marginStart = dp(8) },
+                            )
+                        }
+                        repeat(4 - sizes.size) {
+                            addView(View(this@TileLayoutSettingsActivity), LinearLayout.LayoutParams(0, dp(56), 1f).apply { marginStart = dp(8) })
+                        }
+                    },
+                    NexusUi.block().apply { if (rowIndex > 0) topMargin = dp(8) },
+                )
+            }
+        }
+
+    private fun sizeChip(tile: EditorTile, size: TileSize, on: Boolean): LinearLayout {
+        val ok = size in tile.sizes
+        val label = TileLayoutEditorState.sizeLabel(size)
+        val ink = when {
+            on -> NexusUi.ON_ACCENT
+            ok -> NexusUi.GREEN
+            else -> NexusUi.INK4
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            background = when {
+                on -> NexusUi.bordered(this@TileLayoutSettingsActivity, NexusUi.GREEN, NexusUi.GREEN, 12)
+                ok -> NexusUi.bordered(
+                    this@TileLayoutSettingsActivity, NexusUi.alpha(NexusUi.GREEN, 0x0A), NexusUi.alpha(NexusUi.GREEN, 0x38), 12,
+                )
+                else -> NexusUi.bordered(this@TileLayoutSettingsActivity, Color.TRANSPARENT, CHIP_DISABLED_BORDER, 12, 1, 3, 3)
+            }
+            isEnabled = ok
+            isClickable = ok
+            isFocusable = ok
+            isSelected = on
+            contentDescription = if (ok) label else "$label, not supported by ${tile.name}"
+            addView(
+                SizeIconView(
+                    this@TileLayoutSettingsActivity,
+                    size,
+                    filled = ink,
+                    empty = if (on) NexusUi.alpha(NexusUi.ON_ACCENT, 0x2E) else NexusUi.alpha(NexusUi.INK2, 0x24),
+                ),
+                LinearLayout.LayoutParams(dp(22), dp(22)),
+            )
+            addView(
+                mono(label, 11f, 0f, ink, upper = false),
+                NexusUi.block().apply { topMargin = dp(6) },
+            )
+            (getChildAt(1) as TextView).gravity = Gravity.CENTER
+            if (ok) {
+                setOnClickListener {
+                    state.select(tile.id)
+                    state.resize(size)
+                    canvasView.stateChanged()
+                    onEditorChanged()
+                }
+            }
+        }
+    }
+
+    private fun header(): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(
+                LinearLayout(this@TileLayoutSettingsActivity).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(10), dp(12), dp(18), dp(12))
+                    addView(backButton())
+                    addView(
+                        NexusUi.metaLabel(this@TileLayoutSettingsActivity, "TILE LAYOUT", NexusUi.INK).apply {
+                            textSize = 12f
+                            letterSpacing = 0.2f
+                        },
+                        LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(4) },
+                    )
+                    addView(
+                        mono("RESET", 10.5f, 0.16f, NexusUi.INK2).apply {
+                            gravity = Gravity.CENTER
+                            setPadding(dp(10), 0, dp(10), 0)
+                            background = NexusUi.pressed(this@TileLayoutSettingsActivity, Color.TRANSPARENT, 10)
+                            isClickable = true
+                            isFocusable = true
+                            setOnClickListener {
+                                state.reset()
+                                canvasView.stateChanged()
+                                onEditorChanged()
+                            }
+                        },
+                        LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(44)),
                     )
                 },
+                NexusUi.block(),
+            )
+            addView(
+                View(this@TileLayoutSettingsActivity).apply { setBackgroundColor(NexusUi.LINE) },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)),
             )
         }
 
-    private fun backButton(): TextView =
-        TextView(this).apply {
-            text = "‹"
-            textSize = 26f
+    private fun footer(): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(
+                View(this@TileLayoutSettingsActivity).apply { setBackgroundColor(NexusUi.LINE) },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)),
+            )
+            addView(
+                LinearLayout(this@TileLayoutSettingsActivity).apply {
+                    setPadding(dp(20), dp(11), dp(20), dp(22))
+                    addView(
+                        footerButton("AUTO-PACK", filled = false).apply {
+                            setOnClickListener {
+                                state.autoPack()
+                                canvasView.stateChanged()
+                                onEditorChanged()
+                            }
+                        },
+                        LinearLayout.LayoutParams(0, dp(46), 1f),
+                    )
+                    saveButton = footerButton(SAVE_LABEL, filled = true).apply {
+                        setOnClickListener { save() }
+                    }
+                    addView(saveButton, LinearLayout.LayoutParams(0, dp(46), 1.4f).apply { marginStart = dp(10) })
+                },
+                NexusUi.block(),
+            )
+        }
+
+    private fun footerButton(label: String, filled: Boolean): Button =
+        Button(this).apply {
+            text = label
+            textSize = 11f
+            typeface = Typeface.create(Typeface.MONOSPACE, if (filled) Typeface.BOLD else Typeface.NORMAL)
+            letterSpacing = 0.1f
+            setAllCaps(false)
+            stateListAnimator = null
+            minHeight = 0
+            minimumHeight = 0
+            minWidth = 0
+            minimumWidth = 0
             includeFontPadding = false
-            gravity = Gravity.CENTER
-            setTextColor(NexusUi.INK)
+            setPadding(0, 0, 0, 0)
+            if (filled) {
+                setTextColor(NexusUi.ON_ACCENT)
+                background = StateListDrawable().apply {
+                    addState(intArrayOf(android.R.attr.state_pressed), NexusUi.rounded(this@TileLayoutSettingsActivity, NexusUi.GREEN_DIM, 13))
+                    addState(intArrayOf(), NexusUi.rounded(this@TileLayoutSettingsActivity, NexusUi.GREEN, 13))
+                }
+            } else {
+                setTextColor(NexusUi.GREEN)
+                background = StateListDrawable().apply {
+                    addState(
+                        intArrayOf(android.R.attr.state_pressed),
+                        NexusUi.bordered(this@TileLayoutSettingsActivity, NexusUi.alpha(NexusUi.GREEN, 0x18), NexusUi.alpha(NexusUi.GREEN, 0x60), 13),
+                    )
+                    addState(
+                        intArrayOf(),
+                        NexusUi.bordered(this@TileLayoutSettingsActivity, NexusUi.alpha(NexusUi.GREEN, 0x0A), NexusUi.alpha(NexusUi.GREEN, 0x38), 13),
+                    )
+                }
+            }
+        }
+
+    private fun save() {
+        TileLayoutSettingsStore(this).setEntries(state.toEntries())
+        BusHubService.onTileLayoutSettingChanged()
+        saveButton.text = if (BusHubService.isGlassesLinkUp()) SENT_LABEL else SAVED_OFFLINE_LABEL
+        handler.removeCallbacks(restoreSaveLabel)
+        handler.postDelayed(restoreSaveLabel, SAVED_LABEL_MS)
+    }
+
+    private fun backButton(): View =
+        object : View(this) {
+            private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+                color = NexusUi.INK
+            }
+
+            override fun onDraw(canvas: Canvas) {
+                val unit = dp(20) / 24f
+                paint.strokeWidth = 1.8f * unit
+                val path = Path().apply {
+                    moveTo(15f * unit, 5f * unit)
+                    lineTo(8f * unit, 12f * unit)
+                    lineTo(15f * unit, 19f * unit)
+                }
+                canvas.translate((width - dp(20)) / 2f, (height - dp(20)) / 2f)
+                canvas.drawPath(path, paint)
+            }
+        }.apply {
+            contentDescription = "Back"
             background = NexusUi.pressed(this@TileLayoutSettingsActivity, Color.TRANSPARENT, 22)
             isClickable = true
             isFocusable = true
             setOnClickListener { finish() }
-            layoutParams = LinearLayout.LayoutParams(
-                NexusUi.dp(this@TileLayoutSettingsActivity, 44),
-                NexusUi.dp(this@TileLayoutSettingsActivity, 44),
-            )
+            layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
         }
+
+    /** The 3x3 cell icon of a size chip: [size]'s cells lit, the rest of the 3x3 dim. */
+    private class SizeIconView(
+        context: Context,
+        private val size: TileSize,
+        private val filled: Int,
+        private val empty: Int,
+    ) : View(context) {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+        override fun onDraw(canvas: Canvas) {
+            val cell = 6f * resources.displayMetrics.density
+            val gap = 2f * resources.displayMetrics.density
+            for (row in 0 until 3) {
+                for (col in 0 until 3) {
+                    paint.color = if (col < size.cols && row < size.rows) filled else empty
+                    val x = col * (cell + gap)
+                    val y = row * (cell + gap)
+                    canvas.drawRoundRect(x, y, x + cell, y + cell, gap / 2f, gap / 2f, paint)
+                }
+            }
+        }
+    }
+
+    private class DashedLineView(context: Context) : View(context) {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            color = NexusUi.GREEN_DIM
+            strokeWidth = resources.displayMetrics.density
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            val unit = resources.displayMetrics.density
+            paint.pathEffect = DashPathEffect(floatArrayOf(3f * unit, 3f * unit), 0f)
+            canvas.drawLine(0f, height / 2f, width.toFloat(), height / 2f, paint)
+        }
+    }
+
+    private companion object {
+        /** The glasses launcher's id for the camera tile: `GlassesHub.CAMERA_LAUNCHER_ID`. */
+        const val CAMERA_TILE_ID = "camera"
+        const val CAMERA_ICON_KEY = "lens"
+        const val SAVE_LABEL = "SAVE LAYOUT"
+        const val SENT_LABEL = "SENT TO GLASSES"
+        const val SAVED_OFFLINE_LABEL = "SAVED · SYNCS ON CONNECT"
+        const val SAVED_LABEL_MS = 1800L
+        val EMPTY_BORDER = 0xFF2C4A37.toInt()
+        val CHIP_DISABLED_BORDER = 0xFF1F3325.toInt()
+    }
 }

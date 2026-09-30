@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tile Layout</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&amp;family=Chivo+Mono:wght@400;500;600&amp;family=Space+Grotesk:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#4dff8c}a:hover{color:#2f9d5c}
+.scroll::-webkit-scrollbar{display:none}
+.hud{position:absolute;left:0;top:0;width:480px;transform-origin:0 0;font-family:'Space Grotesk',sans-serif;color:rgba(64,255,94,0.72)}
+.slot{position:absolute;width:114px;height:112px;border-radius:6px;border:1px dashed rgba(64,255,94,0.10);box-sizing:border-box;transition:border-color 200ms ease}
+.hud.dragging .slot{border-color:rgba(64,255,94,0.24)}
+.tile{position:absolute;box-sizing:border-box;margin:0;font:inherit;color:inherit;text-align:left;display:flex;flex-direction:column;overflow:hidden;padding:9px;border:1px solid rgba(64,255,94,0.48);border-radius:6px;background:rgba(64,255,94,0.06);cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;transition:left 200ms cubic-bezier(.4,0,.2,1),top 200ms cubic-bezier(.4,0,.2,1),width 200ms cubic-bezier(.4,0,.2,1),height 200ms cubic-bezier(.4,0,.2,1),border-color 120ms ease,background-color 120ms ease,opacity 120ms ease}
+.tile.widget{border-style:dashed;border-color:rgba(64,255,94,0.24);background:transparent}
+.tile.focused{border:2px solid #40FF5E;padding:8px;background:rgba(64,255,94,0.12)}
+.tile.focused .t-title{color:#40FF5E}
+.tile.lifted{transition:none;z-index:5;cursor:grabbing;opacity:0.92;background:#010401}
+.tile:focus{outline:none}
+.tile:focus-visible{outline:2px solid #40FF5E;outline-offset:3px}
+.tile svg{pointer-events:none}
+.ghost{position:absolute;box-sizing:border-box;border:2px dashed #40FF5E;border-radius:6px;background:rgba(64,255,94,0.06);transition:left 120ms ease,top 120ms ease,width 120ms ease,height 120ms ease;pointer-events:none}
+.t-eyebrow{display:flex;align-items:center;gap:5px;font-size:11px;letter-spacing:0.09em;text-transform:uppercase;color:rgba(64,255,94,0.48);margin-bottom:5px}
+.t-title{font-size:14px;font-weight:600;line-height:1.25;color:rgba(64,255,94,0.72);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.t-sub{font-size:12px;color:rgba(64,255,94,0.48);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.t-rows{margin-top:6px;display:flex;flex-direction:column;gap:3px}
+.t-row{display:flex;justify-content:space-between;gap:8px;font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(64,255,94,0.48)}
+.t-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.t-row b{font-weight:500;color:rgba(64,255,94,0.72);flex:none}
+.t-foot{margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between;gap:6px}
+.t-size{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.04em;color:rgba(64,255,94,0.48);flex:none}
+.t-track{flex:1;height:3px;border-radius:2px;background:rgba(64,255,94,0.24);overflow:hidden;margin-bottom:4px}
+.t-fill{height:100%;background:rgba(64,255,94,0.72)}
+.t-big{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:600;line-height:1;color:rgba(64,255,94,0.72)}
+.t-cap{font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:rgba(64,255,94,0.48);margin-top:4px}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #070a08; color: #dcf3e4; font-family: 'Sora', sans-serif; display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased">
+
+<header style="display: flex; align-items: center; gap: 4px; padding: 12px 18px 12px 10px; border-bottom: 1px solid #182619">
+<button type="button" aria-label="Back" style="width: 44px; height: 44px; border: 0; background: transparent; color: #dcf3e4; display: flex; align-items: center; justify-content: center; border-radius: 22px; cursor: pointer">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"></path></svg>
+</button>
+<div style="flex-grow: 1; font-family: 'Chivo Mono', monospace; font-weight: 500; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; color: #dcf3e4">Tile layout</div>
+<button type="button" onClick="{{reset}}" style="height: 44px; padding: 0 10px; border: 0; background: transparent; font-family: 'Chivo Mono', monospace; font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: #8ba896; cursor: pointer">Reset</button>
+</header>
+
+<div class="scroll" style="flex-grow: 1; overflow-y: auto; padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px">
+<p style="margin: 0; font-size: 13px; line-height: 1.55; color: #8ba896">Drag a tile to move it — the others slide into the nearest space that fits. Tap a tile to change its size.</p>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; justify-content: space-between; font-family: 'Chivo Mono', monospace; font-weight: 500; font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase; color: #5f7a68; padding: 0 2px">
+<span>Glasses HUD</span>
+<span style="color: #2f9d5c">{{gridLabel}}</span>
+</div>
+
+<div style="background: #000; border: 1px solid #182619; border-radius: 16px; padding: 10px">
+<div style="position: relative; width: 330px; height: {{frameH}}px; transition: height 200ms ease">
+<div class="{{hudCls}}" ref="{{setGrid}}" style="height: {{gridH}}px; transform: scale({{scale}})">
+<sc-for list="{{slots}}" as="s" hint-placeholder-count="16">
+<div class="slot" style="left: {{s.x}}px; top: {{s.y}}px"></div>
+</sc-for>
+<sc-if value="{{showFold}}" hint-placeholder-val="{{ true }}">
+<div style="position: absolute; left: -6px; right: -6px; top: 355px; border-top: 1px dashed rgba(64,255,94,0.48); pointer-events: none"></div>
+<div style="position: absolute; right: 0; top: 347px; padding: 1px 6px; background: #000; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: rgba(64,255,94,0.48); pointer-events: none">SCROLL ↓</div>
+</sc-if>
+<sc-if value="{{ghost}}" hint-placeholder-val="{{ false }}">
+<div class="ghost" style="left: {{ghost.x}}px; top: {{ghost.y}}px; width: {{ghost.w}}px; height: {{ghost.h}}px"></div>
+</sc-if>
+<sc-for list="{{tiles}}" as="t" hint-placeholder-count="10">
+<button type="button" class="{{t.cls}}" aria-label="{{t.aria}}" style="left: {{t.x}}px; top: {{t.y}}px; width: {{t.pw}}px; height: {{t.ph}}px" onPointerDown="{{t.down}}" onPointerMove="{{t.move}}" onPointerUp="{{t.up}}" onPointerCancel="{{t.cancel}}" onKeyDown="{{t.key}}">
+<sc-if value="{{t.isApp}}" hint-placeholder-val="{{ true }}">
+<div class="t-eyebrow"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" style="flex: none"><path d="{{t.icon}}"></path></svg><span>{{t.label}}</span></div>
+<div class="t-title">{{t.title}}</div>
+<div class="t-sub">{{t.sub}}</div>
+<sc-if value="{{t.showRows}}" hint-placeholder-val="{{ false }}">
+<div class="t-rows">
+<sc-for list="{{t.rows}}" as="rw" hint-placeholder-count="3">
+<div class="t-row"><span>{{rw.l}}</span><b>{{rw.r}}</b></div>
+</sc-for>
+</div>
+</sc-if>
+</sc-if>
+<sc-if value="{{t.isClock}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: auto">
+<div class="t-big">{{clock.time}}</div>
+<div class="t-cap">{{clock.date}}</div>
+</div>
+</sc-if>
+<sc-if value="{{t.isWeather}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: auto; display: flex; align-items: center; gap: 12px">
+<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" style="flex: none; color: rgba(64,255,94,0.72)"><path d="{{t.icon}}"></path></svg>
+<div class="t-big">14°</div>
+<sc-if value="{{t.wide}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+<div style="font-size: 12px; color: rgba(64,255,94,0.48); white-space: nowrap">Partly cloudy</div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: rgba(64,255,94,0.48)">H:17° L:9°</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+<div class="t-foot" style="{{t.footCss}}">
+<sc-if value="{{t.progress}}" hint-placeholder-val="{{ false }}">
+<div class="t-track"><div class="t-fill" style="width: 38%"></div></div>
+</sc-if>
+<span style="flex-grow: 1"></span>
+<span class="t-size">{{t.sizeLabel}}</span>
+</div>
+</button>
+</sc-for>
+</div>
+</div>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px; padding: 0 2px; font-family: 'Chivo Mono', monospace; font-size: 10.5px; color: #5f7a68">
+<span style="width: 18px; border-top: 1px dashed #2f9d5c"></span>
+<span>First view on the glasses · rows below scroll</span>
+</div>
+</div>
+
+<sc-if value="{{sel}}" hint-placeholder-val="{{ true }}">
+<section aria-label="Selected tile" style="padding: 14px 15px; border-radius: 15px; background: #0d150f; border: 1px solid #16241a; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 12px">
+<div style="width: 30px; height: 30px; border-radius: 8px; background: rgba(77,255,140,0.07); color: #4dff8c; display: flex; align-items: center; justify-content: center; flex: none">
+<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{sel.icon}}"></path></svg>
+</div>
+<div style="flex-grow: 1; min-width: 0">
+<div style="font-size: 15px; line-height: 1.1">{{sel.name}}</div>
+<div style="margin-top: 4px; font-family: 'Chivo Mono', monospace; font-size: 10.5px; color: #5f7a68">{{sel.meta}}</div>
+</div>
+<span style="font-family: 'Chivo Mono', monospace; font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: #4dff8c; border: 1px solid rgba(77,255,140,0.38); border-radius: 10px; padding: 4px 8px">{{sel.kind}}</span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; justify-content: space-between; font-family: 'Chivo Mono', monospace; font-weight: 500; font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase; color: #5f7a68">
+<span>Tile size</span>
+<span style="color: #2f9d5c">{{sel.count}}</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{chips}}" as="ch" hint-placeholder-count="7">
+<button type="button" onClick="{{ch.pick}}" disabled="{{ch.disabled}}" aria-pressed="{{ch.on}}" aria-label="{{ch.aria}}" style="height: 56px; border-radius: 12px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; font-family: 'Chivo Mono', monospace; font-size: 11px; padding: 0; {{ch.css}}">
+<span style="display: grid; grid-template-columns: repeat(3, 6px); grid-auto-rows: 6px; gap: 2px">
+<sc-for list="{{ch.cells}}" as="cl" hint-placeholder-count="9">
+<span style="border-radius: 1px; background: {{cl.bg}}"></span>
+</sc-for>
+</span>
+<span>{{ch.label}}</span>
+</button>
+</sc-for>
+</div>
+<sc-if value="{{msg}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="font-family: 'Chivo Mono', monospace; font-size: 10.5px; line-height: 1.4; color: #ffb84d">{{msg}}</div>
+</sc-if>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{noSel}}" hint-placeholder-val="{{ false }}">
+<div style="padding: 16px 14px; border-radius: 13px; border: 1px dashed #2c4a37; font-size: 13px; color: #8ba896">Tap a tile to pick its size.</div>
+</sc-if>
+</div>
+
+<footer style="display: flex; gap: 10px; padding: 11px 20px 22px; border-top: 1px solid #182619">
+<button type="button" onClick="{{autopack}}" style="flex-grow: 1; height: 46px; border-radius: 13px; border: 1px solid rgba(77,255,140,0.22); background: rgba(77,255,140,0.04); color: #4dff8c; font-family: 'Chivo Mono', monospace; font-weight: 500; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer">Auto-pack</button>
+<button type="button" onClick="{{save}}" style="flex-grow: 1.4; height: 46px; border-radius: 13px; border: 0; background: #4dff8c; color: #04180d; font-family: 'Chivo Mono', monospace; font-weight: 600; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer">{{saveLabel}}</button>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+var CW = 114, CH = 112, G = 8, COLS = 4, MAXR = 8, SX = CW + G, SY = CH + G, S = 330 / 480;
+var ALL = ['1x1', '2x1', '3x1', '1x2', '2x2', '3x2', '3x3'];
+var P = {
+  wave: 'M2 12h3l2-7 3 14 3-11 2 7 3-4h4',
+  bus: 'M3 4h18v12H3z M3 10h18 M6 16v3 M18 16v3',
+  music: 'M9 18V5l11-2v13 M3 18a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M14 16a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
+  plane: 'M22 2L11 13 M22 2l-7 20-4-9-9-4 20-7z',
+  mic: 'M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z M5 11a7 7 0 0 0 14 0 M12 18v4 M9 22h6',
+  bell: 'M6 10a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6 M10 20a2 2 0 0 0 4 0',
+  bolt: 'M13 2 4 14h6l-1 8 9-12h-6l1-8z',
+  eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
+  cloud: 'M7 17h10a4 4 0 0 0 .4-8 5.5 5.5 0 0 0-10.6 1A3.5 3.5 0 0 0 7 17z',
+  clock: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0 M12 7v5l3.5 2'
+};
+var APPS = [
+  { id: 'media', name: 'Media Deck', icon: 'wave', kind: 'app', title: 'Midnight Transit', sub: 'Analog Youth', progress: true,
+    rows: [['1:24 / 3:40', ''], ['Up next', 'Night Drive'], ['Queue', '12']], sizes: ['2x1', '3x1', '2x2', '3x2'] },
+  { id: 'transit', name: 'Transit', icon: 'bus', kind: 'app', title: 'Av. Central & 5th', sub: 'Next in 3 min',
+    rows: [['Line 4 → Riverside', '3 min'], ['Line 9 → Old Town', '11 min'], ['Line 2 → Central', '18 min']], sizes: ['1x1', '2x1', '1x2', '2x2', '3x2'] },
+  { id: 'lyrics', name: 'Lyrics', icon: 'music', kind: 'app', title: 'we keep moving', sub: 'Chasing Neon · Live',
+    rows: [['city lights blur past', ''], ['the skyline folds into gray', '']], sizes: ['1x1', '2x1', '3x1', '2x2'] },
+  { id: 'feeds', name: 'Feeds', icon: 'plane', kind: 'app', title: '@kaelan.bsky', sub: 'rewired the desk lamp',
+    rows: [['@noa.codes', '22m'], ['@ferra.dev', '1h'], ['@lin.ink', '2h'], ['@oskar.bsky', '3h'], ['@mei.dev', '4h']], sizes: ['1x1', '1x2', '2x2', '3x2', '3x3'] },
+  { id: 'clock', name: 'Clock', icon: 'clock', kind: 'clock', sizes: ['1x1', '2x1'] },
+  { id: 'weather', name: 'Weather', icon: 'cloud', kind: 'weather', sizes: ['1x1', '2x1', '3x1'] },
+  { id: 'relay', name: 'Relay', icon: 'bell', kind: 'app', title: '3 new', sub: 'Maya Liu',
+    rows: [['Maya Liu', '2m'], ['GitHub', '15m'], ['Calendar', '28m']], sizes: ['1x1', '1x2', '2x2'] },
+  { id: 'assistant', name: 'Assistant', icon: 'mic', kind: 'app', title: 'Ready', sub: 'Hold assist button to ask',
+    rows: [['Last', '18° · rain 6pm']], sizes: ['2x1', '3x1'] },
+  { id: 'tasker', name: 'Tasker', icon: 'bolt', kind: 'app', title: '4 tasks', sub: 'Night Drive Setup',
+    rows: [['Leaving Home', 'Run'], ['Focus Mode', 'Run'], ['Silence All', 'Run']], sizes: ['1x1', '2x1', '1x2'] },
+  { id: 'lens', name: 'Lens', icon: 'eye', kind: 'app', title: 'Scanning', sub: 'Point at text',
+    rows: [['Detected', 'SAÍDA 4'], ['Translation', 'EXIT 4']], sizes: ['1x1', '2x2', '3x3'] }
+];
+var INIT = {
+  media: { c: 0, r: 0, w: 2, h: 1 }, transit: { c: 2, r: 0, w: 2, h: 2 },
+  lyrics: { c: 0, r: 1, w: 1, h: 1 }, feeds: { c: 1, r: 1, w: 1, h: 1 },
+  clock: { c: 0, r: 2, w: 1, h: 1 }, weather: { c: 1, r: 2, w: 2, h: 1 }, relay: { c: 3, r: 2, w: 1, h: 1 },
+  assistant: { c: 0, r: 3, w: 2, h: 1 }, tasker: { c: 2, r: 3, w: 1, h: 1 }, lens: { c: 3, r: 3, w: 1, h: 1 }
+};
+function dims(s) { var p = s.split('x'); return { w: +p[0], h: +p[1] }; }
+function lbl(w, h) { return w + '×' + h; }
+function ov(a, b) { return a.c < b.c + b.w && b.c < a.c + a.w && a.r < b.r + b.h && b.r < a.r + a.h; }
+function free(rc, placed) {
+  if (rc.c < 0 || rc.r < 0 || rc.c + rc.w > COLS || rc.r + rc.h > MAXR) return false;
+  for (var k in placed) { if (ov(rc, placed[k])) return false; }
+  return true;
+}
+/* Place one tile at rc; tiles it covers move to the nearest free spot that fits them. */
+function placeAt(base, id, rc) {
+  if (!free(rc, {})) return null;
+  var out = {}; out[id] = rc; var disp = [];
+  APPS.forEach(function (a) {
+    if (a.id === id) return;
+    var t = base[a.id];
+    if (ov(t, rc)) disp.push(a.id); else out[a.id] = t;
+  });
+  disp.sort(function (x, y) { return base[x].r - base[y].r || base[x].c - base[y].c; });
+  for (var i = 0; i < disp.length; i++) {
+    var t = base[disp[i]], best = null, bd = 1e9;
+    for (var r = 0; r <= MAXR - t.h; r++) {
+      for (var c = 0; c <= COLS - t.w; c++) {
+        var cand = { c: c, r: r, w: t.w, h: t.h };
+        if (!free(cand, out)) continue;
+        var d = Math.abs(c - t.c) + Math.abs(r - t.r) * 1.5 + r * 0.01;
+        if (d < bd) { bd = d; best = cand; }
+      }
+    }
+    if (!best) return null;
+    out[disp[i]] = best;
+  }
+  return out;
+}
+function packAll(layout) {
+  var ids = APPS.map(function (a) { return a.id; });
+  ids.sort(function (x, y) { return layout[x].r - layout[y].r || layout[x].c - layout[y].c; });
+  var out = {};
+  for (var i = 0; i < ids.length; i++) {
+    var t = layout[ids[i]], done = false;
+    for (var r = 0; r <= MAXR - t.h && !done; r++) {
+      for (var c = 0; c <= COLS - t.w && !done; c++) {
+        var cand = { c: c, r: r, w: t.w, h: t.h };
+        if (free(cand, out)) { out[ids[i]] = cand; done = true; }
+      }
+    }
+    if (!done) return layout;
+  }
+  return out;
+}
+function usedRows(l) { var u = 0; for (var k in l) u = Math.max(u, l[k].r + l[k].h); return u; }
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { layout: INIT, selected: 'transit', drag: null, msg: '', saved: false };
+    this.gridEl = null;
+    var self = this;
+    this.setGrid = function (el) { self.gridEl = el; };
+  }
+  toHud(e) {
+    var g = this.gridEl.getBoundingClientRect();
+    var sc = g.width / 480;
+    return { x: (e.clientX - g.left) / sc, y: (e.clientY - g.top) / sc };
+  }
+  down(id, e) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (!this.gridEl) return;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+    var p = this.toHud(e), t = this.state.layout[id];
+    var x0 = t.c * SX, y0 = t.r * SY;
+    this.setState({
+      selected: id, msg: '', saved: false,
+      drag: { id: id, offX: p.x - x0, offY: p.y - y0, x: x0, y: y0, sx: e.clientX, sy: e.clientY, moved: false, base: this.state.layout, tc: t.c, tr: t.r }
+    });
+  }
+  move(id, e) {
+    var d = this.state.drag;
+    if (!d || d.id !== id) return;
+    var p = this.toHud(e);
+    var moved = d.moved || Math.abs(e.clientX - d.sx) + Math.abs(e.clientY - d.sy) > 5;
+    if (!moved) return;
+    var t = d.base[id];
+    var x = p.x - d.offX, y = p.y - d.offY;
+    var tc = Math.max(0, Math.min(COLS - t.w, Math.round(x / SX)));
+    var tr = Math.max(0, Math.min(MAXR - t.h, Math.round(y / SY)));
+    var next = { drag: Object.assign({}, d, { x: x, y: y, moved: true }) };
+    if (tc !== d.tc || tr !== d.tr || !d.moved) {
+      var res = placeAt(d.base, id, { c: tc, r: tr, w: t.w, h: t.h });
+      if (res) { next.layout = res; next.drag.tc = tc; next.drag.tr = tr; }
+    }
+    this.setState(next);
+  }
+  up(id, e) {
+    var d = this.state.drag;
+    if (!d || d.id !== id) return;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (err) {}
+    this.setState({ drag: null });
+  }
+  cancel(id) {
+    var d = this.state.drag;
+    if (!d || d.id !== id) return;
+    this.setState({ drag: null, layout: d.base });
+  }
+  key(id, e) {
+    var m = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (!m) return;
+    e.preventDefault();
+    var t = this.state.layout[id];
+    var res = placeAt(this.state.layout, id, { c: t.c + m[0], r: t.r + m[1], w: t.w, h: t.h });
+    if (res) this.setState({ layout: res, selected: id, msg: '', saved: false });
+  }
+  resize(s) {
+    var id = this.state.selected; if (!id) return;
+    var t = this.state.layout[id], z = dims(s);
+    var rc = { c: Math.min(t.c, COLS - z.w), r: Math.min(t.r, MAXR - z.h), w: z.w, h: z.h };
+    var res = placeAt(this.state.layout, id, rc);
+    if (!res) { this.setState({ msg: 'No room for ' + lbl(z.w, z.h) + ' — shrink another tile first.' }); return; }
+    this.setState({ layout: res, msg: '', saved: false });
+  }
+  renderVals() {
+    var self = this, st = this.state, L = st.layout, d = st.drag;
+    var used = usedRows(L);
+    if (d) used = Math.max(used, usedRows(d.base));
+    var rows = Math.min(MAXR, Math.max(4, used + 1));
+    var gridH = rows * SY - G;
+
+    var slots = [];
+    for (var r = 0; r < rows; r++) for (var c = 0; c < COLS; c++) slots.push({ x: c * SX, y: r * SY });
+
+    var tiles = APPS.map(function (a) {
+      var t = L[a.id];
+      var dragging = !!(d && d.id === a.id && d.moved);
+      var pw = t.w * CW + (t.w - 1) * G, ph = t.h * CH + (t.h - 1) * G;
+      var nRows = t.h >= 3 ? 6 : t.h === 2 ? 3 : 0;
+      var cls = 'tile' + (a.kind !== 'app' ? ' widget' : '') + (st.selected === a.id ? ' focused' : '') + (dragging ? ' lifted' : '');
+      var id = a.id;
+      return {
+        cls: cls,
+        x: dragging ? d.x : t.c * SX,
+        y: dragging ? d.y : t.r * SY,
+        pw: pw, ph: ph,
+        aria: a.name + ', ' + t.w + ' by ' + t.h + ', column ' + (t.c + 1) + ', row ' + (t.r + 1) + '. Drag or use arrow keys to move.',
+        isApp: a.kind === 'app', isClock: a.kind === 'clock', isWeather: a.kind === 'weather',
+        wide: t.w >= 2,
+        icon: P[a.icon], label: a.name, title: a.title, sub: a.sub,
+        showRows: nRows > 0 && !!a.rows,
+        rows: (a.rows || []).slice(0, nRows).map(function (x) { return { l: x[0], r: x[1] }; }),
+        progress: !!a.progress,
+        footCss: a.kind === 'app' ? '' : 'position: absolute; right: 9px; top: 8px',
+        sizeLabel: lbl(t.w, t.h),
+        down: function (e) { self.down(id, e); },
+        move: function (e) { self.move(id, e); },
+        up: function (e) { self.up(id, e); },
+        cancel: function () { self.cancel(id); },
+        key: function (e) { self.key(id, e); }
+      };
+    });
+
+    var ghost = null;
+    if (d && d.moved) {
+      var gt = d.base[d.id];
+      ghost = { x: d.tc * SX, y: d.tr * SY, w: gt.w * CW + (gt.w - 1) * G, h: gt.h * CH + (gt.h - 1) * G };
+    }
+
+    var app = null;
+    APPS.forEach(function (a) { if (a.id === st.selected) app = a; });
+    var sel = null, chips = [];
+    if (app) {
+      var t = L[app.id];
+      sel = {
+        name: app.name, icon: P[app.icon],
+        kind: app.kind === 'app' ? 'App' : 'Widget',
+        meta: lbl(t.w, t.h) + ' · col ' + (t.c + 1) + ' · row ' + (t.r + 1),
+        count: app.sizes.length + ' of ' + ALL.length + ' supported'
+      };
+      chips = ALL.map(function (s) {
+        var z = dims(s), ok = app.sizes.indexOf(s) >= 0, on = t.w === z.w && t.h === z.h;
+        var css = on ? 'background: #4dff8c; color: #04180d; border: 1px solid #4dff8c; cursor: pointer'
+          : ok ? 'background: rgba(77,255,140,0.04); color: #4dff8c; border: 1px solid rgba(77,255,140,0.22); cursor: pointer'
+          : 'background: transparent; color: #42574a; border: 1px dashed #1f3325; cursor: not-allowed';
+        var cells = [];
+        for (var r2 = 0; r2 < 3; r2++) for (var c2 = 0; c2 < 3; c2++) {
+          var fill = c2 < z.w && r2 < z.h;
+          cells.push({ bg: fill ? (on ? '#04180d' : ok ? '#4dff8c' : '#42574a') : (on ? 'rgba(4,24,13,0.18)' : 'rgba(139,168,150,0.14)') });
+        }
+        return {
+          label: lbl(z.w, z.h), css: css, cells: cells, on: on, disabled: !ok,
+          aria: lbl(z.w, z.h) + (ok ? '' : ', not supported by ' + app.name),
+          pick: function () { self.resize(s); }
+        };
+      });
+    }
+
+    var now = new Date();
+    var days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    return {
+      setGrid: this.setGrid,
+      scale: S,
+      gridH: gridH,
+      frameH: Math.round(gridH * S),
+      hudCls: 'hud' + (d && d.moved ? ' dragging' : ''),
+      gridLabel: COLS + ' cols · ' + rows + ' rows',
+      showFold: rows > 3,
+      slots: slots, tiles: tiles, ghost: ghost,
+      clock: { time: String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0'), date: days[now.getDay()] + ' ' + now.getDate() + ' ' + months[now.getMonth()] },
+      sel: sel, noSel: !sel, chips: chips, msg: st.msg,
+      saveLabel: st.saved ? 'Sent to glasses' : 'Save layout',
+      reset: function () { self.setState({ layout: INIT, selected: 'transit', msg: '', saved: false, drag: null }); },
+      autopack: function () { self.setState({ layout: packAll(self.state.layout), msg: '', saved: false }); },
+      save: function () {
+        self.setState({ saved: true });
+        clearTimeout(self._t);
+        self._t = setTimeout(function () { self.setState({ saved: false }); }, 1800);
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

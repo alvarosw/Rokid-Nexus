@@ -1946,7 +1946,10 @@ unknown fields are ignorable in both directions, so fields only ever get added.
 - Glasses → phone (`GlassesHubCapabilitiesContract`): `version`, renderer
   `features` bits, `imageSurfaceVersion`, `pinSurfaceVersion`,
   `noticeSurfaceVersion`, `activitySurfaceVersion`, `inkSurfaceVersion`,
-  `ttsVersion`, `maxImageBytes`, the glasses app
+  `ttsVersion`, `maxImageBytes`, the additive `homeGridVisibleRows` (whole tile
+  rows the glasses home grid shows without scrolling; `0` or absent = unknown,
+  sanitized to `0..16`; the phone uses it to place the layout preview's fold
+  line and falls back to an estimate when it is `0`), the glasses app
   `versionName` (drives the phone-side glasses update checker), and
   `setupComplete` (self-arm onboarding state; the phone preserves the last
   known value across link loss — only a live announcement can lower it).
@@ -1956,6 +1959,24 @@ unknown fields are ignorable in both directions, so fields only ever get added.
   only while a consumer is ready, ≤ 80 chars). The additive
   `activityAlwaysExpanded` boolean carries the wearer's platform setting; it
   defaults to `false` when absent and is never plugin-controlled.
+
+## Tile layout config (`/glasses/tile-layout/config`)
+
+Phone hub → glasses hub, trusted hub-to-hub, never a plugin capability. Payload
+`{"version":2,"entries":[{"pluginId","size","col","row"}]}`, re-pushed on every
+glasses capabilities announce. `size` is one of `1x1 2x1 3x1 1x2 2x2 3x2 3x3`.
+
+- v2: `col`/`row` are authoritative; the glasses place each tile exactly there and
+  keep holes. A stored entry is pinned only if it lies inside the 4 columns and
+  overlaps no earlier pinned entry; any other tile (new plugin, camera entry,
+  rejected entry) is placed first-fit, row-major, into the free cells. `entries`
+  are written in reading order (row, then column), which is also the glasses'
+  selection and list-mode order.
+- v1 payloads (positions produced by the packer) are still accepted and read the
+  same way. A malformed entry is dropped, not the whole config.
+- Degradation: glasses that predate v2 accept it (they only reject
+  `version < 1`) but ignore `col`/`row`, pack the entries in order, and drop any
+  entry whose `size` they do not know (the 3-wide shapes).
 
 ## Transport selection (hub-side routing)
 

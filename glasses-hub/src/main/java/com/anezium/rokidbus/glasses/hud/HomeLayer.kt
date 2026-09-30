@@ -14,7 +14,19 @@ import com.anezium.rokidbus.glasses.HudTopInset
 import com.anezium.rokidbus.glasses.TileCache
 import com.anezium.rokidbus.glasses.TileController
 import com.anezium.rokidbus.glasses.TileLayoutStore
-import com.anezium.rokidbus.shared.tile.TileSize
+import com.anezium.rokidbus.shared.tile.TileGridLayout
+import com.anezium.rokidbus.shared.tile.TilePlacement
+
+/**
+ * The placements the hub resolved when it ordered [entries], so each tile is placed exactly once. If
+ * the hub's last resolution covers a different set of ids (a race, a test with its own entries), the
+ * entries are resolved from the stored layout instead.
+ */
+internal fun resolvedPlacements(context: Context, entries: List<GlassesHub.LauncherEntry>): List<TilePlacement> {
+    val byId = GlassesHub.launcherPlacements().associateBy { it.pluginId }
+    if (byId.size == entries.size && entries.all { it.id in byId }) return entries.map { byId.getValue(it.id) }
+    return TileGridLayout.resolve(entries.map { it.id to null }, TileLayoutStore.getEntries(context))
+}
 
 /**
  * The launcher inside [HudHost]: one [HomeViewModel] drawn by [ListHome] or [GridHome]. It renders
@@ -28,9 +40,8 @@ import com.anezium.rokidbus.shared.tile.TileSize
 internal class HomeLayer(
     context: Context,
     private val iconLoader: (Context, GlassesHub.LauncherEntry) -> Drawable = GlassesHub::launcherDrawable,
-    private val sizeSource: (List<GlassesHub.LauncherEntry>) -> Map<String, TileSize?> = { entries ->
-        val stored = TileLayoutStore.getEntries(context).associate { it.pluginId to it.size }
-        entries.associate { it.id to stored[it.id] }
+    private val placementSource: (List<GlassesHub.LauncherEntry>) -> List<TilePlacement> = { entries ->
+        resolvedPlacements(context, entries)
     },
     private val tileSource: (String) -> HomeTile? = { id ->
         // Read once per open or per publish, never per selection move.
@@ -61,13 +72,26 @@ internal class HomeLayer(
     fun show(mode: HomeMode, entries: List<GlassesHub.LauncherEntry>, selectedId: String?) {
         handler.removeCallbacks(expireFailure)
         val tileData = if (mode == HomeMode.GRID && isOnScreen) loadTileData(entries, emptyMap()) else emptyMap()
-        apply(HomeViewModel(entries, selectedId, mode, HomeStatus.None, tileData, model.noticeOwnsRing))
+        apply(
+            HomeViewModel(
+                entries, selectedId, mode, HomeStatus.None, tileData,
+                placements = placementsFor(mode, entries),
+                noticeOwnsRing = model.noticeOwnsRing,
+            ),
+        )
     }
 
     fun update(entries: List<GlassesHub.LauncherEntry>, selectedId: String?) {
         val tileData =
             if (model.mode == HomeMode.GRID && isOnScreen) loadTileData(entries, model.tileData) else emptyMap()
-        apply(model.copy(entries = entries, selectedId = selectedId, tileData = tileData))
+        apply(
+            model.copy(
+                entries = entries,
+                selectedId = selectedId,
+                tileData = tileData,
+                placements = placementsFor(model.mode, entries),
+            ),
+        )
     }
 
     /**
@@ -212,12 +236,15 @@ internal class HomeLayer(
         screen?.let(::removeView)
         val next: HomeScreenView = when (mode) {
             HomeMode.LIST -> ListHome(context, iconLoader, motion)
-            HomeMode.GRID -> GridHome(context, iconLoader, sizeSource, motion)
+            HomeMode.GRID -> GridHome(context, iconLoader, motion)
         }
         next.setTopInsetPx(topInsetPx)
         addView(next, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         screen = next
     }
+
+    private fun placementsFor(mode: HomeMode, entries: List<GlassesHub.LauncherEntry>): List<TilePlacement> =
+        if (mode == HomeMode.GRID) placementSource(entries) else emptyList()
 
     private fun loadTileData(
         entries: List<GlassesHub.LauncherEntry>,

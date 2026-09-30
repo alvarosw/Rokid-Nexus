@@ -19,6 +19,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.anezium.rokidbus.client.ui.HudGridMetrics
 import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.glasses.GlassesHub
 import com.anezium.rokidbus.glasses.ReducedMotion
@@ -333,8 +334,7 @@ internal class HudStatusView(context: Context) : LinearLayout(context) {
     val message: String get() = text.text.toString()
 
     companion object {
-        /** `body-small` 16 px line plus `space-1` above and below. */
-        const val HEIGHT = 24
+        const val HEIGHT = HudGridMetrics.STATUS_HEIGHT
     }
 }
 
@@ -355,7 +355,7 @@ internal class HomeHeaderView(context: Context) : FrameLayout(context) {
     }
 
     companion object {
-        const val HEIGHT = 16
+        const val HEIGHT = HudGridMetrics.HEADER_HEIGHT
     }
 }
 
@@ -397,22 +397,23 @@ internal class ScrollTrackView(context: Context) : View(context) {
 }
 
 /**
- * The corner every tile carries, fallback or live: the 16 px plugin icon over a `label`-style
- * uppercase plugin name, top-left. Stacked rather than side by side because at 106 px a name beside
- * its icon leaves ~70 px, which cuts "NAVIGATION" mid-word.
+ * The eyebrow every tile carries, fallback or live: the 16 px plugin icon and a `label`-style
+ * uppercase plugin name on one line, top-left, `space-1` apart. The name takes what is left of the
+ * row and ellipsizes (a 1x1 tile leaves ~70 px for it).
  */
 internal class TileHeaderView(context: Context, nameLines: Int) : LinearLayout(context) {
     private val icon = ImageView(context)
     private val name = HudType.label(TextView(context)).apply { maxLines = nameLines }
 
     init {
-        orientation = VERTICAL
+        orientation = HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
         val iconSize = RokidHudTokens.ICON_SM
         addView(icon, LayoutParams(iconSize, iconSize))
         addView(
             name,
-            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                topMargin = RokidHudTokens.SPACE_1
+            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = RokidHudTokens.SPACE_1
             },
         )
     }

@@ -129,7 +129,7 @@ class LiveTileViewBindingTest {
     @Test
     fun item57_the_subtitle_shows_only_for_non_small_tiles_and_only_when_present() {
         assertTrue("Line 4" !in shown(bound(TileSize.SMALL, snapshot(subtitle = "Line 4"))))
-        listOf(TileSize.WIDE, TileSize.TALL, TileSize.LARGE).forEach { size ->
+        (TileSize.entries - TileSize.SMALL).forEach { size ->
             assertTrue("$size", "Line 4" in shown(bound(size, snapshot(subtitle = "Line 4"))))
         }
         val tile = bound(TileSize.WIDE, snapshot(subtitle = "Line 4"))
@@ -148,17 +148,65 @@ class LiveTileViewBindingTest {
     }
 
     @Test
-    fun item57_rows_show_only_on_a_large_tile_and_the_snapshot_itself_caps_them_at_four() {
-        // The view keeps its own take(4); the snapshot contract refuses a fifth row before it gets there.
+    fun item57_rows_follow_the_tile_height_and_the_snapshot_itself_caps_them_at_four() {
+        // The view keeps its own cap; the snapshot contract refuses a fifth row before it gets there.
         assertTrue(runCatching { snapshot(rows = listOf("r1", "r2", "r3", "r4", "r5")) }.isFailure)
         val rows = listOf("r1", "r2", "r3", "r4")
-        val large = bound(TileSize.LARGE, snapshot(rows = rows))
-        assertEquals(listOf("r1", "r2", "r3", "r4"), texts(large).map { it.text.toString() }.filter { it in rows })
-
-        listOf(TileSize.SMALL, TileSize.WIDE, TileSize.TALL).forEach { size ->
-            val tile = bound(size, snapshot(rows = rows))
-            assertTrue("$size", texts(tile).none { it.text.toString() in rows })
+        val shownRows = { size: TileSize ->
+            texts(bound(size, snapshot(rows = rows))).map { it.text.toString() }.filter { it in rows }
         }
+        listOf(TileSize.SMALL, TileSize.WIDE, TileSize.BANNER).forEach { size ->
+            assertEquals("$size", emptyList<String>(), shownRows(size))
+        }
+        listOf(TileSize.TALL, TileSize.LARGE, TileSize.PANEL).forEach { size ->
+            assertEquals("$size", listOf("r1", "r2", "r3"), shownRows(size))
+        }
+        assertEquals(rows, shownRows(TileSize.JUMBO))
+    }
+
+    @Test
+    fun the_progress_track_shows_only_while_the_snapshot_carries_a_progress() {
+        TileSize.entries.forEach { size ->
+            val tile = bound(size, snapshot())
+            assertTrue("$size", !tile.progressTrackVisibleForTest)
+            tile.bind(snapshot().copy(progress = 0.4f), stale = false)
+            assertTrue("$size", tile.progressTrackVisibleForTest)
+            assertEquals(0.4f, tile.progressForTest, 0f)
+            tile.bind(snapshot(), stale = false)
+            assertTrue("$size", !tile.progressTrackVisibleForTest)
+        }
+    }
+
+    @Test
+    fun a_loading_tile_has_no_track() {
+        val tile = bound(TileSize.SMALL, snapshot().copy(progress = 1f))
+        assertEquals(1f, tile.progressForTest, 0f)
+        tile.showLoading(null)
+        assertTrue(!tile.progressTrackVisibleForTest)
+    }
+
+    @Test
+    fun a_one_by_one_tile_fits_its_content_inside_the_106_px_square() {
+        val tile = bound(
+            TileSize.SMALL,
+            snapshot(title = "A rather long title that must not wrap", unit = "", badge = "NEW", subtitle = "Sub")
+                .copy(progress = 0.5f),
+        )
+        tile.bindEntry(GlassesHub.LauncherEntry("transit", "Transit planner with a long name"), { _, _ -> android.graphics.drawable.ColorDrawable(0) })
+        tile.measure(
+            View.MeasureSpec.makeMeasureSpec(106, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(106, View.MeasureSpec.EXACTLY),
+        )
+        tile.layout(0, 0, 106, 106)
+        val column = tile.getChildAt(0) as ViewGroup
+        val header = column.getChildAt(0)
+        val content = column.getChildAt(1) as ViewGroup
+        val track = column.getChildAt(2)
+        val stacked = (0 until content.childCount).map { content.getChildAt(it) }
+            .filter { it.visibility != View.GONE }.sumOf { it.measuredHeight }
+        assertTrue("content needs $stacked of ${content.height}", stacked <= content.height)
+        assertTrue("track inside the tile", track.bottom <= 106 - 8)
+        assertTrue("header above the content", header.bottom <= content.top)
     }
 
     @Test

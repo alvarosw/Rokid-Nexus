@@ -1,11 +1,10 @@
 package com.anezium.rokidbus.shared.tile
 
 /**
- * The wearer's chosen tile for one plugin: a size and a position. [col]/[row] are carried for
- * forward compatibility with a future drag-and-drop editor (see the roadmap's "richer" option);
- * today's ordered-list editor derives position purely from list order and re-runs
- * [TileGridPacker] over that order, so a stored [col]/[row] is informational only, not consumed
- * by the packer.
+ * The wearer's chosen tile for one plugin: a size and a position. Since layout config v2 the
+ * [col]/[row] are authoritative: the glasses place the tile exactly there (see
+ * [TileGridLayout.resolve]), holes included, instead of re-packing the stored order. Entries from
+ * a v1 phone carry the positions the packer produced, so they read the same way.
  */
 data class TileLayoutEntry(
     val pluginId: String,

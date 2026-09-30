@@ -378,6 +378,9 @@ class BusHubService : Service() {
     @Volatile private var remoteInkSurfaceVersion = 0
     @Volatile private var remoteEditableSurfaceVersion = 0
     @Volatile private var remoteMaxImageBytes = 0
+
+    /** What the glasses last reported; a property of the glasses, so it survives link drops. */
+    @Volatile private var remoteHomeGridVisibleRows = 0
     @Volatile private var remoteGlassesVersionName: String? = null
     @Volatile private var remoteGlassesSetupComplete = false
     @Volatile private var remoteGlassesSetupFailureState = ""
@@ -1153,7 +1156,9 @@ class BusHubService : Service() {
         ) {
             // The hub stamps the authenticated plugin id server-side; a plugin's own claimed
             // `pluginId` in the payload is never trusted.
-            envelope.copy(payload = JSONObject(envelope.payload.toString()).put("pluginId", sender.principal.descriptor.id))
+            val stamped = JSONObject(envelope.payload.toString()).put("pluginId", sender.principal.descriptor.id)
+            TileSnapshotCache.record(sender.principal.descriptor.id, stamped)
+            envelope.copy(payload = stamped)
         } else {
             envelope
         }
@@ -4856,6 +4861,13 @@ class BusHubService : Service() {
         }
     }
 
+    private fun advertisedCameraConsumerName(): String? {
+        val ready = PhoneAssistedSetupCapabilityPolicy.advertised(phoneCameraCapabilities()) and
+            BusCapabilityBits.CAMERA_CONSUMER_READY != 0
+        if (!ready || !::cameraConsumerReadiness.isInitialized) return null
+        return cameraConsumerReadiness.resolveApproved()?.descriptor?.displayName
+    }
+
     /** The glasses learn phone-side feature bits (camera readiness) only through this. */
     private fun announcePhoneCapabilities() {
         val hudPosition = PhoneHudPositionStore(this)
@@ -4993,6 +5005,7 @@ class BusHubService : Service() {
         remoteInkSurfaceVersion = acceptedInkVersion
         remoteEditableSurfaceVersion = if (editableSupported) EditableSurfaceContract.VERSION else 0
         remoteMaxImageBytes = if (imageSupported) advertised.maxImageBytes else 0
+        remoteHomeGridVisibleRows = advertised.homeGridVisibleRows
         updateRemoteGlassesAppState(
             advertised.versionName,
             advertised.setupComplete,
@@ -5202,6 +5215,19 @@ class BusHubService : Service() {
                 service.executor.execute { service.pushHudModeConfig() }
             }
         }
+
+        /** Grid rows the glasses show before scrolling, as they last reported; 0 = unknown. */
+        internal fun glassesHomeGridVisibleRows(): Int = activeInstance?.remoteHomeGridVisibleRows ?: 0
+
+        /** True while the glasses are reachable over the data link, so a pushed layout lands now. */
+        internal fun isGlassesLinkUp(): Boolean =
+            activeInstance?.let { it.linkState() and LinkStateBits.SPP_DATA_UP != 0 } == true
+
+        /**
+         * The camera tile's name when the glasses' launcher shows one: the same readiness and name
+         * the phone announces in its capabilities, which is what the glasses key that tile on.
+         */
+        internal fun cameraTileName(): String? = activeInstance?.advertisedCameraConsumerName()
 
         internal fun onTileLayoutSettingChanged() {
             activeInstance?.let { service ->

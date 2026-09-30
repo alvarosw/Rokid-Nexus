@@ -144,7 +144,8 @@ are ignored without removing the plugin from the launcher.
 ### Grid HUD tile sizes
 
 `META_PLUGIN_TILE_SIZES` declares which grid-HUD tile shapes a plugin
-supports, as a comma list of wire values: `1x1`, `2x1`, `1x2`, `2x2`.
+supports, as a comma list of wire values: `1x1`, `2x1`, `3x1`, `1x2`, `2x2`, `3x2`, `3x3`. A hub
+that predates the 3-wide shapes (`3x1`, `3x2`, `3x3`) rejects a value that contains them.
 
 ```xml
 <meta-data

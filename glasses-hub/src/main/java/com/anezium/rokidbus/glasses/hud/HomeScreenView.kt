@@ -9,6 +9,7 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import com.anezium.rokidbus.client.ui.HudFrameLayout
+import com.anezium.rokidbus.client.ui.HudGridMetrics
 import com.anezium.rokidbus.client.ui.RokidHudTokens
 import kotlin.math.roundToInt
 
@@ -126,7 +127,8 @@ internal abstract class HomeScreenView(
     }
 
     private fun fit() {
-        val available = screenHeight - paddingTop - paddingBottom - HomeHeaderView.HEIGHT - 2 * GAP - HudStatusView.HEIGHT
+        val available = screenHeight - paddingTop - paddingBottom - HudGridMetrics.HEADER_HEIGHT -
+            2 * GAP - HudGridMetrics.STATUS_HEIGHT
         maxBody = fitBody(available)
         applyBody()
     }
@@ -228,6 +230,6 @@ internal abstract class HomeScreenView(
         private const val TRACK_MARGIN = 6
 
         /** `space-1` between the header, the body and the status slot. */
-        const val GAP = RokidHudTokens.SPACE_1
+        const val GAP = HudGridMetrics.SECTION_GAP
     }
 }

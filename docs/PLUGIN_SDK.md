@@ -1264,8 +1264,11 @@ KiB. Violating a bound throws `IllegalArgumentException` in your process at
 construction time, exactly like an oversized `NexusCard`.
 
 The hub decides how much of the snapshot to show at each declared `TileSize`
-(`SMALL`/`WIDE`/`TALL`/`LARGE`) — you publish one snapshot and the renderer adapts
-it, it is not something you lay out yourself. A tile is not foreground-exclusive:
+(seven shapes: `1x1`, `2x1`, `3x1`, `1x2`, `2x2`, `3x2`, `3x3`; `TILE_SIZES` takes
+these wire values) — you publish one snapshot and the renderer adapts it, it is not
+something you lay out yourself. A hub that predates the 3-wide shapes rejects the
+whole `TILE_SIZES` value as malformed, so a plugin declaring `3x1`, `3x2` or `3x3`
+needs a hub that includes them. A tile is not foreground-exclusive:
 unlike an ordinary surface, publishing never returns `SURFACE_BUSY`, since every
 plugin owns its own tile slot. The hub may instead drop a publish silently past its
 rate ceiling — there is no error callback for that, matching the "give up quietly"

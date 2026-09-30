@@ -1,9 +1,9 @@
 package com.anezium.rokidbus.glasses
 
 import com.anezium.rokidbus.shared.tile.TileLayoutEntry
+import com.anezium.rokidbus.shared.tile.TilePlacement
 import com.anezium.rokidbus.shared.tile.TileSize
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -31,26 +31,51 @@ class TileLayoutStoreTest {
     }
 
     @Test
-    fun `an empty layout leaves the given order untouched`() {
+    fun `an empty layout auto-packs the given order at SMALL`() {
         TileLayoutStore.setEntries(context, emptyList())
-        assertEquals(entries("a", "b", "c"), TileLayoutStore.applyOrder(context, entries("a", "b", "c")))
+        assertEquals(
+            listOf(
+                TilePlacement("a", TileSize.SMALL, col = 0, row = 0),
+                TilePlacement("b", TileSize.SMALL, col = 1, row = 0),
+                TilePlacement("c", TileSize.SMALL, col = 2, row = 0),
+            ),
+            TileLayoutStore.placements(context, entries("a", "b", "c")),
+        )
     }
 
     @Test
-    fun `a custom order is applied, and a newly installed plugin is appended after it`() {
+    fun `stored positions are authoritative and holes stay`() {
         TileLayoutStore.setEntries(
             context,
-            listOf(TileLayoutEntry("c", TileSize.SMALL), TileLayoutEntry("a", TileSize.SMALL)),
+            listOf(
+                TileLayoutEntry("c", TileSize.PANEL, col = 1, row = 2),
+                TileLayoutEntry("a", TileSize.SMALL, col = 3, row = 0),
+            ),
         )
-        // "b" was installed after the layout was saved and never placed; it lands after the
-        // custom-ordered tiles without disturbing their order.
-        assertEquals(entries("c", "a", "b"), TileLayoutStore.applyOrder(context, entries("a", "b", "c")))
+        assertEquals(
+            listOf(
+                TilePlacement("a", TileSize.SMALL, col = 3, row = 0),
+                TilePlacement("c", TileSize.PANEL, col = 1, row = 2),
+            ),
+            TileLayoutStore.placements(context, entries("a", "c")).sortedBy { it.pluginId },
+        )
     }
 
     @Test
-    fun `size lookup answers per plugin and is null for anything unplaced`() {
-        TileLayoutStore.setEntries(context, listOf(TileLayoutEntry("weather", TileSize.WIDE)))
-        assertEquals(TileSize.WIDE, TileLayoutStore.sizeFor(context, "weather"))
-        assertNull(TileLayoutStore.sizeFor(context, "clock"))
+    fun `a plugin the layout does not place fills the first free cell, stored entries for absent plugins are ignored`() {
+        TileLayoutStore.setEntries(
+            context,
+            listOf(
+                TileLayoutEntry("a", TileSize.WIDE, col = 0, row = 0),
+                TileLayoutEntry("gone", TileSize.SMALL, col = 2, row = 0),
+            ),
+        )
+        assertEquals(
+            listOf(
+                TilePlacement("a", TileSize.WIDE, col = 0, row = 0),
+                TilePlacement("b", TileSize.SMALL, col = 2, row = 0),
+            ),
+            TileLayoutStore.placements(context, entries("a", "b")),
+        )
     }
 }

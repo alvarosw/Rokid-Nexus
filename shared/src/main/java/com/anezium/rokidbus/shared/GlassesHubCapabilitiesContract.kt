@@ -29,6 +29,8 @@ data class GlassesHubCapabilities(
     val coreReady: Boolean = false,
     val maintenanceReady: Boolean = false,
     val ttsVersion: Int = 0,
+    /** Whole tile rows the glasses home grid shows without scrolling; 0 = unknown (older glasses). */
+    val homeGridVisibleRows: Int = 0,
 )
 
 /** Additive glasses-to-phone hub capabilities payload. Unknown fields remain ignorable. */
@@ -39,6 +41,7 @@ object GlassesHubCapabilitiesContract {
     const val MAX_SETUP_FAILURE_DIAGNOSTIC_CHARS = 96
     const val MAX_SETUP_SESSION_ID_CHARS = 32
     const val MAX_SETUP_SUPPORT_CODE_CHARS = 12
+    const val MAX_HOME_GRID_VISIBLE_ROWS = 16
 
     fun create(
         features: Int,
@@ -63,6 +66,7 @@ object GlassesHubCapabilitiesContract {
         coreReady: Boolean = false,
         maintenanceReady: Boolean = false,
         ttsVersion: Int = 0,
+        homeGridVisibleRows: Int = 0,
     ): GlassesHubCapabilities = GlassesHubCapabilities(
         protocolVersion = VERSION,
         features = features,
@@ -87,6 +91,7 @@ object GlassesHubCapabilitiesContract {
         coreReady = coreReady,
         maintenanceReady = maintenanceReady,
         ttsVersion = ttsVersion,
+        homeGridVisibleRows = sanitizeHomeGridVisibleRows(homeGridVisibleRows),
     )
 
     fun toJson(capabilities: GlassesHubCapabilities): JSONObject = JSONObject()
@@ -115,6 +120,7 @@ object GlassesHubCapabilitiesContract {
         .put("coreReady", capabilities.coreReady)
         .put("maintenanceReady", capabilities.maintenanceReady)
         .put("ttsVersion", capabilities.ttsVersion)
+        .put("homeGridVisibleRows", sanitizeHomeGridVisibleRows(capabilities.homeGridVisibleRows))
         .also { payload ->
             capabilities.versionName?.let { payload.put("versionName", it) }
         }
@@ -147,6 +153,7 @@ object GlassesHubCapabilitiesContract {
         coreReady = payload.optBoolean("coreReady", false),
         maintenanceReady = payload.optBoolean("maintenanceReady", false),
         ttsVersion = payload.optInt("ttsVersion", 0),
+        homeGridVisibleRows = sanitizeHomeGridVisibleRows(payload.optInt("homeGridVisibleRows", 0)),
     )
 
     fun supportsInkSurface(capabilities: GlassesHubCapabilities): Boolean =
@@ -187,6 +194,8 @@ object GlassesHubCapabilitiesContract {
             .take(4)
             .joinToString("") { byte -> "%02X".format(Locale.ROOT, byte.toInt() and 0xff) }
     }
+
+    fun sanitizeHomeGridVisibleRows(value: Int): Int = value.coerceIn(0, MAX_HOME_GRID_VISIBLE_ROWS)
 
     private fun normalizeVersionName(value: String?): String? = value
         ?.trim()

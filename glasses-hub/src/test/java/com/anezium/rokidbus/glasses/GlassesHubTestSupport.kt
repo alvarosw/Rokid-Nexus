@@ -47,6 +47,7 @@ internal object GlassesHubTestSupport {
         GlassesHub.outboundInterceptor = null
         field("appContext").set(GlassesHub, null)
         field("launcherEntries").set(GlassesHub, emptyList<GlassesHub.LauncherEntry>())
+        field("launcherPlacements").set(GlassesHub, emptyList<com.anezium.rokidbus.shared.tile.TilePlacement>())
         field("remotePhoneCapabilities").set(GlassesHub, PhoneHubCapabilitiesContract.create(0, null))
         sent.clear()
     }

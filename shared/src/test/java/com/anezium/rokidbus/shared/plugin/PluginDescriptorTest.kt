@@ -190,13 +190,14 @@ class PluginDescriptorTest {
         assertEquals(emptySet<TileSize>(), sizesFor("   "))
         assertEquals(setOf(TileSize.SMALL, TileSize.WIDE), sizesFor("1x1,2x1"))
         assertEquals(setOf(TileSize.LARGE), sizesFor("2x2"))
+        assertEquals(setOf(TileSize.BANNER, TileSize.PANEL, TileSize.JUMBO), sizesFor("3x1,3x2,3x3"))
     }
 
     @Test
     fun `malformed tile size token is rejected`() {
         assertEquals(
             PluginDescriptorParseResult.Invalid("INVALID_TILE_SIZE"),
-            PluginDescriptorParser.parse(validMetadata() + (BusConstants.META_PLUGIN_TILE_SIZES to "1x1,3x3")),
+            PluginDescriptorParser.parse(validMetadata() + (BusConstants.META_PLUGIN_TILE_SIZES to "1x1,4x4")),
         )
     }
 

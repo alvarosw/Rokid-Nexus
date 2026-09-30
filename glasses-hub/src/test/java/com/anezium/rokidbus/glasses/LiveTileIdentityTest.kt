@@ -10,7 +10,7 @@ import com.anezium.rokidbus.glasses.hud.HomeLayer
 import com.anezium.rokidbus.glasses.hud.GridHome
 import com.anezium.rokidbus.glasses.hud.HudIconView
 import com.anezium.rokidbus.glasses.hud.layoutOnCanvas
-import com.anezium.rokidbus.glasses.hud.sizesOf
+import com.anezium.rokidbus.glasses.hud.placementsOf
 import com.anezium.rokidbus.shared.tile.TileSize
 import com.anezium.rokidbus.shared.tile.TileSnapshot
 import com.anezium.rokidbus.shared.tile.TileTone
@@ -122,7 +122,7 @@ class LiveTileIdentityTest {
         val layer = HomeLayer(
             context,
             iconLoader = icons,
-            sizeSource = sizesOf(),
+            placementSource = placementsOf(),
             tileSource = { live[it] },
             motion = HudMotionDriver.instant(),
         )

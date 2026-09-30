@@ -2,6 +2,7 @@ package com.anezium.rokidbus.glasses.hud
 
 import android.graphics.Canvas
 import com.anezium.rokidbus.glasses.GlassesHub
+import com.anezium.rokidbus.shared.tile.TilePlacement
 import com.anezium.rokidbus.shared.tile.TileSnapshot
 
 /** A plugin's last published tile snapshot and whether it is old enough to be drawn dimmed. */
@@ -29,6 +30,8 @@ internal data class HomeViewModel(
     val status: HomeStatus = HomeStatus.None,
     /** Only plugins that have a snapshot; every other entry is a fallback tile. Grid mode only. */
     val tileData: Map<String, HomeTile> = emptyMap(),
+    /** Where the grid puts each entry; empty in list mode. */
+    val placements: List<TilePlacement> = emptyList(),
     /** A notice band owns the ring and draws the one focus frame; the selection rests. */
     val noticeOwnsRing: Boolean = false,
 ) {

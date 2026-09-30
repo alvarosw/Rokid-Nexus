@@ -105,7 +105,7 @@ internal object HudController {
                 dispatch(
                     HudEvent.LauncherEntriesChanged(
                         entries = entries.map { it.id },
-                        appearance = entries.associate { it.id to "${it.displayName}|${it.iconKey.orEmpty()}" },
+                        appearance = appearanceOf(context, entries),
                     ),
                 )
             }
@@ -126,6 +126,18 @@ internal object HudController {
     fun onServiceDestroyed(service: AccessibilityService) {
         if (this.service !== service) return
         release()
+    }
+
+    /**
+     * What the home draws for each entry besides its place in the list: name, icon and the tile's
+     * grid cell and size, so a layout change that keeps the reading order still refreshes the home.
+     */
+    private fun appearanceOf(context: Context, entries: List<GlassesHub.LauncherEntry>): Map<String, String> {
+        val placed = resolvedPlacements(context, entries).associateBy { it.pluginId }
+        return entries.associate { entry ->
+            val tile = placed[entry.id]
+            entry.id to "${entry.displayName}|${entry.iconKey.orEmpty()}|${tile?.col},${tile?.row},${tile?.size?.wireValue}"
+        }
     }
 
     /** Ends the current connection: the machine loses its windows, and every observer and timer goes. */

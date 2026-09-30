@@ -224,9 +224,10 @@ selectedId, mode, status, tileData)` and draws it with `ListHome` or `GridHome`,
   the owner asked for the whole screen.
 - List rows: 32 px, 20 px icon, `body` label; focused = `surface-selected` fill + 2 px `focus`
   border + `focus` text; at rest a hairline `line` border. The list scrolls by its own offset with
-  one row of context around the selection. Grid tiles: 106 px unit, `space-2` gaps, sizes from
-  `TileLayoutStore`, whole-row scrolling (a TALL/LARGE tile always shows whole), selection order =
-  packer order. Fallback tiles stack icon over name (an icon-beside-name header leaves ~70 px and
+  one row of context around the selection. Grid tiles: 106 px unit, `space-2` gaps, placed by
+  `TileGridLayout.resolve` from the stored layout (positions are authoritative, holes stay empty;
+  anything unplaced takes the first free cell), seven sizes up to 3x3, whole-row scrolling (a tall
+  tile always shows whole), selection and list order = the grid's reading order (row, then column). Fallback tiles stack icon over name (an icon-beside-name header leaves ~70 px and
   cut "NAVIGATION"). Live tiles take the same focus chrome (dashed for `WARN`); a stale snapshot dims
   the content only.
 - `Opening` = `Loader` (scan, 1200 ms, one static frame under reduced motion) on the selected row
@@ -284,7 +285,7 @@ stays and is the morph's rect interpolation.
   not at all under reduced motion); `WARN` is the alert icon at 72 % on the dashed border. The
   icon carries "critical" because border thickness is the focus vocabulary. When several tiles are
   critical only one is (`GridHome.assignCriticalRoles`): the focused one if it is critical, else
-  the first in packer order; the others read as `WARN`. A focused critical tile shows the focus
+  the first in placement order; the others read as `WARN`. A focused critical tile shows the focus
   chrome and keeps its 100 % icon.
 
 Deviations, with the reason: the settled critical tile is not the Status contract's 2 px border (it
