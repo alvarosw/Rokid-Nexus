@@ -176,6 +176,14 @@ tools/emulator/fake-phone.sh ambient-pointer                                # cu
 tools/emulator/fake-phone.sh ambient-notice-hide ambient-pin-hide ambient-activity-end ambient-pointer-hide
 ```
 
+More states for reviewing the design system on the ambient layers: `ambient-notice-question` (three actions;
+answering it on the emulator fails to send and shows the warn `Status`), `ambient-notice-info`,
+`ambient-notice-long` (two pages), `ambient-notice-compose` (an inline-reply band over its editable card;
+`ambient-notice-compose-hide` clears both), `ambient-pin-medium` (bottom-left; `-hide`),
+`ambient-activity-extras` (route badge, measure and track; `-end`), `ambient-activity-two` (a second
+resident next to `ambient-activity`), and on `ambient-activity`'s activity `ambient-activity-flare` and
+`ambient-activity-urgent` (the critical flare: 2 px outline blinking three times, then steady).
+
 The pointer stream id needs 16+ characters and a rising `sequence`; change `streamId` to replay it.
 `adb shell dumpsys window windows` lists the overlays top to bottom (all named after the package); tell
 them apart by frame and `fl=` flags: the host has no `NOT_FOCUSABLE`, the pointer has

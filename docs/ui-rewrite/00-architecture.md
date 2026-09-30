@@ -400,3 +400,82 @@ glyph in an outlined square (the icon set has no music icon); Ink text stays mon
 `ALERT` row is told apart by icon and weight only. The notice, pin, activity, action row and
 waveform views (`HudActionRowView`, `HudWaveformView`, `ParagraphTranslationLayout` users) are U7b.
 `SurfaceScreenshotTest` renders every kind at 480x640 and checks the single hue on the pixels.
+
+### U7b (ambient layers in the design system, BusTheme retired)
+
+Implemented in `glasses-hub/.../glasses/`: `AmbientStyle.kt` (new: the floating `Panel`, glyph tinting,
+the ambient motion driver and its idle-reporting value), `NoticeOverlayRenderer` (`NoticeBandView`),
+`NoticeComposeMirror` users, `PinOverlayRenderer` (`PinPanelView`), `ActivityOverlayRenderer`,
+`ActivityExtrasViews`, `HudIsland`, `HudActionRowView`, `HudWaveformView`,
+`StatusBadgeOverlayRenderer`, `RemotePointerOverlayRenderer`, plus `MainActivity`'s setup screen and
+`CameraActivity`'s empty state. `BusTheme` and `NexusUi` are no longer referenced anywhere in
+`glasses-hub` (main or test code; `GridColorLiteralLintTest` now fails on either name in any main source
+and on any color literal outside `RokidHudTokens`). `BusTheme` stays in `bus-client` for `phone-hub` and
+the plugins.
+
+- **Panels.** A floating window needs an occluding fill, so the notice band, the pin and the activity
+  island are `Panel`s with a `ground` (black) fill, 1 px `line`, `radius-panel` and `space-3` padding;
+  `ground` is unlit on the optic and keeps the windows below out of the text in the compositor
+  (`AmbientStyle.panel`). No grey, no tinted fill.
+- **Notice band.** `heading` title, `body` message at `text-primary` (sans, 14/20, wrapped to the same
+  line-based page capacities as before: 8 lines compact, 14 pageable), `body-small` footer and `mono`
+  page counter at `text-secondary` (the counter is right-aligned even without a footer). The action row
+  is a row of `Button`s (32 px, `line-control` outline, 16 px icon, `body` label); the selected chip is
+  the row's one primary button in the focus chrome (`surface-selected`, 2 px `focus`). The inline compose
+  field is the focused control (same chrome, `focus` caret, `text-secondary` placeholder). An answer that
+  could not be sent ("Delivery not confirmed") is `Status warn`: alert icon, dashed `line-control`
+  border.
+- **Pin and activity chip.** `PinPanelView` is `body`/`body-small` (small) or `heading`/`body`
+  (medium); a `bright` line is `text-primary`, others `text-secondary`; the chip's measure is `data`
+  (mono). The glyph is a 24 px icon tinted with the text intensity (plugin glyph drawables keep their
+  geometry; their legacy green is replaced by a color filter).
+- **Activity island.** Outline `line` 1 px, `radius-panel`. The panel's primary is the screen's one
+  `display` value fitted between 22 and 16 px (`fitActivityPrimary` now works in px; its floor is
+  `heading`), the ETA a `data` readout, the secondary `body`, details `body-small`; progress is
+  `Loader progress` (`MediaProgressView` plus a `mono` percentage) or `Loader scan` (`HudLoaderView`) when
+  indeterminate. The route badge is a `line-control` `data` chip sized to its text; the track is
+  `text-secondary` passed dots and segments, `text-primary` current, `line` hollow later stops.
+- **Critical.** An urgent flare is `Status critical`: the alert icon at 100 %, a 2 px `focus` outline
+  that blinks three times at `duration-default` (`CriticalBlink`, one shared step chain) 380 ms after the
+  band has arrived and then stays; under reduced motion it is steady. It replaces the old spring wobble
+  ("beat") of the outline. `BUSSPEC.md` and `docs/PLUGIN_SDK.md` still describe the outline as one that
+  "beats once"; the wire and SDK are untouched and that sentence was not edited (owner call). Only one
+  flare exists at a time, so there is one critical from this layer; a critical live tile on the home
+  below is a second one the ambient windows cannot see.
+- **Pointer.** A `focus` ring (2 px, radius 12 = half an `icon-lg`) with a `focus` center dot and a
+  black halo; the white ring and the off-palette green are gone. Position math uses `HudGeometry`.
+- **Waveform.** `text-primary` bars over a `line` rest level, 2 px bars on a 6 px pitch, 32 px tall.
+  Nothing instantiates it today.
+- **Status badge.** Colors only: the glyph and the `mono` numerals are `text-primary`. Its size and
+  placement stay in dp/sp and read from the ROM row, because the chip must match the ROM's 20 px icons
+  and ~11 sp labels (HARDWARE D3 and S6, `StatusBadgeGeometry`); the swap to token pixels would have
+  changed the row it is tuned to disappear into.
+
+Geometry. Pin, chip and panel sit at `safe-x` 16 / `safe-y` 12 (+ the synced top inset, converted once
+with `HudTopInset.toPx`) from their corner; the panel is 78 % and the pin 45 % / 60 % of
+`HudGeometry`'s 480 px viewport, and the band's height ceiling is a fraction of its 640 px. The notice
+band and the activity flare keep the Ink card's width (441 px) and top (`12 dp + inset`), which stay in
+dp in `HudBandGeometry`: the card's rpx layout is measured on that width and the band morphs into the
+card, so moving one moves the other (`InkCardPresentationTest` still pins 441 and `dp(52)`; the test
+now spells `dp` and the ground color without `BusTheme`, the assertions are the same values). No
+ambient layer reads `displayMetrics` any more except the badge (D3).
+
+Motion decision. The notice's slide and fade moved to `HudMotionDriver` (`AmbientMotionValue` wraps it
+and calls the idle hook `AmbientStack` waits for after an end, and after a snap or cancel that stopped
+an animation). Old 280 ms enter and 240 ms exit are `duration-structural` (220); the 180 ms Ink fade is
+`duration-default` (200); one easing replaces the enter and exit curves. The animation scale now
+applies to the notice too (verified at 3x and 6x, and 0 lands instantly). The bitmap release delay in
+`NoticeController` follows the exit duration. Kept on the old vocabulary: `HudIslandView`'s damped
+springs (physics, not a duration token; its cross-fade and form timings are unchanged), the flare's
+`STANDARD_MS + HOLD_MS` dwell (3 780 ms, a hold rather than a tween), and `HudMotion` for Ink, chart and
+`SurfaceHudView`, which are not ambient layers.
+
+Deviations and limits. The plugin glyph vocabulary (`NexusGlyphs`) is the SDK's, not the design's fixed
+icon set; the drawables are only recolored. `MainActivity`'s setup screen and the camera's empty state
+were restyled with tokens, but `CameraOverlayView` (the camera HUD, with cyan, amber and red status
+colors) is out of scope with the camera pipeline and is the one main source the lint exempts besides the
+Ink tier anchors. The home's own 2 px focus ring stays visible under a notice or flare that draws
+another, because the windows cannot coordinate. Two activities can still overlap when a wide panel and a
+chip share the top row (unchanged from before). The status badge's new colors were only rendered on
+Roborazzi: it needs the ROM launcher on the device and cannot be exercised on the emulator.
+
