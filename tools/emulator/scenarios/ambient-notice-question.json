@@ -1,0 +1,36 @@
+{
+  "description": "A question band with three actions (45 s); answering it fails to send and shows the warn Status.",
+  "envelopes": [
+    {
+      "path": "/notice/show",
+      "payload": {
+        "kind": "notice",
+        "surfaceId": "lyrics:notice",
+        "ownerPluginId": "lyrics",
+        "noticeInstanceId": "inst-q",
+        "noticeQuestionId": "q-q",
+        "ttlMs": 45000,
+        "title": "Ana",
+        "body": "Are you free for lunch tomorrow at one?",
+        "footer": "Relay",
+        "actions": [
+          {
+            "id": "yes",
+            "glyph": "send",
+            "label": "Yes"
+          },
+          {
+            "id": "later",
+            "glyph": "timer",
+            "label": "Later"
+          },
+          {
+            "id": "no",
+            "glyph": "cancel",
+            "label": "No"
+          }
+        ]
+      }
+    }
+  ]
+}

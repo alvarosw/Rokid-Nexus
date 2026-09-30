@@ -1,0 +1,35 @@
+{
+  "description": "A transit activity with route badge, measure and track (top-left).",
+  "envelopes": [
+    {
+      "path": "/activity/start",
+      "payload": {
+        "kind": "activity",
+        "surfaceId": "nav:activity",
+        "ownerPluginId": "nav",
+        "glyph": "bus",
+        "primary": "3 min",
+        "measure": "250 m",
+        "secondary": "Rue de Rivoli",
+        "eta": "12:40",
+        "detail": [
+          "Then line 5, 4 stops"
+        ],
+        "badge": "38",
+        "track": {
+          "count": 6,
+          "at": 2,
+          "target": 4,
+          "label": "Chatelet"
+        },
+        "actions": [
+          {
+            "id": "mute",
+            "glyph": "pause",
+            "label": "Mute"
+          }
+        ]
+      }
+    }
+  ]
+}

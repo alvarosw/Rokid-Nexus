@@ -1,0 +1,11 @@
+{
+  "description": "Hides the medium pin.",
+  "envelopes": [
+    {
+      "path": "/pin/hide",
+      "payload": {
+        "surfaceId": "timer:pin"
+      }
+    }
+  ]
+}

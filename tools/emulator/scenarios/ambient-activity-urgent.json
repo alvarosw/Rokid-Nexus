@@ -1,0 +1,16 @@
+{
+  "description": "A significant, urgent update of ambient-activity's activity: the critical flare.",
+  "envelopes": [
+    {
+      "path": "/activity/update",
+      "payload": {
+        "surfaceId": "media:activity",
+        "ownerPluginId": "media",
+        "primary": "Failed",
+        "secondary": "album.zip",
+        "significant": true,
+        "tone": "urgent"
+      }
+    }
+  ]
+}

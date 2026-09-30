@@ -1,0 +1,20 @@
+{
+  "description": "A medium pin, bottom-left.",
+  "envelopes": [
+    {
+      "path": "/pin/show",
+      "payload": {
+        "kind": "pin",
+        "surfaceId": "timer:pin",
+        "title": "Timer 04:12",
+        "lines": [
+          "Pasta is boiling",
+          "Drain in 3 minutes",
+          "Then the sauce"
+        ],
+        "position": "bottom-left",
+        "size": "medium"
+      }
+    }
+  ]
+}
