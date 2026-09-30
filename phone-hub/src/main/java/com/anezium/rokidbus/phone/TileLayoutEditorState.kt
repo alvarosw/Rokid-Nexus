@@ -176,11 +176,15 @@ class TileLayoutEditorState(
                 TileLayoutEntry(pluginId = id, size = sizeOf(rect), col = rect.col, row = rect.row)
             }
 
-    /** Rows the preview shows: one spare row below the lowest tile, 4..8, counting a drag's start. */
+    /**
+     * Rows the preview shows: one spare row below the lowest tile, 4..8, counting a drag's start.
+     * A tile the glasses placed past the editor's last row (a plugin added to a full layout) still
+     * gets its rows, so it is drawn and can be dragged back into the grid.
+     */
     fun gridRows(): Int {
         var used = usedRows(layout)
         drag?.let { used = max(used, usedRows(it.startLayout)) }
-        return min(TileGridLayout.MAX_ROWS, max(MIN_ROWS, used + 1))
+        return min(max(TileGridLayout.MAX_ROWS, used), max(MIN_ROWS, used + 1))
     }
 
     fun usedRows(): Int = usedRows(layout)

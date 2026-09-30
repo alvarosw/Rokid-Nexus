@@ -105,6 +105,17 @@ class TileLayoutEditorStateTest {
     }
 
     @Test
+    fun `a tile resolved past the last editor row stays shown and can be dragged back in`() {
+        val state = editor(linkedMapOf("a" to GridRect(0, 0, 1, 1), "late" to GridRect(0, 8, 1, 1)))
+        assertEquals(9, state.gridRows())
+        state.dragStart("late", 10f, 8 * pitch + 10)
+        state.dragMove(10f, 2 * pitch + 10, travelDp = 100f)
+        state.dragEnd()
+        assertEquals(GridRect(0, 2, 1, 1), state.layout["late"])
+        assertEquals(4, state.gridRows())
+    }
+
+    @Test
     fun `move by action shifts a tile and selects it, and refuses to leave the grid`() {
         val state = editor(three)
         assertTrue(state.moveBy("b", 1, 0))
