@@ -14,8 +14,10 @@ import com.anezium.rokidbus.glasses.logError
  * switched by visibility. It is attached when the machine leaves Hidden or External and detached
  * only when it enters them again, never between Home, Opening and App.
  *
- * The window's own layout params are set once. Nothing here calls `updateViewLayout` (HARDWARE W3):
- * motion moves child views inside this fixed window. [sync] is told what the machine's screen is and
+ * The window's size and type are set once, and motion moves child views inside this fixed window
+ * (HARDWARE W3). The only layout update is one flag: `FLAG_KEEP_SCREEN_ON` is carried by an open or
+ * opening app and dropped on the home, so a launcher that nobody touches follows the system screen
+ * timeout instead of holding the display. [sync] is told what the machine's screen is and
  * lays the layers out for it at once; [HudMorph] then animates the open and close between the home
  * and the app toward that state, and can be interrupted by the next [sync] at any moment.
  */
@@ -43,6 +45,8 @@ internal class HudHost(
         private set
 
     private var windowParams: WindowManager.LayoutParams? = null
+
+    private var keepingScreenOn = false
 
     private val ambientWindow = object : AmbientWindow {
         override val layer = AmbientLayer.HOST
@@ -73,7 +77,7 @@ internal class HudHost(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+            flagsFor(shown),
             PixelFormat.TRANSLUCENT,
         )
         val added = runCatching { windowManager.addView(root, params) }
@@ -82,6 +86,7 @@ internal class HudHost(
         if (!added) return false
         isAttached = true
         windowParams = params
+        keepingScreenOn = keepsScreenOn(shown)
         // Overlays stack in the order they were added: the stack puts the ambient layers that were
         // already up back above this window.
         stack.added(ambientWindow)
@@ -111,11 +116,32 @@ internal class HudHost(
         shown = screen
         val homeVisible = isHomeVisible(screen)
         val appVisible = isAppVisible(screen)
+        updateKeepScreenOn(screen)
         val morphing = morph.handle(HudMorphPlan.of(previous, screen))
         if (!morphing) showLayers(homeVisible, appVisible)
         if (!isAttached) return
         if (homeVisible && !isHomeVisible(previous)) root.requestFocus()
         if (!homeVisible && appVisible) app.focusContent()
+    }
+
+    private fun keepsScreenOn(screen: HudScreen) = screen is HudScreen.App || screen is HudScreen.Opening
+
+    private fun flagsFor(screen: HudScreen): Int =
+        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            if (keepsScreenOn(screen)) WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON else 0
+
+    private fun updateKeepScreenOn(screen: HudScreen) {
+        val params = windowParams ?: return
+        val keepOn = keepsScreenOn(screen)
+        if (keepOn == keepingScreenOn) return
+        keepingScreenOn = keepOn
+        params.flags = if (keepOn) {
+            params.flags or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+        } else {
+            params.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON.inv()
+        }
+        runCatching { windowManager.updateViewLayout(root, params) }
+            .onFailure { logError("HUD host keep-screen-on flag could not be updated", it) }
     }
 
     private fun layOutStatically() {

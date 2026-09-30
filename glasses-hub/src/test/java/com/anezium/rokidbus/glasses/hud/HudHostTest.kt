@@ -23,8 +23,10 @@ class HudHostTest {
         var added = 0
         var removed = 0
         var updated = 0
+        var lastParams: WindowManager.LayoutParams? = null
         override fun addView(view: View, params: android.view.ViewGroup.LayoutParams) {
             added++
+            lastParams = params as WindowManager.LayoutParams
             delegate.addView(view, params)
         }
         override fun removeView(view: View) {
@@ -33,6 +35,7 @@ class HudHostTest {
         }
         override fun updateViewLayout(view: View, params: android.view.ViewGroup.LayoutParams) {
             updated++
+            lastParams = params as WindowManager.LayoutParams
             delegate.updateViewLayout(view, params)
         }
     }
@@ -44,7 +47,7 @@ class HudHostTest {
     private val app = HudScreen.App(SurfaceInfo("s", "s"), Origin.HOME)
 
     @Test
-    fun the_window_is_added_once_and_never_re_laid_out_between_home_opening_and_app() {
+    fun the_window_is_added_once_and_only_its_keep_screen_on_flag_is_updated_between_home_opening_and_app() {
         assertTrue(host.attach())
         assertTrue(host.attach())
         host.sync(home)
@@ -53,11 +56,40 @@ class HudHostTest {
         host.sync(home)
         assertEquals(1, windows.added)
         assertEquals(0, windows.removed)
-        assertEquals(0, windows.updated)
+        // Opening and App each change the flag once: home -> opening on, app keeps it, app -> home off.
+        assertEquals(2, windows.updated)
         host.detach()
         host.detach()
         assertEquals(1, windows.removed)
         assertFalse(host.isAttached)
+    }
+
+    private fun keepsScreenOn(): Boolean =
+        windows.lastParams!!.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0
+
+    @Test
+    fun only_an_opening_or_open_app_keeps_the_screen_on_and_the_home_follows_the_system_timeout() {
+        host.attach()
+        host.sync(home)
+        assertFalse("a fresh home does not hold the display", keepsScreenOn())
+        host.sync(HudScreen.Opening("a", 1, 10_000, home))
+        assertTrue(keepsScreenOn())
+        host.sync(app)
+        assertTrue(keepsScreenOn())
+        host.sync(HudScreen.Home(HomeMode.LIST, "a", beneath = app))
+        assertFalse("a launcher opened over an app lets the display time out", keepsScreenOn())
+        host.sync(app)
+        assertTrue(keepsScreenOn())
+        host.sync(HudScreen.Hidden)
+        assertFalse(keepsScreenOn())
+    }
+
+    @Test
+    fun a_window_attached_while_an_app_is_up_starts_with_the_flag() {
+        host.sync(app)
+        host.attach()
+        assertTrue(keepsScreenOn())
+        assertEquals(0, windows.updated)
     }
 
     @Test
