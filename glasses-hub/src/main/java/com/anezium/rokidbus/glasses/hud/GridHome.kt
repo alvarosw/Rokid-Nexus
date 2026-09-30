@@ -5,6 +5,7 @@ import android.graphics.Rect
 import android.graphics.drawable.Drawable
 import android.view.View
 import android.widget.FrameLayout
+import com.anezium.rokidbus.client.ui.HudGridMetrics
 import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.glasses.FallbackTileView
 import com.anezium.rokidbus.glasses.GlassesHub
@@ -166,8 +167,7 @@ internal class GridHome(
 
     override fun fitBody(available: Int): Int {
         // Two rows at least: a TALL or LARGE tile spans two and must be able to show whole.
-        val rows = ((available + RokidHudTokens.SPACE_2) / PITCH).coerceAtLeast(MIN_ROWS)
-        return rows * UNIT + (rows - 1) * RokidHudTokens.SPACE_2
+        return HudGridMetrics.rowsHeight(HudGridMetrics.rowsFitting(available))
     }
 
     override fun onBodyChanged(model: HomeViewModel) = followSelection(model.selectedId)
@@ -207,10 +207,7 @@ internal class GridHome(
 
     companion object {
         const val COLUMNS = TileGridPacker.DEFAULT_COLUMNS
-        private const val MIN_ROWS = 2
-
-        /** (448 - 3 x 8) / 4 = 106 px. */
-        const val UNIT = (RokidHudTokens.CONTENT_WIDTH - (COLUMNS - 1) * RokidHudTokens.SPACE_2) / COLUMNS
-        const val PITCH = UNIT + RokidHudTokens.SPACE_2
+        const val UNIT = HudGridMetrics.UNIT
+        const val PITCH = HudGridMetrics.PITCH
     }
 }

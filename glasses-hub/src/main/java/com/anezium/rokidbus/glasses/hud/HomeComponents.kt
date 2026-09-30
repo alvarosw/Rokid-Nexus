@@ -19,6 +19,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.anezium.rokidbus.client.ui.HudGridMetrics
 import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.glasses.GlassesHub
 import com.anezium.rokidbus.glasses.ReducedMotion
@@ -333,8 +334,7 @@ internal class HudStatusView(context: Context) : LinearLayout(context) {
     val message: String get() = text.text.toString()
 
     companion object {
-        /** `body-small` 16 px line plus `space-1` above and below. */
-        const val HEIGHT = 24
+        const val HEIGHT = HudGridMetrics.STATUS_HEIGHT
     }
 }
 
@@ -355,7 +355,7 @@ internal class HomeHeaderView(context: Context) : FrameLayout(context) {
     }
 
     companion object {
-        const val HEIGHT = 16
+        const val HEIGHT = HudGridMetrics.HEADER_HEIGHT
     }
 }
 
