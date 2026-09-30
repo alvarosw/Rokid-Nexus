@@ -14,7 +14,19 @@ import com.anezium.rokidbus.glasses.HudTopInset
 import com.anezium.rokidbus.glasses.TileCache
 import com.anezium.rokidbus.glasses.TileController
 import com.anezium.rokidbus.glasses.TileLayoutStore
+import com.anezium.rokidbus.shared.tile.TileGridLayout
 import com.anezium.rokidbus.shared.tile.TilePlacement
+
+/**
+ * The placements the hub resolved when it ordered [entries], so each tile is placed exactly once. If
+ * the hub's last resolution covers a different set of ids (a race, a test with its own entries), the
+ * entries are resolved from the stored layout instead.
+ */
+internal fun resolvedPlacements(context: Context, entries: List<GlassesHub.LauncherEntry>): List<TilePlacement> {
+    val byId = GlassesHub.launcherPlacements().associateBy { it.pluginId }
+    if (byId.size == entries.size && entries.all { it.id in byId }) return entries.map { byId.getValue(it.id) }
+    return TileGridLayout.resolve(entries.map { it.id to null }, TileLayoutStore.getEntries(context))
+}
 
 /**
  * The launcher inside [HudHost]: one [HomeViewModel] drawn by [ListHome] or [GridHome]. It renders
@@ -29,7 +41,7 @@ internal class HomeLayer(
     context: Context,
     private val iconLoader: (Context, GlassesHub.LauncherEntry) -> Drawable = GlassesHub::launcherDrawable,
     private val placementSource: (List<GlassesHub.LauncherEntry>) -> List<TilePlacement> = { entries ->
-        TileLayoutStore.placements(context, entries)
+        resolvedPlacements(context, entries)
     },
     private val tileSource: (String) -> HomeTile? = { id ->
         // Read once per open or per publish, never per selection move.

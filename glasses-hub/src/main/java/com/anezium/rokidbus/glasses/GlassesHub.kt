@@ -55,6 +55,7 @@ import com.anezium.rokidbus.shared.WirelessAdbContract
 import com.anezium.rokidbus.shared.WirelessAdbReply
 import com.anezium.rokidbus.shared.plugin.PathRules
 import com.anezium.rokidbus.shared.tile.TileGridLayout
+import com.anezium.rokidbus.shared.tile.TilePlacement
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.CopyOnWriteArrayList
@@ -142,6 +143,11 @@ object GlassesHub {
     private var setupCapabilitiesFuture: ScheduledFuture<*>? = null
     private var manualSetupScreenLock: PowerManager.WakeLock? = null
     @Volatile private var launcherEntries: List<LauncherEntry> = emptyList()
+
+    /** The placements [allLauncherEntries] resolved last, so the grid draws exactly what ordered the list. */
+    @Volatile private var launcherPlacements: List<TilePlacement> = emptyList()
+
+    internal fun launcherPlacements(): List<TilePlacement> = launcherPlacements
     @Volatile private var appContext: Context? = null
 
     /** The home grid row count of the last capabilities announcement that went out; -1 before any. */
@@ -1426,7 +1432,9 @@ object GlassesHub {
         val entries = listOfNotNull(cameraLauncherEntry(remotePhoneCapabilities)) + nonCamera
         val context = appContext ?: return entries
         val byId = entries.associateBy { it.id }
-        return TileGridLayout.readingOrder(TileLayoutStore.placements(context, entries)).mapNotNull { byId[it.pluginId] }
+        val placements = TileLayoutStore.placements(context, entries)
+        launcherPlacements = placements
+        return TileGridLayout.readingOrder(placements).mapNotNull { byId[it.pluginId] }
     }
 
     private fun cameraLauncherEntry(capabilities: PhoneHubCapabilities): LauncherEntry? {

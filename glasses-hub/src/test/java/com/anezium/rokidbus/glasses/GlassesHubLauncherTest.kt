@@ -4,6 +4,11 @@ import android.content.Intent
 import com.anezium.rokidbus.shared.BusPaths
 import com.anezium.rokidbus.shared.HudModeContract
 import com.anezium.rokidbus.shared.TileLayoutContract
+import com.anezium.rokidbus.glasses.hud.GridHome
+import com.anezium.rokidbus.glasses.hud.HomeLayer
+import com.anezium.rokidbus.glasses.hud.HomeMode
+import com.anezium.rokidbus.glasses.hud.HudMotionDriver
+import com.anezium.rokidbus.shared.tile.TileGridLayout
 import com.anezium.rokidbus.shared.tile.TileLayoutEntry
 import com.anezium.rokidbus.shared.tile.TileSize
 import org.json.JSONArray
@@ -174,6 +179,36 @@ class GlassesHubLauncherTest {
         GlassesHubTestSupport.receive(BusPaths.TILE_LAYOUT_CONFIG, TileLayoutContract.configToJson(layout))
 
         assertEquals(listOf("c", "b", "a", "camera"), seen.last().map { it.id })
+    }
+
+    @Test
+    fun the_grid_draws_the_placements_the_hub_resolved_for_mixed_size_unpinned_tiles() {
+        GlassesHubTestSupport.launcherList("a", "b", "c", "d")
+        GlassesHubTestSupport.advertiseCamera("Lens")
+        // "b" and "a" are pinned; "c" is a TALL whose stored cell is taken, so it is unpinned, as are
+        // "d" and the camera (SMALL): three unpinned tiles of two sizes around the pinned ones.
+        val stored = listOf(
+            TileLayoutEntry("b", TileSize.SMALL, col = 0, row = 0),
+            TileLayoutEntry("a", TileSize.SMALL, col = 1, row = 1),
+            TileLayoutEntry("c", TileSize.TALL, col = 0, row = 0),
+        )
+        GlassesHubTestSupport.receive(BusPaths.TILE_LAYOUT_CONFIG, TileLayoutContract.configToJson(stored))
+
+        val expected = TileGridLayout.resolve(
+            listOf("camera", "a", "b", "c", "d").map { it to null },
+            stored,
+        )
+        val layer = HomeLayer(
+            context,
+            iconLoader = { _, _ -> android.graphics.drawable.ColorDrawable(0) },
+            tileSource = { null },
+            motion = HudMotionDriver.instant(),
+        )
+        layer.show(HomeMode.GRID, seen.last(), seen.last().first().id)
+        val drawn = (layer.screenForTest() as GridHome).placementsForTest()
+
+        assertEquals(expected.sortedBy { it.pluginId }, drawn.sortedBy { it.pluginId })
+        assertEquals(TileGridLayout.readingOrder(expected).map { it.pluginId }, seen.last().map { it.id })
     }
 
     @Test
