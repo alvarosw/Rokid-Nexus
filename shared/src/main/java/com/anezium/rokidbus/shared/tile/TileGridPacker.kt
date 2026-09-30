@@ -17,8 +17,8 @@ object TileGridPacker {
      * degrades gracefully" rule the icon/glyph metadata already follows.
      */
     fun pack(entries: List<Pair<String, TileSize?>>, columns: Int = DEFAULT_COLUMNS): List<TilePlacement> {
-        require(columns >= TileSize.entries.maxOf { it.cols }) {
-            "columns must fit the widest declared tile size"
+        require(entries.all { (_, size) -> columns >= (size ?: TileSize.SMALL).cols }) {
+            "columns must fit the widest tile size in use"
         }
         val occupied = HashSet<Long>()
         fun cellKey(row: Int, col: Int): Long = row.toLong() * columns + col
