@@ -85,6 +85,21 @@ class HudHostTest {
     }
 
     @Test
+    fun item12_detach_is_guarded_when_the_host_is_not_attached() {
+        host.detach()
+        assertEquals("nothing to remove from a window manager that never had it", 0, windows.removed)
+        assertFalse(host.isAttached)
+
+        host.attach()
+        host.detach()
+        host.detach()
+        assertEquals("a second hide is a no-op", 1, windows.removed)
+        // A guarded detach leaves the host usable.
+        assertTrue(host.attach())
+        assertEquals(2, windows.added)
+    }
+
+    @Test
     fun a_second_attach_after_detach_adds_a_fresh_window() {
         host.attach()
         host.detach()
