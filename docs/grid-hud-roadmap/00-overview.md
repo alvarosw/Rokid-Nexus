@@ -1,3 +1,5 @@
+> Superseded for the glasses UI by docs/ui-rewrite/ — kept for history; the tile data pipeline (03) remains current.
+
 # Grid HUD — delivery roadmap
 
 Goal: replace the current list-style glasses launcher with an always-visible,

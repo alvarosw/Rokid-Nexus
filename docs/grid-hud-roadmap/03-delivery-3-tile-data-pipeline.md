@@ -1,3 +1,5 @@
+> Current: the tile data pipeline described here remains in use. Only the glasses-side rendering of tiles is superseded by docs/ui-rewrite/ (kept for history).
+
 # Delivery 3 — Tile data pipeline (`WidgetTileContract`)
 
 ## Goal

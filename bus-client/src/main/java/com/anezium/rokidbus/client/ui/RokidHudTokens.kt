@@ -11,10 +11,10 @@ import android.widget.TextView
  * system, state is intensity + border shape + icon + text.
  *
  * This is a **separate token object from [BusTheme]**, deliberately not an extension of it.
- * `BusTheme` is a different, older green (`#71FF97`) and keeps serving every surface that already
- * depends on it (phone settings, today's list launcher, notices) — none of that is in scope here
- * and none of it should regress. Only the new grid-HUD code (`GridLauncherView`, `FallbackTileView`,
- * `HudFrameLayout`, and everything later deliveries add on top) may reference this object.
+ * `BusTheme` is a different, older green (`#71FF97`) and still serves the phone hub and the
+ * plugins. The glasses hub no longer references it: every glasses layer (home, plugin surfaces,
+ * notice, pin, activity, pointer, setup screens) is drawn with this object, and a lint test keeps
+ * color literals out of the rest of the glasses sources.
  *
  * Unit: every size, spacing, radius, border and text size here is a **physical pixel** on the
  * 480x640 screen, not a dp/sp. The design canvas equals the screen, so the tokens are applied as

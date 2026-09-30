@@ -832,6 +832,7 @@ Cannot be emulated: real 5 s timeout re-assertion at boot, the panel ignoring `F
 14. **Q14 Camera window:** does `FLAG_KEEP_SCREEN_ON` keep the viewfinder alive beyond 5 s idle, or does the standby/ROM timer kill it?
 15. **Q15 R08 device name:** all variants of the input device name (is `"R08"` always present, also over Bluetooth reconnects)?
 16. **Q16** Does `GLOBAL_ACTION_LOCK_SCREEN` differ from the power key for wake/dim behavior and for `ACTION_SCREEN_OFF` timing (used by the standby watchdog and notice sleep)?
+17. **Q17 Density and the notice/Ink band top (unit mix kept on purpose).** `HudBandGeometry.topPx` is `(12 dp + HUD inset) x density`, while every other glasses layer places itself at `12 px + inset x density` (design-token pixels). At the assumed 1.5 the band therefore starts 6 px lower than the rest (78 px against 72 at inset 40). It was left in dp because the Ink card's rpx layout is measured on that width and top, the notice band morphs into the card, and `InkCardPresentationTest` pins the value as `52 dp`; converting it would change that assertion, not just restate it. Once the density is confirmed on the device (Q2), decide whether the card's top should move to 12 px and re-measure the Ink layouts then.
 
 ---
 
