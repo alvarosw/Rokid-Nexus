@@ -223,7 +223,7 @@ internal class HudLoaderView(context: Context) : View(context) {
 
 /** The two monoline icons the home layer needs: `alert` and `circle`. 1 px stroke at any size. */
 internal class HudIconView(context: Context, private val kind: Kind) : View(context) {
-    enum class Kind { ALERT, CIRCLE }
+    enum class Kind { ALERT, CIRCLE, CHEVRON_UP, CHEVRON_DOWN }
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -246,6 +246,16 @@ internal class HudIconView(context: Context, private val kind: Kind) : View(cont
         path.reset()
         when (kind) {
             Kind.CIRCLE -> path.addCircle(ox + 8f * u, oy + 8f * u, 6.5f * u, Path.Direction.CW)
+            Kind.CHEVRON_UP -> {
+                path.moveTo(ox + 3f * u, oy + 10f * u)
+                path.lineTo(ox + 8f * u, oy + 5f * u)
+                path.lineTo(ox + 13f * u, oy + 10f * u)
+            }
+            Kind.CHEVRON_DOWN -> {
+                path.moveTo(ox + 3f * u, oy + 6f * u)
+                path.lineTo(ox + 8f * u, oy + 11f * u)
+                path.lineTo(ox + 13f * u, oy + 6f * u)
+            }
             Kind.ALERT -> {
                 path.moveTo(ox + 8f * u, oy + 1.5f * u)
                 path.lineTo(ox + 15f * u, oy + 14f * u)

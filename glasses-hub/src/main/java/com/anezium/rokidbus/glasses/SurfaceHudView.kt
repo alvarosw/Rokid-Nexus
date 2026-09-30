@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Canvas
-import android.graphics.drawable.GradientDrawable
 import android.os.BatteryManager
 import android.os.Build
 import android.os.SystemClock
@@ -15,7 +14,7 @@ import android.text.Spanned
 import android.text.TextUtils
 import android.text.TextWatcher
 import android.text.style.ForegroundColorSpan
-import android.text.style.RelativeSizeSpan
+import android.text.style.AbsoluteSizeSpan
 import android.text.InputType
 import android.util.TypedValue
 import android.view.Gravity
@@ -26,7 +25,8 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import com.anezium.rokidbus.client.ui.BusTheme
+import com.anezium.rokidbus.client.ui.RokidHudTokens
+import com.anezium.rokidbus.glasses.hud.HudIconView
 import com.anezium.rokidbus.shared.EditableSurfaceContract
 import com.anezium.rokidbus.shared.EditableSurfaceField
 import java.text.SimpleDateFormat
@@ -55,16 +55,16 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
      * someone else's status row — so it is exactly as available as the surface
      * itself is, in every plugin, with nothing to lose sync with.
      */
-    private val phoneBatteryStatusView = monoText(11f, BusTheme.muted).apply {
+    private val phoneBatteryStatusView = SurfaceType.mono(TextView(context)).apply {
         isSingleLine = true
         gravity = Gravity.START
     }
-    private val dateStatusView = monoText(11f, BusTheme.dim).apply {
+    private val dateStatusView = SurfaceType.mono(TextView(context)).apply {
         isSingleLine = true
         gravity = Gravity.CENTER
         textAlignment = TEXT_ALIGNMENT_CENTER
     }
-    private val glassesBatteryStatusView = monoText(11f, BusTheme.muted).apply {
+    private val glassesBatteryStatusView = SurfaceType.mono(TextView(context)).apply {
         isSingleLine = true
         gravity = Gravity.END
         textAlignment = TEXT_ALIGNMENT_VIEW_END
@@ -84,19 +84,24 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
         }
     }
 
-    private val titleView = monoText(17f, BusTheme.text, bold = true)
-    private val subtitleView = monoText(11f, BusTheme.muted)
-    private val previousView = monoText(15f, BusTheme.dim)
-    private val currentView = monoText(25f, BusTheme.phosphor, bold = true).apply {
+    private val titleView = SurfaceType.heading(TextView(context))
+    private val subtitleView = SurfaceType.bodySmall(TextView(context))
+    private val previousView = SurfaceType.wrap(SurfaceType.body(TextView(context), RokidHudTokens.TEXT_SECONDARY), 2)
+    private val currentView = TextView(context).apply {
+        includeFontPadding = false
+        setTextColor(RokidHudTokens.TEXT_PRIMARY)
+        typeface = RokidHudTokens.bodyTypeface()
+        RokidHudTokens.applyTextSize(this, RokidHudTokens.DISPLAY_TEXT_SIZE)
         gravity = Gravity.CENTER
         textAlignment = TEXT_ALIGNMENT_CENTER
         maxLines = 5
+        setHorizontallyScrolling(false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            breakStrategy = android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+        }
     }
-    private val nextView = monoText(17f, BusTheme.muted).apply {
-        gravity = Gravity.CENTER
-        textAlignment = TEXT_ALIGNMENT_CENTER
-        maxLines = 3
-    }
+    private val nextView = SurfaceType.wrap(SurfaceType.body(TextView(context), RokidHudTokens.TEXT_SECONDARY), 3)
     private val boardView = LinearLayout(context).apply {
         orientation = VERTICAL
         gravity = Gravity.CENTER_VERTICAL
@@ -111,11 +116,17 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
         // A plugin opened this field to be typed into, so the phone may bring its
         // keyboard up for it, unlike any field the wearer merely lands on.
         privateImeOptions = RemoteInputMetadataPolicy.EDITABLE_SURFACE_IME_OPTION
-        setTextColor(BusTheme.text)
-        setHintTextColor(BusTheme.dim)
-        setBackgroundColor(BusTheme.glassesBg)
-        textSize = 17f
-        typeface = android.graphics.Typeface.MONOSPACE
+        // The field is always the focused control: `surface-selected` fill, 2 px `focus` border.
+        background = SurfaceChrome.focused()
+        setPadding(RokidHudTokens.SPACE_3, RokidHudTokens.SPACE_2, RokidHudTokens.SPACE_3, RokidHudTokens.SPACE_2)
+        setTextColor(RokidHudTokens.TEXT_PRIMARY)
+        setHintTextColor(RokidHudTokens.TEXT_SECONDARY)
+        typeface = RokidHudTokens.bodyTypeface()
+        RokidHudTokens.applyTextSize(this, RokidHudTokens.HEADING_TEXT_SIZE)
+        textCursorDrawable = android.graphics.drawable.GradientDrawable().apply {
+            setColor(RokidHudTokens.FOCUS)
+            setSize(RokidHudTokens.BORDER_STRONG, RokidHudTokens.HEADING_TEXT_SIZE.toInt())
+        }
         // One line: this is a reply, not a composer, and it lets a physical
         // Enter key submit directly instead of inserting a newline the way a
         // multi-line field would.
@@ -156,7 +167,7 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
     private val mediaView = MediaHudView(context).apply { visibility = GONE }
     private val imageView = ImageHudView(context).apply {
         visibility = GONE
-        setPadding(px(4), px(4), px(4), px(4))
+        setPadding(RokidHudTokens.SPACE_1, RokidHudTokens.SPACE_1, RokidHudTokens.SPACE_1, RokidHudTokens.SPACE_1)
     }
     private val inkView = InkHudView(context).apply { visibility = GONE }
     private val inkCardHost = InkCardClipHost(context).apply {
@@ -169,7 +180,12 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
             ),
         )
     }
-    private val footerView = monoText(10.5f, BusTheme.dim).apply {
+    private val panelView = LinearLayout(context).apply {
+        orientation = VERTICAL
+        gravity = Gravity.TOP
+        setPadding(RokidHudTokens.SPACE_3, RokidHudTokens.SPACE_3, RokidHudTokens.SPACE_3, RokidHudTokens.SPACE_3)
+    }
+    private val footerView = SurfaceType.bodySmall(TextView(context)).apply {
         gravity = Gravity.CENTER
         textAlignment = TEXT_ALIGNMENT_CENTER
         maxLines = 1
@@ -215,8 +231,8 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
     init {
         orientation = VERTICAL
         gravity = Gravity.TOP
-        setBackgroundColor(BusTheme.glassesBg)
-        setPadding(px(18), px(16), px(18), px(12))
+        setBackgroundColor(RokidHudTokens.GROUND)
+        applyFullBleedHost()
         isFocusable = true
         isFocusableInTouchMode = true
         // The glasses never enter touch mode, so the platform would wash this focused,
@@ -224,50 +240,41 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
         // whatever a see-through card leaves in view.
         defaultFocusHighlightEnabled = false
 
-        applyMarquee(titleView)
-        subtitleView.maxLines = 1
-        subtitleView.ellipsize = TextUtils.TruncateAt.END
+        SurfaceType.marquee(titleView)
         previousView.gravity = Gravity.CENTER
         previousView.textAlignment = TEXT_ALIGNMENT_CENTER
-        previousView.maxLines = 2
-        previousView.ellipsize = TextUtils.TruncateAt.END
+        nextView.gravity = Gravity.CENTER
+        nextView.textAlignment = TEXT_ALIGNMENT_CENTER
+        footerView.gravity = Gravity.CENTER
+        footerView.textAlignment = TEXT_ALIGNMENT_CENTER
 
         addView(statusRowView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-            bottomMargin = px(6)
+            bottomMargin = RokidHudTokens.SPACE_2
         })
-        addView(titleView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-        addView(subtitleView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-            topMargin = px(3)
+        addView(inkCardHost, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
+        addView(panelView, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
+        panelView.background = SurfaceChrome.panel()
+        val wide = LayoutParams.MATCH_PARENT
+        panelView.addView(titleView, LayoutParams(wide, LayoutParams.WRAP_CONTENT))
+        panelView.addView(subtitleView, LayoutParams(wide, LayoutParams.WRAP_CONTENT).apply {
+            topMargin = RokidHudTokens.SPACE_1
         })
-        addView(mediaView, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f).apply {
-            topMargin = px(8)
+        panelView.addView(mediaView, LayoutParams(wide, 0, 1f).apply { topMargin = RokidHudTokens.SPACE_3 })
+        panelView.addView(imageView, LayoutParams(wide, 0, 1f).apply { topMargin = RokidHudTokens.SPACE_3 })
+        panelView.addView(previousView, LayoutParams(wide, LayoutParams.WRAP_CONTENT).apply {
+            topMargin = RokidHudTokens.SPACE_6
         })
-        addView(imageView, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f).apply {
-            topMargin = px(8)
+        panelView.addView(currentView, LayoutParams(wide, 0, 1f).apply { topMargin = RokidHudTokens.SPACE_3 })
+        panelView.addView(boardView, LayoutParams(wide, 0, 1f).apply { topMargin = RokidHudTokens.SPACE_3 })
+        panelView.addView(editView, LayoutParams(wide, LayoutParams.WRAP_CONTENT).apply {
+            topMargin = RokidHudTokens.SPACE_3
         })
-        addView(inkCardHost, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f).apply {
-            topMargin = px(8)
+        panelView.addView(readerView, LayoutParams(wide, 0, 1f).apply { topMargin = RokidHudTokens.SPACE_3 })
+        panelView.addView(nextView, LayoutParams(wide, LayoutParams.WRAP_CONTENT).apply {
+            topMargin = RokidHudTokens.SPACE_3
         })
-        addView(previousView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-            topMargin = px(30)
-        })
-        addView(currentView, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f).apply {
-            topMargin = px(8)
-        })
-        addView(boardView, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f).apply {
-            topMargin = px(8)
-        })
-        addView(editView, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f).apply {
-            topMargin = px(8)
-        })
-        addView(readerView, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f).apply {
-            topMargin = px(8)
-        })
-        addView(nextView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-            topMargin = px(8)
-        })
-        addView(footerView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-            topMargin = px(16)
+        panelView.addView(footerView, LayoutParams(wide, LayoutParams.WRAP_CONTENT).apply {
+            topMargin = RokidHudTokens.SPACE_3
         })
     }
 
@@ -417,6 +424,7 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
             SurfaceHudMode.INK_CARD -> applyInkCardHost()
             SurfaceHudMode.FULL_BLEED -> applyFullBleedHost()
         }
+        panelView.visibility = visibleIf(!surface.isInk)
         titleView.text = surface.title
         titleView.visibility = visibleIf(surface.title.isNotBlank())
         subtitleView.text = surface.subtitle
@@ -508,6 +516,7 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
     private fun applySeeThrough(on: Boolean) {
         seeThrough = on
         statusRowView.visibility = if (on) GONE else VISIBLE
+        panelView.background = if (on) null else SurfaceChrome.panel()
         if (on) {
             background = null
             titleView.visibility = GONE
@@ -605,12 +614,17 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
         // The top-inset observer re-applies this chrome whenever the view attaches, which for a
         // freshly created surface activity is after the band already took the field.
         if (fill == null || seeThrough) background = null else setBackgroundColor(fill)
-        setPadding(
-            px(chrome.paddingLeftDp),
-            px(chrome.paddingTopDp),
-            px(chrome.paddingRightDp),
-            px(chrome.paddingBottomDp),
-        )
+        if (mode == SurfaceHudMode.INK_CARD) {
+            setPadding(0, 0, 0, 0)
+        } else {
+            // The app safe area: safe-x / safe-y, the top pushed down by the synced HUD inset.
+            setPadding(
+                RokidHudTokens.SAFE_X,
+                RokidHudTokens.SAFE_Y + HudTopInset.toPx(context, hudTopInsetDp),
+                RokidHudTokens.SAFE_X,
+                RokidHudTokens.SAFE_Y,
+            )
+        }
     }
 
     private fun applyInkCardHost() {
@@ -827,7 +841,9 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
         currentView.visibility = VISIBLE
         // Long lyric lines must never lose their tail: shrink to fit instead of clipping.
         currentView.maxLines = TIMED_BODY_MAX_LINES
-        fitTimedBody()
+        currentView.typeface = RokidHudTokens.displayTypeface()
+        currentView.setTextColor(RokidHudTokens.FOCUS)
+        fitBody()
         currentView.gravity = Gravity.CENTER
         currentView.textAlignment = TEXT_ALIGNMENT_CENTER
         val index = currentTimedIndex(surface)
@@ -841,30 +857,15 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
         nextView.visibility = visibleIf(nextView.text.isNotBlank())
     }
 
-    private fun fitCardBody() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            currentView.setAutoSizeTextTypeUniformWithConfiguration(
-                CARD_BODY_MIN_SP,
-                CARD_BODY_MAX_SP,
-                CARD_BODY_STEP_SP,
-                TypedValue.COMPLEX_UNIT_SP,
-            )
-        } else {
-            currentView.textSize = CARD_BODY_SP
-        }
-    }
-
-    private fun fitTimedBody() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            currentView.setAutoSizeTextTypeUniformWithConfiguration(
-                TIMED_BODY_MIN_SP,
-                TIMED_BODY_MAX_SP,
-                TIMED_BODY_STEP_SP,
-                TypedValue.COMPLEX_UNIT_SP,
-            )
-        } else {
-            currentView.textSize = TIMED_BODY_SP
-        }
+    /**
+     * Long bodies (lyrics, assistant replies) must never lose their tail: the text takes the
+     * largest of the three design sizes, `display`, `heading` or `body`, that fits.
+     */
+    private fun fitBody() {
+        currentView.setAutoSizeTextTypeUniformWithPresetSizes(
+            BODY_PRESET_SIZES_PX,
+            TypedValue.COMPLEX_UNIT_PX,
+        )
     }
 
     private fun renderCard(surface: NexusSurface) {
@@ -908,9 +909,11 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
             val view = if (row.tone == SurfaceRow.TONE_BODY) bodyRow(row) else listRow(row)
             val params = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                 if (index > 0) {
-                    topMargin = px(
-                        if (row.tone == SurfaceRow.TONE_BODY) LIST_BODY_GAP_DP else LIST_ROW_GAP_DP,
-                    )
+                    topMargin = if (row.tone == SurfaceRow.TONE_BODY) {
+                        RokidHudTokens.SPACE_2
+                    } else {
+                        RokidHudTokens.SPACE_1
+                    }
                 }
             }
             view to params
@@ -990,10 +993,24 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
         }
     }
 
-    private fun listOverflowIndicator(up: Boolean, hiddenCount: Int): TextView =
-        monoText(LIST_SUB_SP, BusTheme.muted).apply {
-            text = "${if (up) "▴" else "▾"} $hiddenCount"
-            maxLines = 1
+    /** A chevron and the count of the rows out of view, in `mono` at `text-secondary`. */
+    private fun listOverflowIndicator(up: Boolean, hiddenCount: Int): LinearLayout =
+        LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(
+                HudIconView(
+                    context,
+                    if (up) HudIconView.Kind.CHEVRON_UP else HudIconView.Kind.CHEVRON_DOWN,
+                ).apply { setIntensity(RokidHudTokens.TEXT_SECONDARY) },
+                LayoutParams(RokidHudTokens.ICON_SM, RokidHudTokens.ICON_SM),
+            )
+            addView(
+                SurfaceType.mono(TextView(context)).apply { text = hiddenCount.toString() },
+                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                    marginStart = RokidHudTokens.SPACE_1
+                },
+            )
         }
 
     private fun invalidatePendingListLayout() {
@@ -1002,95 +1019,89 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
         pendingListLayoutListener = null
     }
 
+    /** `ListItem`: 32 px minimum, `body` title, optional `body-small` line, `data` value at the end. */
     private fun listRow(row: SurfaceRow): LinearLayout =
         LinearLayout(context).apply {
             orientation = HORIZONTAL
-            addView(
-                selectionRail(row.selected),
-                LayoutParams(px(3), LayoutParams.MATCH_PARENT),
-            )
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = RokidHudTokens.LIST_ITEM_HEIGHT
+            setPadding(RokidHudTokens.SPACE_2, RokidHudTokens.SPACE_1, RokidHudTokens.SPACE_2, RokidHudTokens.SPACE_1)
+            background = if (row.selected) SurfaceChrome.focused() else null
+            if (row.tone == SurfaceRow.TONE_ALERT) {
+                // `Status` warn: the alert icon carries "needs the wearer", not a color.
+                addView(
+                    HudIconView(context, HudIconView.Kind.ALERT).apply { setIntensity(toneColor(row)) },
+                    LayoutParams(RokidHudTokens.ICON_SM, RokidHudTokens.ICON_SM).apply {
+                        marginEnd = RokidHudTokens.SPACE_2
+                    },
+                )
+            }
             addView(
                 LinearLayout(context).apply {
                     orientation = VERTICAL
                     addView(
-                        LinearLayout(context).apply {
-                            orientation = HORIZONTAL
-                            gravity = Gravity.BOTTOM
-                            addView(
-                                monoText(LIST_TITLE_SP, toneColor(row), bold = row.isEmphasised)
-                                    .apply {
-                                        text = row.text
-                                        maxLines = 1
-                                        // Never marquee a list title: a scrolling row is
-                                        // unreadable at a glance, which is the whole point.
-                                        ellipsize = TextUtils.TruncateAt.END
-                                    },
-                                LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f),
-                            )
-                            if (row.trail.isNotEmpty()) {
-                                addView(
-                                    listMetaView(row),
-                                    LayoutParams(
-                                        LayoutParams.WRAP_CONTENT,
-                                        LayoutParams.WRAP_CONTENT,
-                                    ).apply { marginStart = px(8) },
-                                )
-                            }
+                        SurfaceType.body(TextView(context), toneColor(row)).apply {
+                            text = row.text
+                            // Never marquee a list title: a scrolling row is unreadable at a glance.
+                            if (row.isEmphasised) typeface = RokidHudTokens.headingTypeface()
                         },
                         LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT),
                     )
                     if (row.sub.isNotBlank()) {
                         addView(
-                            monoText(LIST_SUB_SP, BusTheme.muted).apply {
-                                text = row.sub
-                                maxLines = 1
-                                ellipsize = TextUtils.TruncateAt.END
-                            },
-                            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-                                .apply { topMargin = px(2) },
+                            SurfaceType.bodySmall(TextView(context)).apply { text = row.sub },
+                            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT),
                         )
                     }
                 },
-                LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = px(9) },
+                LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f),
             )
+            if (row.trail.isNotEmpty()) {
+                addView(
+                    listMetaView(row),
+                    LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                        marginStart = RokidHudTokens.SPACE_2
+                    },
+                )
+            }
+            if (row.badge.isNotBlank()) {
+                addView(
+                    SurfaceType.data(TextView(context), toneColor(row)).apply { text = row.badge },
+                    LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                        marginStart = RokidHudTokens.SPACE_2
+                    },
+                )
+            }
         }
 
-    /** Prose row: a fixed dim label, then wrapped text — a conversation, not a table. */
+    /** Prose row: a fixed `label` column, then wrapped `body` text: a conversation, not a table. */
     private fun bodyRow(row: SurfaceRow): LinearLayout =
         LinearLayout(context).apply {
             orientation = HORIZONTAL
+            setPadding(RokidHudTokens.SPACE_2, RokidHudTokens.SPACE_1, RokidHudTokens.SPACE_2, RokidHudTokens.SPACE_1)
+            background = if (row.selected) SurfaceChrome.focused() else null
             if (row.badge.isNotBlank()) {
                 addView(
-                    monoText(LIST_LABEL_SP, BusTheme.muted, bold = true).apply {
-                        text = row.badge
-                        maxLines = 1
+                    SurfaceType.label(TextView(context)).apply {
+                        // The label column's line box is 14 px against the body's 20.
+                        text = row.badge.uppercase(Locale.ROOT)
+                        setPadding(0, (SurfaceType.BODY_LINE - SurfaceType.LABEL_LINE) / 2, 0, 0)
                     },
-                    LayoutParams(px(LIST_LABEL_WIDTH_DP), LayoutParams.WRAP_CONTENT),
+                    LayoutParams(LIST_LABEL_WIDTH_PX, LayoutParams.WRAP_CONTENT),
                 )
             }
             addView(
-                monoText(LIST_BODY_SP, if (row.selected) BusTheme.phosphor else BusTheme.text).apply {
-                    text = row.text
-                    maxLines = LIST_BODY_MAX_LINES
-                    ellipsize = TextUtils.TruncateAt.END
-                },
+                SurfaceType.wrap(
+                    SurfaceType.body(TextView(context), if (row.selected) RokidHudTokens.FOCUS else RokidHudTokens.TEXT_PRIMARY),
+                    LIST_BODY_MAX_LINES,
+                ).apply { text = row.text },
                 LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f),
             )
         }
 
-    private fun selectionRail(selected: Boolean): View =
-        View(context).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                setColor(if (selected) BusTheme.phosphor else BusTheme.glassesBg)
-                cornerRadius = px(2).toFloat()
-            }
-        }
-
-    /** Status token bright, the rest (age, counters) muted and smaller. */
+    /** Status token first, in `data`; the rest (age, counters) in `mono` at `text-secondary`. */
     private fun listMetaView(row: SurfaceRow): TextView =
-        monoText(LIST_META_SP, toneColor(row), bold = row.isEmphasised).apply {
-            maxLines = 1
+        SurfaceType.data(TextView(context), toneColor(row)).apply {
             text = SpannableStringBuilder().apply {
                 append(row.trail.first())
                 row.trail.drop(1).forEach { token ->
@@ -1098,13 +1109,13 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
                     append("  ")
                     append(token)
                     setSpan(
-                        ForegroundColorSpan(BusTheme.muted),
+                        ForegroundColorSpan(RokidHudTokens.TEXT_SECONDARY),
                         start,
                         length,
                         Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
                     )
                     setSpan(
-                        RelativeSizeSpan(0.82f),
+                        AbsoluteSizeSpan(RokidHudTokens.MONO_TEXT_SIZE.toInt()),
                         start,
                         length,
                         Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
@@ -1114,10 +1125,9 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
         }
 
     private fun toneColor(row: SurfaceRow): Int = when {
-        row.tone == SurfaceRow.TONE_ALERT -> BusTheme.phosphor
-        row.tone == SurfaceRow.TONE_DIM -> BusTheme.muted
-        row.selected -> BusTheme.phosphor
-        else -> BusTheme.text
+        row.selected -> RokidHudTokens.FOCUS
+        row.tone == SurfaceRow.TONE_DIM -> RokidHudTokens.TEXT_SECONDARY
+        else -> RokidHudTokens.TEXT_PRIMARY
     }
 
     private fun renderMedia(surface: NexusSurface) {
@@ -1163,7 +1173,9 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
         currentView.visibility = VISIBLE
         // Long card bodies (assistant replies, article text) must never lose
         // their tail: shrink to fit instead of clipping, like timed lines do.
-        fitCardBody()
+        currentView.typeface = RokidHudTokens.bodyTypeface()
+        currentView.setTextColor(RokidHudTokens.TEXT_PRIMARY)
+        fitBody()
         currentView.maxLines = CARD_BODY_MAX_LINES
         // Plain cards align as a left block; per-line centering scatters the columns.
         currentView.gravity = Gravity.CENTER_VERTICAL or Gravity.START
@@ -1183,7 +1195,7 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
             boardView.addView(
                 boardRow(row),
                 LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                    if (index > 0) topMargin = px(BOARD_ROW_GAP_DP)
+                    if (index > 0) topMargin = RokidHudTokens.SPACE_3
                 },
             )
         }
@@ -1193,60 +1205,40 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
         LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = RokidHudTokens.LIST_ITEM_HEIGHT
             addView(
                 badgeView(row.badge),
                 LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT),
             )
             addView(
-                monoText(BOARD_TEXT_SP, BusTheme.text).apply {
-                    text = row.text
-                    applyMarquee(this)
-                },
+                SurfaceType.marquee(SurfaceType.body(TextView(context))).apply { text = row.text },
                 LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply {
-                    marginStart = px(10)
+                    marginStart = RokidHudTokens.SPACE_3
                 },
             )
             if (row.trail.isNotEmpty()) {
                 addView(
                     trailView(row.trail),
                     LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
-                        marginStart = px(10)
+                        marginStart = RokidHudTokens.SPACE_3
                     },
                 )
             }
         }
 
-    /**
-     * Slow horizontal scroll for names too long for their slot. isSelected
-     * keeps the marquee running without focus, which overlays never hold.
-     */
-    private fun applyMarquee(view: TextView) {
-        view.isSingleLine = true
-        view.setHorizontallyScrolling(true)
-        view.ellipsize = TextUtils.TruncateAt.MARQUEE
-        view.marqueeRepeatLimit = -1
-        view.isSelected = true
-    }
-
-    /** Solid phosphor chip with punched-out route text — the brightest mark on the row. */
+    /** The route as a control outline (`line-control`, `radius-control`) around a `data` value. */
     private fun badgeView(badge: String): TextView =
-        monoText(BOARD_BADGE_SP, BusTheme.glassesBg, bold = true).apply {
-            text = badge.ifBlank { "·" }
-            maxLines = 1
+        SurfaceType.data(TextView(context)).apply {
+            text = badge.ifBlank { "\u00b7" }
             gravity = Gravity.CENTER
-            minWidth = px(44)
-            setPadding(px(7), px(2), px(7), px(2))
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                setColor(BusTheme.phosphor)
-                cornerRadius = px(6).toFloat()
-            }
+            minWidth = BOARD_BADGE_MIN_WIDTH_PX
+            setPadding(RokidHudTokens.SPACE_2, RokidHudTokens.SPACE_1, RokidHudTokens.SPACE_2, RokidHudTokens.SPACE_1)
+            background = SurfaceChrome.control()
         }
 
-    /** Next departure large and bright, the following ones smaller and muted. */
+    /** The next departure in `data`, the following ones in `mono` at `text-secondary`. */
     private fun trailView(trail: List<String>): TextView =
-        monoText(BOARD_TRAIL_SP, BusTheme.phosphor, bold = true).apply {
-            maxLines = 1
+        SurfaceType.data(TextView(context)).apply {
             text = SpannableStringBuilder().apply {
                 append(trail.first())
                 trail.drop(1).forEach { token ->
@@ -1254,13 +1246,13 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
                     append("  ")
                     append(token)
                     setSpan(
-                        ForegroundColorSpan(BusTheme.muted),
+                        ForegroundColorSpan(RokidHudTokens.TEXT_SECONDARY),
                         start,
                         length,
                         Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
                     )
                     setSpan(
-                        RelativeSizeSpan(0.78f),
+                        AbsoluteSizeSpan(RokidHudTokens.MONO_TEXT_SIZE.toInt()),
                         start,
                         length,
                         Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
@@ -1316,12 +1308,6 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
     private fun tickDelay(surface: NexusSurface): Long =
         if (surface.isMedia) MEDIA_TICK_MS else TICK_MS
 
-    private fun monoText(sizeSp: Float, color: Int, bold: Boolean = false): TextView =
-        monoHudText(context, sizeSp, color, bold)
-
-    private fun px(dp: Int): Int =
-        (dp * resources.displayMetrics.density + 0.5f).toInt()
-
     private companion object {
         private const val TICK_MS = 100L
         private const val MEDIA_TICK_MS = 500L
@@ -1329,39 +1315,19 @@ class SurfaceHudView(context: Context) : LinearLayout(context) {
         /** Long enough for the plugin to hide its field after its band closes; see watchNotice. */
         private const val INLINE_FALLBACK_DELAY_MS = 1_500L
 
-        // Plain card bodies (messages, chooser): smaller mono, more lines.
-        // Auto-fit mirrors the lyrics pattern: short bodies keep the full
-        // size, long ones shrink to fit instead of clipping their tail.
-        private const val CARD_BODY_SP = 17f
+        /** `display`, `heading`, `body`: the sizes a card body or a lyric line may take, largest first fitting. */
+        private val BODY_PRESET_SIZES_PX = intArrayOf(
+            RokidHudTokens.BODY_TEXT_SIZE.toInt(),
+            RokidHudTokens.HEADING_TEXT_SIZE.toInt(),
+            RokidHudTokens.DISPLAY_TEXT_SIZE.toInt(),
+        )
         private const val CARD_BODY_MAX_LINES = 15
-        private const val CARD_BODY_MAX_SP = 17
-        private const val CARD_BODY_MIN_SP = 14
-        private const val CARD_BODY_STEP_SP = 1
-        private const val TIMED_BODY_SP = 25f
         private const val TIMED_BODY_MAX_LINES = 5
+        private const val BOARD_BADGE_MIN_WIDTH_PX = 48
 
-        // Lyrics auto-fit: keep the big size for short lines, shrink long ones to fit.
-        private const val TIMED_BODY_MAX_SP = 25
-        private const val TIMED_BODY_MIN_SP = 14
-        private const val TIMED_BODY_STEP_SP = 1
-
-        // Structured board rows: badge chip, destination, wait times.
-        private const val BOARD_BADGE_SP = 15f
-        private const val BOARD_TEXT_SP = 16f
-        private const val BOARD_TRAIL_SP = 18f
-        private const val BOARD_ROW_GAP_DP = 12
-
-        // List rows: selection rail, title + meta, optional secondary line.
-        private const val LIST_TITLE_SP = 16f
-        private const val LIST_SUB_SP = 12.5f
-        private const val LIST_META_SP = 14f
-        private const val LIST_ROW_GAP_DP = 11
         // Conversation rows: fixed speaker label, wrapped prose.
-        private const val LIST_BODY_SP = 14.5f
-        private const val LIST_LABEL_SP = 11.5f
-        private const val LIST_LABEL_WIDTH_DP = 38
+        private const val LIST_LABEL_WIDTH_PX = 56
         private const val LIST_BODY_MAX_LINES = 3
-        private const val LIST_BODY_GAP_DP = 9
     }
 }
 

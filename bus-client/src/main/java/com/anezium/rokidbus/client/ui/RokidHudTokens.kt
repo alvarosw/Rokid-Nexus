@@ -120,6 +120,13 @@ object RokidHudTokens {
     // (or crash on) an unstubbed android.graphics.Typeface call at object-init time.
     private val sans: Typeface by lazy { Typeface.create("sans-serif", Typeface.NORMAL) }
     private val sansMedium: Typeface by lazy { Typeface.create("sans-serif-medium", Typeface.NORMAL) }
+    private val semibold: Typeface by lazy {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            Typeface.create(Typeface.create("sans-serif", Typeface.NORMAL), 600, false)
+        } else {
+            Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        }
+    }
     private val mono: Typeface by lazy { Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL) }
 
     fun bodyTypeface(): Typeface = sans
@@ -137,6 +144,17 @@ object RokidHudTokens {
 
     // typography.body-small — supporting text. 12 / 16 / 400.
     const val BODY_SMALL_TEXT_SIZE = 12f
+
+    // typography.heading — panel/screen title, sans, 600 weight. 16 / 22 / 600.
+    const val HEADING_TEXT_SIZE = 16f
+
+    // typography.display — one value or title per screen, at most; sans, 600 weight. 22 / 28 / 600.
+    const val DISPLAY_TEXT_SIZE = 22f
+
+    /** `heading` and `display` are 600 weight; the platform has no 600 sans, so this is its semibold cut. */
+    fun headingTypeface(): Typeface = semibold
+
+    fun displayTypeface(): Typeface = semibold
 
     /** [color] with its alpha multiplied by [factor] (0..1); a token color faded, never re-hued. */
     fun scaleAlpha(color: Int, factor: Float): Int {
