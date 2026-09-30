@@ -78,7 +78,11 @@ internal class FakePhone(
      * is consumed; everything else still meets the real (absent) link.
      */
     fun onOutbound(envelope: BusEnvelope): Boolean {
-        if (envelope.path != BusPaths.LAUNCHER_OPEN) return false
+        if (envelope.path != BusPaths.LAUNCHER_OPEN) {
+            // What the plugin would have heard: a tour asserts on this line (e.g. no BACK after a cancelled open).
+            log("FAKE_PHONE outbound ${envelope.path} ${envelope.payload}")
+            return false
+        }
         val pluginId = envelope.payload.optString("pluginId")
         val rule = onOpen[pluginId]
         when {

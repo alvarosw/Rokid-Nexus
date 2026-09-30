@@ -18,7 +18,7 @@ sleep 1.2
 date +%s%N > /data/local/tmp/fr/action.txt
 sendevent $KBD_DEV 1 $code 1; sendevent $KBD_DEV 0 0 0; sendevent $KBD_DEV 1 $code 0; sendevent $KBD_DEV 0 0 0
 sleep ${3:-4}
-kill \$L; sleep 0.3"
+kill \$L; sleep 0.3" || true   # the killed background loop makes the shell exit non-zero
 adb_ pull /data/local/tmp/fr/. "$out" >/dev/null 2>&1
 python3 - "$out" <<'PY'
 import os, sys

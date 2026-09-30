@@ -138,6 +138,10 @@ tools/emulator/fake-phone.sh my-envelope.json      # any envelope file, array, o
 tools/emulator/fake-phone.sh --reset               # forget the /launcher/open rules
 ```
 
+Every outbound envelope other than `/launcher/open` is logged as `FAKE_PHONE outbound <path> <payload>`
+before it meets the (absent) link, which is how a tour checks what a plugin would have heard (for
+example that a cancelled open sends no BACK).
+
 A scenario name resolves to `tools/emulator/scenarios/<name>.json`; several can be given and play in
 order. `fake-phone-build.py` flattens a scenario (`"@file:x"` inlines text, e.g. the compiled Ink
 document; `"binaryFile"` becomes `binaryBase64` and fills `"@sha256"`) and the script pushes it to

@@ -479,3 +479,74 @@ another, because the windows cannot coordinate. Two activities can still overlap
 chip share the top row (unchanged from before). The status badge's new colors were only rendered on
 Roborazzi: it needs the ROM launcher on the device and cannot be exercised on the emulator.
 
+### Review fixes (independent review of U1-U7b)
+
+Every item has a test that failed before the change (JVM or Robolectric) except where noted.
+
+- **Host attach failure.** `HudEvent.HostAttachFailed` is dispatched when `HudHost.attach()` returns
+  false for the launcher. A Home or Opening falls back to what it was opened over (foreign content) or
+  to Hidden, which cancels the open deadline, detaches and publishes `ringFocus=false`; keys then pass
+  to the system instead of vanishing into an invisible launcher. `showApp` keeps its own activity
+  fallback. `HudControllerTest` runs it against a window manager that refuses `addView`.
+- **`MainActivity` and the app icon.** Only a start of the activity (`onCreate`, `onNewIntent`: the app
+  icon or a setup hand-back) sets `openLauncherRequested`; a plain resume or a store broadcast never
+  does, so the launcher is not requested over an App screen. The flag stays set until the launcher
+  really opened; with the service not connected the setup view shows "Nexus is not running" (a
+  Settings shortcut, retried every 2 s) instead of finishing to a blank task. `LauncherHandoff.decide`
+  holds the rule and is unit tested; the "not running" view itself could not be reached on the
+  emulator (removing the service also moves the setup snapshot back to an onboarding stage).
+- **Cancelled open (`OPEN_CANCELLED`).** BUSSPEC has no event for "the hub hid a surface that was never
+  displayed": `/surface/input` with `KEYCODE_BACK` is the only close signal a non-Ink plugin ever gets,
+  and it means the wearer pressed BACK. So the surface is hidden locally and **nothing is sent**
+  (`CloseReason.forwardsBackToPlugin()` is true only for `WEARER_DISMISSED`). An Ink surface keeps the
+  `/ink/event closed` (`CLOSE_USER`) it always gets, since that event exists for exactly this end of
+  its session. No new wire value. A re-show inside the cancelled window is closed the same way and
+  sends nothing that could start another show; after the open's deadline it is an unsolicited show
+  as before. The plugin is left believing its surface is up until then: an accepted cost of having
+  no wire signal for it. Emulator: `plugins8-slow`, dismiss during `Opening`, the late show logs
+  "Surface closed unseen" and the fake-phone log has no `/surface/input`.
+- **One focus frame under a notice.** `HudState.noticeOwnsRing` reaches `HomeLayer.setNoticeOwnsRing`
+  from the settled sink; `HomeViewModel.focusedId` is null while it is true, so the selected row or
+  tile draws rest chrome (line border, no fill, no focus text) and the critical-tile choice ignores
+  it. The header counter still shows the selection. Captures: `list-07-notice-owns-ring`,
+  `grid-09-notice-owns-ring` (Roborazzi) and the emulator pair 18/19.
+- **Second `onServiceConnected`.** It releases the previous connection first (same path as a destroy:
+  the machine gets `ServiceDestroyed`, the host window is removed, observers and timers stop); a late
+  destroy of the old service is ignored.
+- **Threading.** `toggleLauncherFromBroadcast` posts to the main looper from any other thread and
+  answers `queued`; `dispatch` is private; `HudRunner.state` is `@Volatile`.
+- **Camera over a launcher over a surface.** The camera entry now closes the visible surface with
+  `SUPERSEDED` like every other external launch.
+- **Entries refresh.** `LauncherEntriesChanged` carries an `appearance` map (name and icon key per
+  id); a change with the same ids emits `RefreshHomeEntries` while the home is up.
+- **Live tiles while hidden.** `HomeLayer` loads, observes and binds tile data only while it is
+  `VISIBLE` and refreshes from the cache when it becomes visible, so a critical blink is not spent
+  under an app or a detached host.
+- **Owed UPs.** Each owed UP is stamped with its DOWN's event time and dropped after 5 s (a held key's
+  repeats refresh it), so a lost UP cannot swallow the UP of a later press.
+- **Reader keys.** A reader forwards only BACK, ENTER and DPAD_CENTER (`READER_FORWARDED_KEYS`); SPACE
+  and `MEDIA_PLAY_PAUSE` pass to the system as before the rewrite.
+- **Density of the band top: kept in dp.** `HudBandGeometry.topPx` is `(12 dp + inset) x density`, the
+  rest of the layers use `12 px + inset x density`. `InkCardPresentationTest` pins the Ink card's top as
+  `52 dp`, so unifying the unit would change what that test asserts, not restate it. It is recorded as
+  HARDWARE Q17 until the density is confirmed on a device.
+- **Debug injection.** `RawKeyEvent` carries `downTime` and `deviceId`; the receiver gives an injected
+  DOWN/UP pair one down time and a virtual device id, so the notice's press identity matches
+  (`HudKeyEventAdapter.toKeyEvent`). `HudInputSeam.sink` is only wired when `BuildConfig.DEBUG`.
+  The fake phone now logs every outbound envelope other than `/launcher/open`.
+- **Cleanup.** Removed `HudController.onSurfaceContentChanged`, `HomeLayer.clearStatus`,
+  `HudWaveformView` (nothing instantiated it; U7b's note about it is history), `HudSpring.BEAT`, the
+  `RingSurfaceInputPolicy` class and test (its keycode constants are `RingSurfaceKeys`), and the
+  `LiveTileViewTest` case that asserted `true`.
+- **Docs.** `docs/grid-hud-roadmap/00-05` carry a supersession banner (03 and 04 say what stays
+  current); the stash references in EMULATION are replaced by the fact they cited; the `RokidHudTokens`
+  KDoc no longer names the deleted grid view. By the owner's decision the urgent-flare sentences in
+  BUSSPEC.md and PLUGIN_SDK.md now say "blinks three times, then stays" (wording only), which closes
+  the note in U7b that they were left unedited.
+- **Frame analyzer.** `tools/emulator/analyze-frames.py`, `frame-sheet.py` and `dense-capture.sh`
+  (docs/EMULATION.md): a frame is either the ROM wallpaper (`home`) or Nexus content, so a green
+  panel or a photo is no longer taken for the launcher, and `--fail-on-home` asserts "no frame without
+  a Nexus window".
+
+Unchanged on purpose: the B1 back guard stays off (`unclaimedBackGuardMs = 0`).
+
