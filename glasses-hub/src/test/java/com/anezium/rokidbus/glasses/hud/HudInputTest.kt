@@ -247,11 +247,11 @@ class HudInputRingTest {
 
     @Test fun R3_a_missing_up_cannot_swallow_the_up_of_a_later_press() {
         val r = rig()
-        assertTrue(r.down(ENTER, TOUCHPAD, 1_000).consumed)      // its UP never arrives
+        assertTrue(r.down(TAP, R08, 1_000).consumed)             // its UP never arrives
         r.ctx.owner = InputOwner.NONE
         // Much later a press whose DOWN passed through: its UP is not owed to the lost one.
-        assertFalse(r.down(ENTER, TOUCHPAD, 30_000).consumed)
-        assertFalse(r.up(ENTER, TOUCHPAD, 30_050).consumed)
+        assertFalse(r.down(TAP, R08, 30_000).consumed)
+        assertFalse(r.up(TAP, R08, 30_050).consumed)
     }
 
     @Test fun R3_a_held_key_keeps_its_debt_alive_through_repeats() {
