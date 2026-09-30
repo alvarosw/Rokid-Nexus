@@ -27,7 +27,7 @@ import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.shared.tile.GridRect
 import com.anezium.rokidbus.shared.tile.TileSnapshot
 import com.anezium.rokidbus.shared.tile.TileTone
-import com.anezium.rokidbus.shared.tile.WidgetTileContract
+import com.anezium.rokidbus.shared.tile.TileContentRules
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -235,6 +235,9 @@ internal class TileLayoutCanvasView(context: Context) : View(context) {
         }
     }
 
+    /** Where [id] was last drawn, in canvas pixels. */
+    internal fun drawnRect(id: String): RectF? = drawn[id]?.let { RectF(it) }
+
     private fun rectOf(id: String): RectF? {
         val current = state ?: return null
         current.drag?.takeIf { it.id == id && it.moved }?.let { drag ->
@@ -412,6 +415,8 @@ internal class TileLayoutCanvasView(context: Context) : View(context) {
         val snapshot = visual?.snapshot
         val cells = state?.layout?.get(tile.id) ?: return
         val layer = if (lifted) canvas.saveLayerAlpha(rect, LIFTED_ALPHA) else canvas.save()
+        val tone = snapshot?.tone
+        val alert = tone == TileTone.WARN || tone == TileTone.CRITICAL
 
         val borderWidth = if (selected) 2f else 1f
         fill.color = when {
@@ -421,9 +426,14 @@ internal class TileLayoutCanvasView(context: Context) : View(context) {
         }
         canvas.drawRoundRect(rect, RADIUS, RADIUS, fill)
         stroke.strokeWidth = borderWidth
-        stroke.color = if (selected) RokidHudTokens.GREEN_100 else RokidHudTokens.GREEN_48
-        stroke.pathEffect =
-            if (snapshot?.tone == TileTone.WARN) DashPathEffect(floatArrayOf(4f, 3f), 0f) else null
+        // Resting border intensity as the glasses draw it: the fallback tile at `line`, a live one by tone.
+        stroke.color = when {
+            selected -> RokidHudTokens.GREEN_100
+            snapshot == null -> RokidHudTokens.LINE
+            tone == TileTone.OK || tone == TileTone.WARN || tone == TileTone.CRITICAL -> RokidHudTokens.GREEN_72
+            else -> RokidHudTokens.GREEN_48
+        }
+        stroke.pathEffect = if (tone == TileTone.WARN) DashPathEffect(floatArrayOf(4f, 3f), 0f) else null
         tmp.set(rect)
         tmp.inset(borderWidth / 2f, borderWidth / 2f)
         canvas.drawRoundRect(tmp, RADIUS - borderWidth / 2f, RADIUS - borderWidth / 2f, stroke)
@@ -433,110 +443,158 @@ internal class TileLayoutCanvasView(context: Context) : View(context) {
         clip.addRoundRect(rect, RADIUS, RADIUS, Path.Direction.CW)
         canvas.clipPath(clip)
 
-        val inner = CONTENT_INSET
-        val left = rect.left + inner
-        val right = rect.right - inner
-        val bottom = rect.bottom - inner
-        var y = rect.top + inner
+        // The glasses' tile: 8 px padding, then header, content top-down, progress track at the foot.
+        val left = rect.left + PAD
+        val right = rect.right - PAD
+        val bottom = rect.bottom - PAD
+        var y = rect.top + PAD
+        val ink = if (selected) RokidHudTokens.GREEN_100 else null
 
-        // Eyebrow: plugin glyph and uppercase name.
+        val icon = RokidHudTokens.ICON_SM.toFloat()
         visual?.glyph?.let { glyph ->
-            glyph.setBounds(0, 0, GLYPH, GLYPH)
-            glyph.colorFilter = PorterDuffColorFilter(RokidHudTokens.GREEN_48, PorterDuff.Mode.SRC_IN)
+            glyph.setBounds(0, 0, RokidHudTokens.ICON_SM, RokidHudTokens.ICON_SM)
+            glyph.colorFilter = PorterDuffColorFilter(ink ?: RokidHudTokens.TEXT_PRIMARY, PorterDuff.Mode.SRC_IN)
             canvas.save()
             canvas.translate(left, y)
             glyph.draw(canvas)
             canvas.restore()
         }
-        val nameLeft = left + if (visual?.glyph != null) GLYPH + 5f else 0f
-        sansPaint(11f, 0.09f, RokidHudTokens.GREEN_48, bold = false)
-        drawLine(canvas, tile.name.uppercase(), nameLeft, y, GLYPH.toFloat(), right - nameLeft)
-        y += GLYPH + 5f
+        val nameLeft = left + if (visual?.glyph != null) icon + RokidHudTokens.SPACE_1 else 0f
+        val nameRight = right - if (alert) icon + RokidHudTokens.SPACE_1 else 0f
+        paint(RokidHudTokens.labelTypeface(), RokidHudTokens.LABEL_TEXT_SIZE, RokidHudTokens.LABEL_LETTER_SPACING_EM, ink ?: RokidHudTokens.TEXT_SECONDARY)
+        drawLine(canvas, tile.name.uppercase(), nameLeft, y, icon, nameRight - nameLeft)
+        if (alert) {
+            drawAlert(canvas, right - icon, y, if (tone == TileTone.CRITICAL) RokidHudTokens.CRITICAL else RokidHudTokens.TEXT_PRIMARY)
+        }
+        y += icon
 
+        val shown = TileContentRules.contentFor(TileLayoutEditorState.sizeOf(cells), snapshot)
         if (snapshot != null) {
-            y = drawSnapshot(canvas, cells, snapshot, selected, left, right, y)
-            val progress = snapshot.progress
-            if (progress != null) {
-                val sizeWidth = drawSizeLabel(canvas, cells, right, bottom, measureOnly = true)
-                val trackRight = right - sizeWidth - 6f
-                val trackTop = bottom - 4f - 3f
-                fill.color = RokidHudTokens.GREEN_24
-                tmp.set(left, trackTop, trackRight, trackTop + 3f)
-                canvas.drawRoundRect(tmp, 2f, 2f, fill)
-                fill.color = RokidHudTokens.GREEN_72
-                tmp.set(left, trackTop, left + (trackRight - left) * progress, trackTop + 3f)
-                canvas.drawRoundRect(tmp, 2f, 2f, fill)
+            val width = right - left
+            when (shown.titleStyle) {
+                TileContentRules.TitleStyle.TEXT -> {
+                    y += RokidHudTokens.SPACE_1
+                    paint(RokidHudTokens.bodyTypeface(), RokidHudTokens.BODY_TEXT_SIZE, 0f, ink ?: RokidHudTokens.TEXT_PRIMARY)
+                    y = drawWrapped(canvas, snapshot.title, left, y, width, shown.titleMaxLines)
+                }
+                TileContentRules.TitleStyle.DATA_VALUE -> {
+                    y += RokidHudTokens.SPACE_1
+                    paint(RokidHudTokens.dataTypeface(), RokidHudTokens.DATA_TEXT_SIZE, 0f, ink ?: RokidHudTokens.TEXT_PRIMARY)
+                    val valueHeight = lineHeight()
+                    val valueWidth = text.measureText(snapshot.title)
+                    drawLine(canvas, snapshot.title, left, y, valueHeight, width)
+                    var rowHeight = valueHeight
+                    if (shown.showUnit) {
+                        paint(RokidHudTokens.monoTypeface(), RokidHudTokens.MONO_TEXT_SIZE, 0f, RokidHudTokens.TEXT_SECONDARY)
+                        val unitLeft = left + valueWidth + RokidHudTokens.SPACE_1
+                        drawLine(canvas, snapshot.unit, unitLeft, y, lineHeight(), right - unitLeft)
+                        rowHeight = max(rowHeight, lineHeight())
+                    }
+                    y += rowHeight
+                }
+                TileContentRules.TitleStyle.NONE -> Unit
+            }
+            if (shown.subtitleVisible) {
+                y += 2f
+                paint(RokidHudTokens.bodyTypeface(), RokidHudTokens.LABEL_TEXT_SIZE, 0f, RokidHudTokens.TEXT_SECONDARY)
+                y = drawWrapped(canvas, snapshot.subtitle, left, y, width, shown.subtitleMaxLines)
+            }
+            if (shown.badgeVisible) {
+                y += RokidHudTokens.SPACE_1
+                paint(RokidHudTokens.dataTypeface(), RokidHudTokens.LABEL_TEXT_SIZE, 0f, RokidHudTokens.TEXT_PRIMARY)
+                drawLine(canvas, snapshot.badge, left, y, lineHeight(), width)
+                y += lineHeight()
+            }
+            if (shown.rowCount > 0) {
+                y += 6f
+                paint(RokidHudTokens.bodyTypeface(), RokidHudTokens.LABEL_TEXT_SIZE, 0f, RokidHudTokens.TEXT_PRIMARY)
+                snapshot.rows.take(shown.rowCount).forEachIndexed { index, row ->
+                    if (index > 0) y += 3f
+                    drawLine(canvas, row, left, y, lineHeight(), width)
+                    y += lineHeight()
+                }
             }
         }
-        drawSizeLabel(canvas, cells, right, bottom, measureOnly = false)
+        val progress = shown.progress
+        var labelBottom = bottom
+        if (progress != null) {
+            val trackTop = bottom - TRACK_HEIGHT
+            fill.color = RokidHudTokens.LINE
+            tmp.set(left, trackTop, right, bottom)
+            canvas.drawRoundRect(tmp, RokidHudTokens.RADIUS_DATA.toFloat(), RokidHudTokens.RADIUS_DATA.toFloat(), fill)
+            fill.color = RokidHudTokens.TEXT_PRIMARY
+            tmp.set(left, trackTop, left + (right - left) * progress, bottom)
+            canvas.drawRoundRect(tmp, RokidHudTokens.RADIUS_DATA.toFloat(), RokidHudTokens.RADIUS_DATA.toFloat(), fill)
+            labelBottom = trackTop - RokidHudTokens.SPACE_1
+        }
+        // Editor-only: the tile's size, which the glasses do not draw.
+        val label = TileLayoutEditorState.sizeLabel(cells)
+        monoPaint(10f, 0.04f, RokidHudTokens.GREEN_48)
+        canvas.drawText(label, right - text.measureText(label), labelBottom - text.descent(), text)
         canvas.restoreToCount(layer)
     }
 
-    /** Title, subtitle, badge and rows as the glasses' live tile lays them out; returns the next y. */
-    private fun drawSnapshot(
-        canvas: Canvas,
-        cells: GridRect,
-        snapshot: TileSnapshot,
-        selected: Boolean,
-        left: Float,
-        right: Float,
-        top: Float,
-    ): Float {
-        val titleColor = if (selected) RokidHudTokens.GREEN_100 else RokidHudTokens.GREEN_72
+    /** The glasses' `ALERT` icon: a triangle with an exclamation mark, 1 px round stroke. */
+    private fun drawAlert(canvas: Canvas, x: Float, y: Float, color: Int) {
+        stroke.strokeWidth = RokidHudTokens.BORDER_DEFAULT.toFloat()
+        stroke.color = color
+        stroke.strokeCap = Paint.Cap.ROUND
+        stroke.strokeJoin = Paint.Join.ROUND
+        clip.reset()
+        clip.moveTo(x + 8f, y + 1.5f)
+        clip.lineTo(x + 15f, y + 14f)
+        clip.lineTo(x + 1f, y + 14f)
+        clip.close()
+        clip.moveTo(x + 8f, y + 6f)
+        clip.lineTo(x + 8f, y + 9.5f)
+        clip.moveTo(x + 8f, y + 11.5f)
+        clip.lineTo(x + 8f, y + 12f)
+        canvas.drawPath(clip, stroke)
+        stroke.strokeCap = Paint.Cap.BUTT
+        stroke.strokeJoin = Paint.Join.MITER
+    }
+
+    private fun lineHeight(): Float = text.fontMetrics.let { it.descent - it.ascent }
+
+    /** Word-wrapped lines of the current paint, the last one ellipsized; returns the next y. */
+    private fun drawWrapped(canvas: Canvas, value: String, x: Float, top: Float, width: Float, maxLines: Int): Float {
+        val height = lineHeight()
+        var rest = value.trim()
         var y = top
-        if (snapshot.title.toDoubleOrNull() != null) {
-            monoPaint(26f, 0f, titleColor, bold = true)
-            drawLine(canvas, snapshot.title, left, y, 28f, right - left)
-            val valueWidth = text.measureText(snapshot.title)
-            if (snapshot.unit.isNotEmpty()) {
-                monoPaint(11f, 0f, RokidHudTokens.GREEN_48)
-                drawLine(canvas, snapshot.unit, left + valueWidth + 4f, y + 14f, 14f, right - left - valueWidth - 4f)
+        var line = 0
+        while (rest.isNotEmpty() && line < maxLines) {
+            val fits = text.breakText(rest, true, width, null)
+            if (line == maxLines - 1 || fits >= rest.length) {
+                drawLine(canvas, rest, x, y, height, width)
+                y += height
+                break
             }
-            y += 28f
-        } else {
-            sansPaint(14f, 0f, titleColor, bold = true)
-            drawLine(canvas, snapshot.title, left, y, 17.5f, right - left)
-            y += 17.5f
-        }
-        if ((cells.cols >= 2 || cells.rows >= 2) && snapshot.subtitle.isNotEmpty()) {
-            sansPaint(12f, 0f, RokidHudTokens.GREEN_48)
-            y += 2f
-            drawLine(canvas, snapshot.subtitle, left, y, 15f, right - left)
-            y += 15f
-        }
-        if (snapshot.badge.isNotEmpty()) {
-            monoPaint(11f, 0f, RokidHudTokens.GREEN_72)
-            y += 3f
-            drawLine(canvas, snapshot.badge, left, y, 14f, right - left)
-            y += 14f
-        }
-        val rowCap = when {
-            cells.rows == 1 -> 0
-            cells.rows == 2 -> 3
-            else -> WidgetTileContract.MAX_ROWS
-        }
-        if (rowCap > 0 && snapshot.rows.isNotEmpty()) {
-            y += 6f
-            monoPaint(11f, 0f, RokidHudTokens.GREEN_48)
-            snapshot.rows.take(rowCap).forEach { row ->
-                drawLine(canvas, row, left, y, 14f, right - left)
-                y += 14f + 3f
-            }
+            var cut = rest.lastIndexOf(' ', fits)
+            if (cut <= 0) cut = fits.coerceAtLeast(1)
+            drawLine(canvas, rest.substring(0, cut).trimEnd(), x, y, height, width)
+            y += height
+            rest = rest.substring(cut).trimStart()
+            line++
         }
         return y
     }
 
-    /** The "W×H" label at the tile's bottom-right; returns its width. */
-    private fun drawSizeLabel(canvas: Canvas, cells: GridRect, right: Float, bottom: Float, measureOnly: Boolean): Float {
-        val label = TileLayoutEditorState.sizeLabel(cells)
-        monoPaint(10f, 0.04f, RokidHudTokens.GREEN_48)
-        val width = text.measureText(label)
-        if (!measureOnly) canvas.drawText(label, right - width, bottom - text.descent(), text)
-        return width
+    private fun paint(typeface: Typeface, size: Float, tracking: Float, color: Int) {
+        text.typeface = typeface
+        text.textSize = size
+        text.letterSpacing = tracking
+        text.color = color
     }
 
     /** One ellipsized line, vertically centred in a [lineHeight] band starting at [top]. */
-    private fun drawLine(canvas: Canvas, value: String, x: Float, top: Float, lineHeight: Float, maxWidth: Float) {
+    private fun drawLine(
+        canvas: Canvas,
+        value: String,
+        x: Float,
+        top: Float,
+        lineHeight: Float,
+        maxWidth: Float,
+    ) {
         if (maxWidth <= 0f) return
         val shown = if (text.measureText(value) <= maxWidth) {
             value
@@ -570,9 +628,9 @@ internal class TileLayoutCanvasView(context: Context) : View(context) {
         const val MOVE_MS = 200L
         const val ELLIPSIS = "…"
 
-        /** Border plus padding of a tile: 1 + 9 at rest, 2 + 8 selected, so content never shifts. */
-        const val CONTENT_INSET = 10f
-        const val GLYPH = 13
+        /** The glasses tile's padding; the 1 or 2 px border is drawn inside it. */
+        const val PAD = RokidHudTokens.SPACE_2 * 1f
+        const val TRACK_HEIGHT = 3f
         const val LIFTED_ALPHA = 235
         const val SLOT_REST = 0x1A40FF5E
 

@@ -11,6 +11,7 @@ import com.anezium.rokidbus.shared.tile.GridRect
 import com.anezium.rokidbus.shared.tile.TileLayoutEntry
 import com.anezium.rokidbus.shared.tile.TileSize
 import com.anezium.rokidbus.shared.tile.TileSnapshot
+import com.anezium.rokidbus.shared.tile.TileTone
 import com.anezium.rokidbus.shared.tile.WidgetTileContract
 import java.io.File
 import org.junit.After
@@ -122,23 +123,79 @@ class TileLayoutScreenshotTest {
         capture("tile-layout-editor-full", representative, height = 2500)
     }
 
-    @Test
-    fun `a tile lifted mid-drag shows the ghost at its snap target`() {
-        val tiles = listOf("a", "b", "c").map { EditorTile(it, "Tile $it", TileSize.entries.toSet(), live = false) }
-        val layout = mapOf("a" to GridRect(0, 0, 2, 1), "b" to GridRect(2, 0, 1, 1), "c" to GridRect(0, 1, 2, 2))
-        val state = TileLayoutEditorState(tiles, layout, layout)
-        val context = org.robolectric.RuntimeEnvironment.getApplication()
-        val view = TileLayoutCanvasView(context)
-        view.bind(state, emptyMap(), visibleRows = 3)
-        state.dragStart("c", 100f, 140f)
-        state.dragMove(330f, 40f, travelDp = 80f)
-        val width = 780
+    private fun render(view: TileLayoutCanvasView, name: String, width: Int = 780): Bitmap {
+        org.robolectric.shadows.ShadowLooper.idleMainLooper(400, java.util.concurrent.TimeUnit.MILLISECONDS)
         view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.UNSPECIFIED)
         view.layout(0, 0, width, view.measuredHeight)
         val bitmap = Bitmap.createBitmap(width, view.measuredHeight, Bitmap.Config.ARGB_8888)
         view.draw(Canvas(bitmap))
         File("build/screenshots").apply { mkdirs() }
-        File("build/screenshots/tile-layout-drag.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        File("build/screenshots/$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        return bitmap
+    }
+
+    @Test
+    fun `a tile lifted mid-drag shows the ghost at its snap target`() {
+        val tiles = listOf("a", "b", "c").map { EditorTile(it, "Tile $it", TileSize.entries.toSet(), live = false) }
+        val layout = mapOf("a" to GridRect(0, 0, 2, 1), "b" to GridRect(2, 0, 1, 1), "c" to GridRect(0, 1, 2, 2))
+        val state = TileLayoutEditorState(tiles, layout, layout)
+        val view = TileLayoutCanvasView(org.robolectric.RuntimeEnvironment.getApplication())
+        view.bind(state, emptyMap(), visibleRows = 3)
+        state.dragStart("c", 100f, 140f)
+        state.dragMove(330f, 40f, travelDp = 80f)
+        view.stateChanged()
+        render(view, "tile-layout-drag")
         assertEquals(GridRect(2, 0, 2, 2), state.layout["c"])
+        // The displaced tile is drawn at its new cell, not where it started.
+        val displaced = state.layout.getValue("b")
+        assert(displaced != GridRect(2, 0, 1, 1))
+        val drawn = view.drawnRect("b")!!
+        assertEquals(displaced.col * 114f, drawn.left, 0.5f)
+        assertEquals(displaced.row * 114f, drawn.top, 0.5f)
+    }
+
+    /** The fixture of the glasses capture `grid-17-wide-live-progress`, for a side-by-side check. */
+    @Test
+    fun `preview of the glasses grid-17 fixture`() {
+        val names = listOf("Lyrics", "Now Playing", "Navigation", "Transit", "Relay")
+        val glyphs = listOf(
+            "M9 18V5l11-2v13 M3 18a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M14 16a3 3 0 1 0 6 0a3 3 0 1 0-6 0",
+            "M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0 M12 7v5l3.5 2",
+            "M22 2L11 13 M22 2l-7 20-4-9-9-4 20-7z",
+            "M3 4h18v12H3z M3 10h18 M6 16v3 M18 16v3",
+            "M22 2L11 13 M22 2l-7 20-4-9-9-4 20-7z",
+        )
+        val tiles = names.mapIndexed { i, n -> EditorTile("plugin$i", n, TileSize.entries.toSet(), live = true) }
+        val layout = TileLayoutEditorState.layoutOf(
+            com.anezium.rokidbus.shared.tile.TileGridLayout.resolve(
+                tiles.map { it.id to null },
+                listOf(
+                    TileLayoutEntry("plugin0", TileSize.BANNER, 0, 0),
+                    TileLayoutEntry("plugin1", TileSize.SMALL, 3, 0),
+                    TileLayoutEntry("plugin2", TileSize.PANEL, 1, 2),
+                    TileLayoutEntry("plugin3", TileSize.SMALL, 0, 3),
+                    TileLayoutEntry("plugin4", TileSize.JUMBO, 0, 5),
+                ),
+            ),
+        )
+        fun snap(id: String, title: String, unit: String, tone: TileTone, subtitle: String = "") =
+            TileSnapshot(id, "k", title, unit = unit, tone = tone, subtitle = subtitle)
+        val snapshots = mapOf(
+            "plugin0" to snap("plugin0", "Next bus in 12 min", "", TileTone.OK, "Line 4 to Central"),
+            "plugin1" to snap("plugin1", "7", "new", TileTone.INFO),
+            "plugin2" to snap("plugin2", "3", "tasks", TileTone.OK, "Today")
+                .copy(rows = listOf("Call Ana", "Buy milk", "Send report"), progress = 0.66f),
+            "plugin4" to snap("plugin4", "Sync", "", TileTone.OFF, "Photos")
+                .copy(rows = listOf("IMG_0412", "IMG_0413", "IMG_0414", "IMG_0415"), progress = 0.3f, badge = "42%"),
+        )
+        val state = TileLayoutEditorState(tiles, layout, layout)
+        state.select("plugin2")
+        val view = TileLayoutCanvasView(org.robolectric.RuntimeEnvironment.getApplication())
+        view.bind(
+            state,
+            tiles.mapIndexed { i, t -> t.id to TileVisual(GlyphDrawable(glyphs[i]), snapshots[t.id]) }.toMap(),
+            visibleRows = 5,
+        )
+        render(view, "tile-layout-grid-17")
     }
 }
