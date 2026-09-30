@@ -81,6 +81,39 @@ tools/emulator/frame-sheet.py /tmp/nexus-emu/dense-list-open -0.2 1.5 /tmp/nexus
 
 The hubs link the vendor CXR library: build without `-PskipCxrGlobal=true` (the script does).
 
+## API 32 (Android 12L), the version of the Rokid OS
+
+The glasses run Android 12L (API 32). Two devices are supported; `EMU_TARGET` picks one for every script
+(`cuttlefish37` is the default, `api32` selects the values below; `SERIAL`, `ADB_BIN`, `KBD_DEV` still override).
+`env.sh` refuses any serial that is not an emulator/Cuttlefish one, and every adb call carries `-s`, so a physical
+device that is also attached is never touched.
+
+- **Cuttlefish API 32 is not obtainable here.** `cvd fetch --default_build=aosp-sc-v2-dev/aosp_cf_x86_64_phone-userdebug`
+  (also `aosp-android12L-release`, `aosp-android-latest-release`) fails anonymously with `Error response from Android Build API
+  - 400`, and ci.android.com answers 403 "Rate limit exceeded for legacy API" for every branch. It needs credentials.
+- **What works: the regular Android emulator with the API 32 AOSP image**, installed into the machine's existing SDK:
+  ```
+  sdkmanager --sdk_root=$HOME/Android/Sdk emulator "system-images;android-32;default;x86_64"
+  tools/emulator/start-api32.sh create      # AVD "glasses32" in ~/cuttlefish-api32/avd: 480x640, 240 dpi, 4 GB, 4 cores
+  tools/emulator/start-api32.sh             # headless, port 5570, serial emulator-5570, then adb root
+  EMU_TARGET=api32 tools/emulator/install-and-arm.sh
+  ```
+  `start-api32.sh stop` shuts it down. Keep TMPDIR off `/tmp` (a small tmpfs): the script uses `~/cuttlefish-api32/tmp`.
+  The image is `Android 12 / SDK 32 (SE1B.240122.005) x86_64`, native size 480x640 @ 240, no ARM translation (the stub is
+  still needed).
+- **Ring by evdev**: on this image the keyboard is `/dev/input/event1` ("AT Translated Set 2 keyboard"; the script default
+  for `api32`), and the `shell` user cannot write it (`Permission denied`), hence `adb root` in `start-api32.sh`. A Cuttlefish
+  that was cold-booted needs `adb root` for `event4` too.
+- **Switch back to API 37**: `start-api32.sh stop`, then
+  `cd /opt/cuttlefish/cf && HOME=/opt/cuttlefish/cf bin/launch_cvd --daemon --resume=true --gpu_mode=guest_swiftshader --memory_mb=4096 --cpus=4`
+  (about 3 minutes; do NOT pass `--start_webrtc=false`: the guest never starts), `adb -s 0.0.0.0:6520 root`,
+  `tools/emulator/setup-display.sh` (720x1280 @ 320 native), and `SKIP_BUILD=1 tools/emulator/install-and-arm.sh`.
+  Stop it with `HOME=/opt/cuttlefish/cf /opt/cuttlefish/cf/bin/stop_cvd`. Only one of the two fits comfortably in 11 GB.
+- Differences seen: the API 32 home shows the AOSP status bar and navigation bar under the Nexus window, which covers them;
+  `input keyevent` does not reach the accessibility key filter on either API (use evdev or `INPUT_MODE=hud`); the `hud-mode`
+  config does not repaint an open launcher on either (it applies on the next open); the Ink card is see-through, so on both
+  the analyzer reports `home` once the morph ends (run `--to 0.6` for Ink); everything else behaved the same.
+
 ## Slowing motion down and reduced motion
 
 The host's animations honor `animator_duration_scale`: `0` is reduced motion (every transition lands on
@@ -113,7 +146,7 @@ The product APK is untouched. Set `X86_STUB=0` on a device that can run ARM.
 
 - The real R08 ring: actual event timing, long-press/repeat behavior, touchpad gestures.
 - Rokid ROM behavior: status bar/mode row (`HudTopInset`), the screen-position setting, standby and
-  wake policy, the ROM's own launcher, the API 32 (Android 12L) framework (the emulator is API 37).
+  wake policy, the ROM's own launcher, the Rokid framework build (API 32 itself is covered, see below).
 - CXR/SPP links: with the stub the hub sees no phone, so no plugin entries, tiles, surfaces from
   plugins, camera, media sync or self-arm flows.
 - The optical see-through display: black is transparent on glasses, brightness/legibility outdoors,

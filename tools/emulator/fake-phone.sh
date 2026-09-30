@@ -24,7 +24,8 @@ while [ "$#" -gt 0 ]; do
     --reset) broadcast --ez reset true ;;
     --hud)   broadcast --es hudMode "${2:?--hud list|grid}"; shift ;;
     --envelope)
-      broadcast --es path "${2:?path}" --es payload "${3:-{\}}"; shift 2 ;;
+      # adb joins its arguments for the device shell, which would strip the JSON's double quotes.
+      broadcast --es path "$(printf %q "${2:?path}")" --es payload "$(printf %q "${3:-{\}}")"; shift 2 ;;
     *)
       src="$1"
       [ -f "$src" ] || src="$HERE/scenarios/$1.json"

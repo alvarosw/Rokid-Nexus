@@ -3,12 +3,11 @@
 # Runs a raw `screencap` loop on the device (about 150 ms per frame) around one evdev key press and
 # pulls the frames to $OUT_DIR/dense-<label>/, renamed to their offset from the press in seconds
 # (`-1.032.raw`, `+0.118.raw`). Feed the directory to analyze-frames.py and frame-sheet.py.
-# Env: the settings of env.sh, plus KBD_DEV (default /dev/input/event4, the emulator keyboard).
+# Env: the settings of env.sh, plus KBD_DEV (the emulator keyboard node, per EMU_TARGET).
 set -euo pipefail
 . "$(dirname "$0")/env.sh"
 label="${1:?usage: dense-capture.sh <label> <evdev-key-code> [seconds-after]}"
 code="${2:?evdev key code, e.g. 28 = ENTER, 108 = DOWN, 158 = BACK}"
-KBD_DEV="${KBD_DEV:-/dev/input/event4}"
 out="$OUT_DIR/dense-$label"
 rm -rf "$out"; mkdir -p "$out"
 adb_ shell "rm -rf /data/local/tmp/fr; mkdir -p /data/local/tmp/fr

@@ -12,7 +12,7 @@ set -euo pipefail
 # INPUT_MODE=hud broadcasts the raw keys to DebugHudInputReceiver tagged as device R08, so the ring
 # pipeline of HudInput runs with the real 85/87/88 keycodes. The receiver logs "no HudInput is wired"
 # while the accessibility service is not connected.
-KBD_DEV="${KBD_DEV:-/dev/input/event4}"   # "Cuttlefish Vhost User Keyboard 0"; see `getevent -il`
+# KBD_DEV comes from env.sh (see `getevent -il` for the right node)
 key() {  # <inject keycode> <linux evdev code>
   if [ "${INPUT_MODE:-evdev}" = "hud" ]; then
     # BACK is not a ring key: the ring dismisses with a double tap, so send it as the generic device.
