@@ -824,6 +824,36 @@ class HudStateMachineTest {
     }
 
     @Test
+    fun cancelling_a_second_open_keeps_the_first_ones_late_show_closed_unseen() {
+        val h = Harness()
+        h.openEntry("a")
+        h.dismiss(at = 100)
+        h.next()
+        h.select(at = 200)
+        h.dismiss(at = 300)
+        assertEquals(setOf("a", "b"), h.state.cancelledOpen.keys)
+        val fxA = h.shown("a", at = 400)
+        assertEquals(listOf<HudEffect>(CloseApp("a", CloseReason.OPEN_CANCELLED)), fxA)
+        val fxB = h.shown("b", at = 500)
+        assertEquals(listOf<HudEffect>(CloseApp("b", CloseReason.OPEN_CANCELLED)), fxB)
+    }
+
+    @Test
+    fun one_cancelled_opens_deadline_passing_does_not_affect_the_other() {
+        val h = Harness()
+        val deadlineA = HudConfig().openTimeoutMs
+        h.openEntry("a")
+        h.dismiss(at = 100)
+        h.next()
+        h.select(at = 1_500)
+        h.dismiss(at = 1_600)
+        val at = deadlineA + 100
+        h.shown("a", at = at)
+        assertEquals(Origin.HIDDEN, h.app().origin)
+        assertEquals(setOf("b"), h.state.cancelledOpen.keys)
+    }
+
+    @Test
     fun a_show_of_another_plugin_is_not_swallowed_by_a_cancelled_open() {
         val h = Harness()
         h.openEntry("b")
@@ -840,7 +870,7 @@ class HudStateMachineTest {
         h.dismiss(at = 900)
         h.shown("b", at = 10_000)
         assertEquals(Origin.HIDDEN, h.app().origin)
-        assertNull(h.state.cancelledOpen)
+        assertTrue(h.state.cancelledOpen.isEmpty())
     }
 
     @Test
@@ -849,7 +879,7 @@ class HudStateMachineTest {
         h.openEntry("b")
         h.dismiss(at = 500)
         h.select(at = 700)
-        assertNull(h.state.cancelledOpen)
+        assertTrue(h.state.cancelledOpen.isEmpty())
         h.shown("b", at = 900)
         assertEquals(Origin.HOME, h.app().origin)
     }

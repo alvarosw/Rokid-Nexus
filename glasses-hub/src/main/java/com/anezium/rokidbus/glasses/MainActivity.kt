@@ -9,6 +9,8 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.KeyEvent
 import android.view.Gravity
@@ -48,7 +50,9 @@ class MainActivity : Activity() {
 
     /** The launch was requested but the accessibility service is not running: the setup view says so. */
     private var serviceStopped = false
-    private val recheckService = Runnable { if (serviceStopped && !isFinishing) renderScreen() }
+    // Straight to the handoff: a full render would flash the setup confirmation over the stopped screen.
+    private val recheckService = Runnable { if (serviceStopped && !isFinishing) handOffToLauncher() }
+    private val recheckHandler = Handler(Looper.getMainLooper())
     private val swipeDedupe = DpadPairDedupe()
     private val onboardingReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -103,6 +107,7 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        cancelServiceRecheck()
         if (resumedInstance === this) resumedInstance = null
         super.onPause()
     }
@@ -116,6 +121,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        cancelServiceRecheck()
         if (resumedInstance === this) resumedInstance = null
         if (liveInstance === this) liveInstance = null
         insetUnsubscribe?.invoke()
@@ -234,6 +240,7 @@ class MainActivity : Activity() {
             return
         }
         serviceStopped = false
+        cancelServiceRecheck()
         confirmationShownForSession = ""
         onboardingView.visibility = View.VISIBLE
 
@@ -382,6 +389,7 @@ class MainActivity : Activity() {
                 if (opened) {
                     openLauncherRequested = false
                     serviceStopped = false
+                    cancelServiceRecheck()
                     onboardingView.visibility = View.GONE
                     finish()
                 } else {
@@ -397,8 +405,17 @@ class MainActivity : Activity() {
         }
     }
 
+    /** Nothing tells this activity the service came back, so the stopped screen polls for it. */
+    private fun scheduleServiceRecheck() {
+        recheckHandler.removeCallbacks(recheckService)
+        recheckHandler.postDelayed(recheckService, SERVICE_RECHECK_MS)
+    }
+
+    private fun cancelServiceRecheck() = recheckHandler.removeCallbacks(recheckService)
+
     private fun showServiceStopped() {
         serviceStopped = true
+        scheduleServiceRecheck()
         interactiveFlowActive = true
         confirmationShownForSession = ""
         onboardingStepView.setText(R.string.onb_stopped_eyebrow)
@@ -534,7 +551,7 @@ class MainActivity : Activity() {
 
         /** Long enough to read four words, short enough that nobody waits on it. */
         const val SETUP_CONFIRMATION_MS = 1_600L
-        private const val SERVICE_RECHECK_MS = 2_000L
+        internal const val SERVICE_RECHECK_MS = 2_000L
         const val CONFIRMATION_SESSIONLESS = "-"
     }
 }

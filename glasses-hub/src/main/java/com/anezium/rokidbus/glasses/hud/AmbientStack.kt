@@ -78,6 +78,8 @@ class AmbientStack(
     private val timer: AmbientTimer,
     private val onFailure: (String) -> Unit = {},
     private val trace: (String) -> Unit = {},
+    /** The animator duration scale; read when the backstop is armed so a change applies to the next one. */
+    private val durationScale: () -> Float = { 1f },
 ) {
     private val windows = EnumMap<AmbientLayer, AmbientWindow>(AmbientLayer::class.java)
     private val order = ArrayList<AmbientLayer>()
@@ -147,10 +149,16 @@ class AmbientStack(
 
     private fun armDeadline() {
         if (cancelDeadline != null) return
-        cancelDeadline = timer.postDelayed(MAX_DEFER_MS) {
+        cancelDeadline = timer.postDelayed(backstopMs()) {
             cancelDeadline = null
             settle(force = true)
         }
+    }
+
+    /** Motion scales its durations by the animator scale, so the backstop has to outlast the scaled ones. */
+    private fun backstopMs(): Long {
+        val scale = durationScale()
+        return if (scale > 1f) (MAX_DEFER_MS * scale).toLong() else MAX_DEFER_MS
     }
 
     private fun clearDeadline() {
@@ -159,7 +167,7 @@ class AmbientStack(
     }
 
     companion object {
-        /** Longer than every structural animation, including the emulator's slow-motion runs. */
+        /** Longer than every structural animation at scale 1; [durationScale] stretches it for slow-motion runs. */
         const val MAX_DEFER_MS = 2_000L
 
         val main: AmbientStack by lazy {
@@ -173,6 +181,7 @@ class AmbientStack(
                 },
                 onFailure = { logError(it) },
                 trace = { log(it) },
+                durationScale = HudController::animatorDurationScale,
             )
         }
 

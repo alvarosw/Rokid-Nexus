@@ -223,7 +223,7 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
             s = s.copy(
                 screen = opening,
                 lastSelectedId = id,
-                cancelledOpen = s.cancelledOpen?.takeUnless { it.pluginId == id },
+                cancelledOpen = s.cancelledOpen - id,
             )
             fx += ShowOpening(id)
             fx += if (id == CAMERA_ENTRY_ID) StartCamera(token) else SendLauncherOpen(id, token)
@@ -249,7 +249,7 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
                     // open's own deadline (F-3, F-9).
                     s = s.copy(
                         screen = sc.home,
-                        cancelledOpen = CancelledOpen(sc.pluginId, sc.deadline),
+                        cancelledOpen = s.cancelledOpen.filterValues { it > now } + (sc.pluginId to sc.deadline),
                     )
                     fx += ShowHome(sc.home.mode, sc.home.selectedId, s.entries)
                 }
@@ -327,12 +327,11 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
          * show is unsolicited like any other.
          */
         fun answersCancelledOpen(info: SurfaceInfo): Boolean {
-            val cancelled = s.cancelledOpen ?: return false
-            if (now >= cancelled.until) {
-                s = s.copy(cancelledOpen = null)
-                return false
-            }
-            if (!matchesOpen(cancelled.pluginId, info)) return false
+            if (s.cancelledOpen.isEmpty()) return false
+            // Expired records are dropped on every look, so the map cannot grow.
+            val live = s.cancelledOpen.filterValues { it > now }
+            if (live.size != s.cancelledOpen.size) s = s.copy(cancelledOpen = live)
+            if (live.keys.none { matchesOpen(it, info) }) return false
             val visible = when (val sc = s.screen) {
                 is Home -> sc.beneath
                 is Opening -> sc.home.beneath

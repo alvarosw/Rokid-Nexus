@@ -39,10 +39,10 @@ private class FakeAmbientTimer : AmbientTimer {
     }
 }
 
-private class StackRig(val failures: MutableList<String> = ArrayList()) {
+private class StackRig(val failures: MutableList<String> = ArrayList(), scale: Float = 1f) {
     val wm = FakeWindowManager()
     val timer = FakeAmbientTimer()
-    val stack = AmbientStack(timer) { failures += it }
+    val stack = AmbientStack(timer, { failures += it }, durationScale = { scale })
     val animating = HashSet<AmbientLayer>()
     private val windows = HashMap<AmbientLayer, AmbientWindow>()
 
@@ -215,6 +215,27 @@ class AmbientStackTest {
         rig.timer.advance(1)
         assertEquals(listOf(HOST, PIN, ACTIVITY), rig.wm.order)
         assertTrue(rig.stack.isSettled())
+    }
+
+    private fun backstopFires(scale: Float, expectedMs: Long) {
+        val rig = StackRig(scale = scale)
+        rig.add(HOST)
+        rig.add(ACTIVITY)
+        rig.animating += ACTIVITY
+        rig.add(PIN)
+        rig.timer.advance(expectedMs - 1)
+        assertEquals("scale $scale fired early", 0, rig.readds(ACTIVITY))
+        rig.timer.advance(1)
+        assertEquals("scale $scale", listOf(HOST, PIN, ACTIVITY), rig.wm.order)
+    }
+
+    @Test
+    fun the_backstop_is_stretched_by_the_animator_duration_scale() {
+        backstopFires(1f, 2_000L)
+        backstopFires(0.5f, 2_000L)
+        backstopFires(0f, 2_000L)
+        backstopFires(6f, 12_000L)
+        backstopFires(10f, 20_000L)
     }
 
     @Test

@@ -552,6 +552,20 @@ Every item has a test that failed before the change (JVM or Robolectric) except 
 
 The B1 back guard is removed (`unclaimedBackGuardMs`, `SwallowBack` and the dismissal timestamp are gone): keys in `Hidden` belong to the ROM.
 
+### Ultrareview fixes
+
+- **Cancelled opens are per plugin.** `HudState.cancelledOpen` is a `Map<pluginId, deadline>`: cancelling
+  B's open no longer forgets A's, a Select of a plugin removes its entry, and expired entries are dropped
+  whenever the map is consulted or added to. A late show still does not consume its entry (a plugin may
+  re-show inside the window and every show is closed); the deadline bounds it.
+- **Stopped screen polls for the service.** `MainActivity.showServiceStopped()` schedules a recheck every
+  `SERVICE_RECHECK_MS`; it is cancelled on leaving the stopped state, in `onPause` and in `onDestroy`.
+  The recheck calls `handOffToLauncher()` directly (a full render would flash the setup confirmation).
+  The pending app-icon launch request is kept until the launcher opens, so the launcher opens once the
+  service is back: the request was an explicit launch, never a plain resume.
+- **AmbientStack backstop follows the animator scale.** `MAX_DEFER_MS` (2000 ms) is multiplied by the
+  animator duration scale read when the backstop is armed, floor 2000 ms at scale <= 1 (0 counts as 1),
+  so it cannot fire inside a notice animation that `HudMotionDriver` has stretched.
 
 ### Parity coverage
 

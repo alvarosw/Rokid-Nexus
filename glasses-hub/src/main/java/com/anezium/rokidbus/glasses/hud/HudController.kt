@@ -1,5 +1,6 @@
 package com.anezium.rokidbus.glasses.hud
 
+import com.anezium.rokidbus.glasses.ReducedMotion
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.os.Handler
@@ -73,6 +74,9 @@ internal object HudController {
     val state: HudState get() = runner.state
 
     fun isServiceConnected(): Boolean = runner.state.serviceConnected
+
+    /** The animator duration scale, `1` before the first service connection. */
+    fun animatorDurationScale(): Float = appContext?.let(ReducedMotion::durationScale) ?: 1f
 
     fun isLauncherShown(): Boolean = isLauncherScreen(runner.state.screen)
 
