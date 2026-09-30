@@ -744,17 +744,15 @@ class HudStateMachineTest {
     }
 
     @Test
-    fun item_184_B1_back_guard_is_off_by_default_and_swallows_within_the_window_when_on() {
-        val off = Harness()
-        off.open(); off.dismiss(at = 0)
-        assertEquals(listOf<HudEffect>(PassToSystem), off.dismiss(at = 100))
-
-        val on = Harness(config = HudConfig(unclaimedBackGuardMs = 4_000))
-        on.open(); on.dismiss(at = 0)
-        assertEquals(listOf<HudEffect>(SwallowBack), on.dismiss(at = 3_900))
-        assertEquals(listOf<HudEffect>(PassToSystem), on.dismiss(at = 4_100))
-        // A hidden BACK with no prior dismiss is never swallowed.
-        assertEquals(listOf<HudEffect>(PassToSystem), Harness(config = HudConfig(unclaimedBackGuardMs = 4_000)).dismiss(at = 10))
+    fun item_184_keys_in_hidden_belong_to_the_rom_so_a_second_back_is_only_passed_through() {
+        val h = Harness()
+        h.open()
+        assertEquals(listOf<HudEffect>(DetachHost, PublishRingFocus(false)), h.dismiss(at = 0))
+        assertEquals(Hidden, h.screen)
+        // Immediately, and long after: the second BACK is never swallowed or delayed.
+        assertEquals(listOf<HudEffect>(PassToSystem), h.dismiss(at = 10))
+        assertEquals(listOf<HudEffect>(PassToSystem), h.dismiss(at = 60_000))
+        assertEquals(Hidden, h.screen)
     }
 
     // ---- no animation states: events mid-transition -----------------------------------------

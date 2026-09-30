@@ -43,7 +43,7 @@ class HudStateMachinePropertyTest {
 
     @Test
     fun invariants_hold_for_random_sequences() {
-        val machine = HudStateMachine(HudConfig(unclaimedBackGuardMs = 4_000))
+        val machine = HudStateMachine(HudConfig())
         for (seed in 1L..400L) {
             val r = Random(seed)
             var state = HudState()
@@ -88,7 +88,6 @@ class HudStateMachinePropertyTest {
                     assertTrue(ctx, prog || before.screen == HudScreen.Hidden)
                     assertTrue(ctx, event is HudEvent.Intent)
                 }
-                if (SwallowBack in fx) assertEquals(ctx, HudScreen.Hidden, before.screen)
                 if (fx.any { it is PassToExternal }) {
                     assertTrue(ctx, (before.screen as HudScreen.External).kind != ExternalKind.ACTIVITY_SURFACE)
                 }
@@ -101,11 +100,11 @@ class HudStateMachinePropertyTest {
 
                 // Hidden stays quiet: only pass-through, ring and host bookkeeping may follow.
                 if (before.screen == HudScreen.Hidden && after.screen == HudScreen.Hidden) {
-                    assertTrue(ctx, fx.all { it is PassToSystem || it is SwallowBack || it is PublishRingFocus || it is CancelDeadline })
+                    assertTrue(ctx, fx.all { it is PassToSystem || it is PublishRingFocus || it is CancelDeadline })
                 }
                 // Dismiss outside Hidden is never handed to the ROM.
                 if (event == HudEvent.Intent(HudIntent.Dismiss) && before.screen != HudScreen.Hidden) {
-                    assertTrue(ctx, PassToSystem !in fx && SwallowBack !in fx)
+                    assertTrue(ctx, PassToSystem !in fx)
                 }
 
                 // Host attach state follows the screen and is never redundant.

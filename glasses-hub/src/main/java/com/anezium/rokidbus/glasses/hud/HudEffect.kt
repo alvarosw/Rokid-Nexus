@@ -53,9 +53,6 @@ sealed interface HudEffect {
     /** Not ours: let the key through to the foreign app in front. */
     data class PassToExternal(val kind: ExternalKind) : HudEffect
 
-    /** Consume a BACK that would otherwise reach the ROM (HARDWARE B1 guard). */
-    data object SwallowBack : HudEffect
-
     data class PublishRingFocus(val focused: Boolean) : HudEffect
 
     /** Replaces any pending deadline; the runner answers with `DeadlineElapsed(token)`. */

@@ -188,12 +188,6 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
         fun onHiddenIntent(intent: HudIntent) {
             when (intent) {
                 is HudIntent.OpenLauncher -> openHome(null)
-                HudIntent.Dismiss -> {
-                    val last = s.lastDismissAt
-                    if (config.unclaimedBackGuardMs > 0 && last != null &&
-                        now - last < config.unclaimedBackGuardMs
-                    ) fx += SwallowBack else fx += PassToSystem
-                }
                 else -> fx += PassToSystem
             }
         }
@@ -213,10 +207,7 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
                 HudIntent.Next -> move(sc, +1)
                 HudIntent.Prev -> move(sc, -1)
                 HudIntent.Select -> select(sc)
-                HudIntent.Dismiss -> {
-                    s = s.copy(lastDismissAt = now)
-                    leaveHome(sc.beneath)
-                }
+                HudIntent.Dismiss -> leaveHome(sc.beneath)
                 is HudIntent.OpenLauncher ->
                     if (intent.trigger == LauncherTrigger.BROADCAST_TOGGLE) leaveHome(sc.beneath)
                 // Everything else is consumed: the launcher owns input exclusively (item 28, 119).
@@ -254,11 +245,10 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
             when {
                 intent == HudIntent.Dismiss -> {
                     // Cancel the pending open and stay on the launcher the wearer is looking at, so the
-                    // next BACK is still ours (B1). The plugin's late answer is closed unseen until the
+                    // next BACK is still ours. The plugin's late answer is closed unseen until the
                     // open's own deadline (F-3, F-9).
                     s = s.copy(
                         screen = sc.home,
-                        lastDismissAt = now,
                         cancelledOpen = CancelledOpen(sc.pluginId, sc.deadline),
                     )
                     fx += ShowHome(sc.home.mode, sc.home.selectedId, s.entries)
@@ -276,7 +266,6 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
                 HudIntent.Next, HudIntent.Prev, HudIntent.Select, is HudIntent.Raw ->
                     fx += ForwardToApp(info.surfaceId, intent)
                 HudIntent.Dismiss -> {
-                    s = s.copy(lastDismissAt = now)
                     if (info.handlesBack) {
                         fx += ForwardToApp(info.surfaceId, intent)
                         if (backTokenOf(sc) == null) {

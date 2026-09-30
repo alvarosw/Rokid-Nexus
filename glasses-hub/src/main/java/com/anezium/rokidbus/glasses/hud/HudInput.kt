@@ -55,10 +55,6 @@ data class RoutedIntent(val intent: HudIntent, val target: InputTarget = InputTa
  * [consumed] is the whole answer to "does this event reach the system": true means the
  * accessibility service must return true. [intents] are independent of it (a delayed tap that
  * resolves on a later event is reported with that event).
- *
- * One case is deliberately left to the state machine: a BACK DOWN with no owner is returned as
- * [consumed] = false plus a `Dismiss`, so the machine can answer `SwallowBack` (HARDWARE B1); when
- * it does the service must call [HudInput.noteConsumedDown] so the matching UP is swallowed too.
  */
 data class HudInputResult(
     val consumed: Boolean,
@@ -152,11 +148,6 @@ class HudInput(private val context: HudInputContext) {
         val tap = if (ringTapPending) ringTapAt + RING_TAP_DEADLINE_MS else null
         val contact = contactAt?.let { it + CONTACT_DEADLINE_MS }
         return if (tap != null && contact != null) minOf(tap, contact) else tap ?: contact
-    }
-
-    /** The service swallowed a DOWN on its own (B1 guard): owe its UP to the same fate. */
-    fun noteConsumedDown(event: RawKeyEvent) {
-        if (event.isDown) owe(event)
     }
 
     /**
@@ -363,11 +354,6 @@ class HudInput(private val context: HudInputContext) {
 
     /** No Nexus owner: keys go to the system, except what the idle activity layer takes. */
     private fun unownedKey(e: RawKeyEvent, out: MutableList<RoutedIntent>): Boolean {
-        if (e.keyCode == KEY_BACK && e.isDown && e.repeatCount == 0) {
-            // Let the machine apply the B1 guard; see [HudInputResult].
-            out += RoutedIntent(HudIntent.Dismiss)
-            return false
-        }
         if (!context.activityIdle()) return false
         val key = e.keyCode
         return when {

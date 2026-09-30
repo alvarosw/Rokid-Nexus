@@ -165,29 +165,6 @@ class HudRunnerTest {
     }
 
     @Test
-    fun swallow_back_is_reported_to_the_caller_and_not_to_the_sink() {
-        val f = Fixture(HudConfig(unclaimedBackGuardMs = 500))
-        f.intent(HudIntent.OpenLauncher(LauncherTrigger.TRIPLE_TAP))
-        f.now = 1_000
-        f.intent(HudIntent.Dismiss)
-        f.now = 1_200
-        f.effects.clear()
-        assertTrue(f.intent(HudIntent.Dismiss))
-        assertFalse(f.effects.any { it == HudEffect.SwallowBack })
-        f.now = 5_000
-        assertFalse(f.intent(HudIntent.Dismiss))
-    }
-
-    @Test
-    fun the_default_config_never_swallows_back() {
-        val f = Fixture()
-        f.intent(HudIntent.OpenLauncher(LauncherTrigger.TRIPLE_TAP))
-        f.intent(HudIntent.Dismiss)
-        assertFalse(f.intent(HudIntent.Dismiss))
-        assertEquals(0L, HudConfig().unclaimedBackGuardMs)
-    }
-
-    @Test
     fun ring_focus_is_published_only_on_edges_through_the_runner() {
         val f = Fixture()
         f.intent(HudIntent.OpenLauncher(LauncherTrigger.TRIPLE_TAP))

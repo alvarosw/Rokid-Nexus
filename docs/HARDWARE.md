@@ -322,17 +322,17 @@ Fact counts per section: see the table at the end of the file ("Summary of count
 ## 5. BACK and the ROM launcher
 
 **B1. An unclaimed BACK reaching the ROM launcher puts the display to sleep.** (stash@{0})
-- **Fact**: the ROM's own launcher `onKeyUp(BACK)` handler sleeps the display when nothing of ours claims it (confirmed on device via logcat). A redundant dismiss shortly after Nexus already closed something is a real wearer pattern and lands on that shortcut. A 500 ms guard was too short; 4 s covers a wearer taking a beat. The real R08 dismiss path goes through `handleRingKeyEvent`, not the generic chain.
-- **Evidence**: `stash@{0}` `G/RokidBusAccessibilityService.kt` (`guardAgainstRomSleepOnBack`, `lastConsumedBackAtMs`, `BACK_SLEEP_GUARD_MS = 4_000L`, and the early return in `handleRingKeyEvent`); working tree has none of it (`G/RokidBusAccessibilityService.kt:237`).
-- **Current handling**: working tree: unclaimed BACK falls through to the ROM (the bug); stash: swallow an unclaimed BACK within 4 s after a consumed one.
-- **Requirement**: a BACK/BACK-equivalent that no Nexus owner claims within 4 s of a consumed dismiss is swallowed and never reaches the ROM; after 4 s it passes. Applies to both ring and touchpad sources. Test at 3.9 s and 4.1 s with a fake ROM launcher that counts `onKeyUp(BACK)`.
+- **Fact**: the ROM's own launcher `onKeyUp(BACK)` handler sleeps the display when nothing of ours claims it (confirmed on device via logcat). A redundant dismiss shortly after Nexus already closed something is a real wearer pattern and lands on that shortcut. The stash guarded this with a 4 s swallow window; that is superseded by the decision below. The real R08 dismiss path goes through `handleRingKeyEvent`, not the generic chain.
+- **Evidence** (of the superseded stash guard): `stash@{0}` `G/RokidBusAccessibilityService.kt` (`guardAgainstRomSleepOnBack`, `lastConsumedBackAtMs`, `BACK_SLEEP_GUARD_MS = 4_000L`, and the early return in `handleRingKeyEvent`); working tree has none of it (`G/RokidBusAccessibilityService.kt:237`).
+- **Current handling**: working tree: unclaimed BACK falls through to the ROM; the stash's 4 s swallow window is not carried over (see Requirement).
+- **Requirement for the new UI (product decision, 2026-09-30)**: what happens inside the Nexus HUD is handled by the app; anything outside it belongs to the ROM. The first BACK closes the HUD (from Home to Hidden; from an app opened from Home back to Home first). The second BACK, with nothing of ours on screen, passes through to the ROM untouched and the ROM handles it however it wants, even if it sleeps the display. Nexus does not intercept it and never swallows a key in `Hidden`, on either the ring or the touchpad path. Test: in `Hidden`, BACK DOWN and UP are not consumed and produce no intent.
 - **Emulable?**: partially. A stand-in HOME app that calls `input keyevent 223` (or `PowerManager.goToSleep` via shell) on `onKeyUp(BACK)` reproduces the effect, not the real ROM.
 
 **B2. Ring double-tap on an idle activity returns BACK to the system on purpose.**
 - **Fact**: activities do not dismiss on BACK, so the double tap is passed to the system with `GLOBAL_ACTION_BACK`; on a ROM home that is exactly the B1 shortcut (inferred).
 - **Evidence**: `G/ActivityController.kt:799-801`; `G/RokidBusAccessibilityService.kt:85-87`.
 - **Current handling**: passes through (no guard in the working tree).
-- **Requirement**: decide explicitly whether an idle-layer double tap may reach the ROM; if it may, it must not put the display to sleep unintentionally (guard or documented behavior).
+- **Requirement**: the idle-layer double tap may reach the ROM; per the B1 decision Nexus does not intercept what the ROM then does with it.
 - **Emulable?**: partially (as B1).
 
 **B3. Native assistant scenes are dismissed by BACK bursts, only while armed and only when they are on top.**
@@ -759,7 +759,7 @@ One row per constant; "Source" is the definition site. The rewrite should keep t
 | 300-500 ms | firmware touch classification latency | `BUSSPEC.md:1246-1249` |
 | 188 ms | measured double-tap that answered twice | `G/NoticeController.kt:40` |
 | 400 ms | camera direction/activation debounce | `G/CameraInputRouter.kt:10-11` |
-| 4 s | unclaimed-BACK guard (stash@{0}) | `stash@{0}` service hunk |
+| 4 s | unclaimed-BACK guard (stash@{0}); not carried over, see B1 | `stash@{0}` service hunk |
 | 1.5 s | plugin-handled BACK failsafe | `G/SurfaceController.kt:28` |
 | 10 s | launcher->surface handoff timeout | `G/RingFocusCoordinator.kt:77`, stash `LauncherOverlayRenderer` |
 | 3 s / 120 ms / 0..1800 ms | native-assistant dismiss arm / debounce / burst | `G/RokidBusAccessibilityService.kt:1195-1197` |
@@ -820,7 +820,7 @@ Cannot be emulated: real 5 s timeout re-assertion at boot, the panel ignoring `F
 2. **Q2 Density (size part resolved, see D1):** confirm 1.5 (240 dpi); `HudPositionPreviewView` claims 2.0.
 3. **Q3 Do launcher, camera and plugin overlays survive >5 s idle?** They rely on `FLAG_KEEP_SCREEN_ON`, which is known not to stop the panel for the notice/surface windows. The grid launcher's screen-off investigation (stash) suggests a problem; measure idle-launcher wakefulness for 15 s.
 4. **Q4 What is the real screen timeout policy?** Forced 5000 at boot, wearer-adjustable, or "never turns off by itself" (1.2.6)? Does the value differ after Hi Rokid changes it?
-5. **Q5 Which BACK sources hit the ROM `onKeyUp(BACK)` sleep?** Ring double-tap through the bridge, touchpad double-tap classification, the idle-activity `GLOBAL_ACTION_BACK` (B2), or all? Is 4 s enough on every path?
+5. **Q5 Which BACK sources hit the ROM `onKeyUp(BACK)` sleep?** Ring double-tap through the bridge, touchpad double-tap classification, the idle-activity `GLOBAL_ACTION_BACK` (B2), or all? Informational only: per the B1 decision (2026-09-30) Nexus does not guard any of them, so this no longer blocks work.
 6. **Q6** Meaning of `KEYCODE_PROG_BLUE` (186) and aliases 183/184: which physical inputs?
 7. **Q7 R08 timing:** DOWN-to-UP spacing, repeat behavior and any duplicate events per tap/swipe (the 20-80 ms pair is documented only for the touchpad).
 8. **Q8 Clock bases (R10):** confirm event times are uptime and whether `elapsedRealtime` timers misfire after deep sleep.

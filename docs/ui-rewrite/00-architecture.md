@@ -65,8 +65,10 @@ Rules:
 - Ring focus (`NEXUS_RING_FOCUS`) is derived: focused ⇔ state ≠ `Hidden` or a notice owns the ring.
   `RingFocusCoordinator`'s handoff timer and `LauncherReturnCoordinator` are deleted.
 - BACK/dismiss is always answered by the state it lands in. `Hidden` is the only state that lets
-  BACK reach the ROM (HARDWARE B1 — whether to add a guard there is an open product question, kept
-  as one explicit rule in the machine, not a timestamp heuristic in the service).
+  BACK reach the ROM, and there Nexus never consumes a key (product decision 2026-09-30, HARDWARE
+  B1): what happens inside the HUD is handled by the app, anything outside it belongs to the ROM.
+  The first BACK closes the HUD; the second, with nothing of ours on screen, goes to the ROM
+  untouched, even if the ROM then sleeps the display.
 
 ### 2.2 `HudInput` — one normalizer for every key source
 
@@ -161,8 +163,8 @@ U1 and U2 are independent. U3 needs both. U4–U6 need U3. U7 last.
 - HARDWARE Q1/Q2 display size: resolved (official screen 480×640, no offset; the 480×352 / 480×400
   figures of 2026-09-29 are superseded); density
   (1.5) is still unconfirmed.
-- HARDWARE B1/Q5: whether a BACK arriving in `Hidden` shortly after a dismissal should be
-  swallowed. One rule in the machine, default off until decided.
+- HARDWARE B1/Q5: decided (2026-09-30). No guard: keys in `Hidden` belong to the ROM and Nexus never
+  swallows them.
 - Emulator is API 37; the device is API 32. An API 32 Cuttlefish is feasible (docs/EMULATION.md)
   and will be set up before U3 is declared done if API-specific window behavior shows up.
 
@@ -173,7 +175,7 @@ U1 and U2 are independent. U3 needs both. U4–U6 need U3. U7 last.
 Implemented in `glasses-hub/.../glasses/hud/`:
 
 - `HudRunner` drives `HudStateMachine` one event at a time, queues events raised by effects, owns
-  the single deadline through a `HudTimer` and reports a swallowed BACK to its caller. It is pure
+  the single deadline through a `HudTimer`. It is pure
   Kotlin and JVM-tested with a fake clock, timer and sink.
 - `HudController` (main thread) is the effects runner and the only place that decides what is on
   screen: entry points (`onRawKey`, `openLauncher`, `toggleLauncherFromBroadcast`,
@@ -548,7 +550,7 @@ Every item has a test that failed before the change (JVM or Robolectric) except 
   panel or a photo is no longer taken for the launcher, and `--fail-on-home` asserts "no frame without
   a Nexus window".
 
-Unchanged on purpose: the B1 back guard stays off (`unclaimedBackGuardMs = 0`).
+The B1 back guard is removed (`unclaimedBackGuardMs`, `SwallowBack` and the dismissal timestamp are gone): keys in `Hidden` belong to the ROM.
 
 
 ### Parity coverage
@@ -740,6 +742,6 @@ Every item of `01-current-behavior.md` §7, mapped to what covers it. **Tests** 
 | 181 | AmbientCameraFanOutTest: item181_the_camera_overlay_takes_the_notice_out_of_view_and_out_of_input, item152_181_the_broadcast_from_the_camera_process_... |  | DEVICE | Decision (U6): main-process notice and pin honour the camera-overlay flag; F-16 fixed. The JVM covers the fan-out; a real :camera process broadcast is device-only |
 | 182 | - |  | DEVICE |  |
 | 183 | - | EMU |  |  |
-| 184 | HudStateMachineTest: item_184_B1_back_guard_is_off_by_default_... |  | DEVICE | Guard exists in the machine, off by default (HARDWARE B1/Q5) |
+| 184 | HudStateMachineTest: item_184_keys_in_hidden_belong_to_the_rom_...; HudInputTest: unowned_back_belongs_to_the_rom_... |  | DEVICE | Intentionally changed: ROM owns keys in Hidden, no guard (HARDWARE B1, 2026-09-30) |
 | 185 | - |  | DEVICE |  |
 | 186 | DisplayStandbyLauncherGateTest: item186_the_launcher_gate_follows_the_host_and_blocks_standby; DisplayStandbyPolicyTest |  |  | Gate reads HudController::isLauncherShown |

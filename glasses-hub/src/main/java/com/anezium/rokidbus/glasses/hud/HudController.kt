@@ -247,13 +247,9 @@ internal object HudController {
         try {
             noteRingTap(raw)
             val result = input.onKey(raw)
-            var consumed = result.consumed
-            if (route(result.intents)) {
-                consumed = true
-                input.noteConsumedDown(raw)
-            }
+            route(result.intents)
             armInputTick()
-            return consumed
+            return result.consumed
         } finally {
             currentKeyEvent = null
         }
@@ -269,11 +265,10 @@ internal object HudController {
         lastRingTapAt = raw.eventTime
     }
 
-    private fun route(intents: List<RoutedIntent>): Boolean {
-        var swallowBack = false
+    private fun route(intents: List<RoutedIntent>) {
         for (routed in intents) {
             when (routed.target) {
-                InputTarget.HUD -> if (dispatch(HudEvent.Intent(routed.intent))) swallowBack = true
+                InputTarget.HUD -> dispatch(HudEvent.Intent(routed.intent))
                 InputTarget.NOTICE -> routeToNotice(routed.intent)
                 InputTarget.ACTIVITY -> {
                     ActivityController.onHudIntent(routed.intent, activityTapTarget)
@@ -283,7 +278,6 @@ internal object HudController {
                 }
             }
         }
-        return swallowBack
     }
 
     private fun routeToNotice(intent: HudIntent) {
@@ -309,10 +303,9 @@ internal object HudController {
 
     // ---- machine plumbing ------------------------------------------------------------------
 
-    /** Returns true when the event ended in a swallowed BACK. */
-    private fun dispatch(event: HudEvent): Boolean {
+    private fun dispatch(event: HudEvent) {
         syncMode()
-        return runner.dispatch(event)
+        runner.dispatch(event)
     }
 
     /** The mode applies the next time the launcher is shown, so it is offered before every event. */
@@ -389,7 +382,7 @@ internal object HudController {
                 HudEffect.PassToSystem, is HudEffect.PassToExternal -> Unit
                 is HudEffect.PublishRingFocus -> context?.let { RingFocusPublisher.publish(it, effect.focused) }
                 // Consumed by HudRunner.
-                HudEffect.SwallowBack, is HudEffect.ScheduleDeadline, HudEffect.CancelDeadline -> Unit
+                is HudEffect.ScheduleDeadline, HudEffect.CancelDeadline -> Unit
             }
         }
 

@@ -1191,7 +1191,7 @@ becomes a test.
 181. [DEVICE] While the camera is up, the main-process notice and pin honour the camera-overlay flag (currently only activities do, F-16). **[decide]**
 182. [DEVICE] The `NexusRemoteInputMethodService` draws nothing and only keeps an `InputConnection`; remote input sessions open and close with focus (`NexusRemoteInputMethodService:16-59`).
 183. [EMU] A native assistant dismiss request arms a 3 s back burst that only fires when the active window is a native assistant package (`RBAS:335-370`).
-184. [DEVICE] With no Nexus owner for a key, BACK is passed to the ROM launcher; the ROM sleeps the display on it (F-12). **[decide]** whether the 4 s stash guard is part of parity.
+184. [DEVICE] With no Nexus owner for a key, BACK is passed to the ROM launcher; the ROM sleeps the display on it (F-12). **[decided 2026-09-30]** the 4 s stash guard is not part of parity: keys in `Hidden` belong to the ROM and Nexus never swallows them.
 185. [DEVICE] The five-second display timeout: the launcher, surface overlay and notice hold the screen with `FLAG_KEEP_SCREEN_ON`; SurfaceActivity and CameraActivity too (`LOR:95`, `SOR:45`, `NOR:39-42`, `SurfaceActivity:20`, `CameraActivity:78`).
 186. [JVM] `DisplayStandbyWatchdog` inputs: surface, notice, activity, camera session, launcher overlay shown, `MainActivity` interactive flow, top window, setup flows, TTS, media sync are all read from UI state; the new host must expose equivalents (`DisplayStandbyWatchdog:135-155`).
 

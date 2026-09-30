@@ -18,12 +18,6 @@ data class HudConfig(
     val openTimeoutMs: Long = 10_000L,
     /** How long a `handlesBack` plugin has to answer a forwarded BACK before the hub closes locally. */
     val backFailsafeMs: Long = 1_500L,
-    /**
-     * HARDWARE B1: an unclaimed BACK that reaches the ROM launcher right after Nexus consumed a
-     * dismiss puts the display to sleep. When positive, a Dismiss in [HudScreen.Hidden] within this
-     * many ms of the last consumed dismiss is swallowed instead of passed. Off until decided.
-     */
-    val unclaimedBackGuardMs: Long = 0L,
 )
 
 /** The surface a screen shows, as far as the machine needs to know. */
@@ -108,7 +102,6 @@ data class HudState(
     val nextToken: Long = 1L,
     /** A surface that was active when the service died; re-shown on reconnect, the launcher is not. */
     val suspended: HudScreen? = null,
-    val lastDismissAt: Long? = null,
     val cancelledOpen: CancelledOpen? = null,
 ) {
     /**

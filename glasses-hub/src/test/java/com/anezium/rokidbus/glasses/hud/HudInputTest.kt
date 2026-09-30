@@ -428,13 +428,17 @@ class HudInputGenericTest {
         assertNull(r.input.nextDeadlineMs())
     }
 
-    @Test fun unowned_back_reaches_the_machine_for_the_b1_guard_and_is_not_consumed_by_input() {
-        val r = rig(InputOwner.NONE)
-        val d = r.down(BACK, TOUCHPAD, 1_000)
-        assertFalse(d.consumed); assertEquals(listOf(HudIntent.Dismiss), r.intents(d))
-        // The machine answered SwallowBack: the service tells input so the UP is swallowed too.
-        r.input.noteConsumedDown(RawKeyEvent(BACK, RawKeyEvent.ACTION_DOWN, 0, 1_000, TOUCHPAD))
-        assertTrue(r.up(BACK, TOUCHPAD, 1_050).consumed)
+    @Test fun unowned_back_belongs_to_the_rom_on_both_pipelines_even_with_an_idle_activity() {
+        for (idle in listOf(false, true)) {
+            for (device in listOf(TOUCHPAD, R08)) {
+                val r = rig(InputOwner.NONE)
+                r.ctx.activityIdle = idle
+                val d = r.down(BACK, device, 1_000)
+                assertFalse(d.consumed); assertTrue(d.intents.isEmpty())
+                val u = r.up(BACK, device, 1_050)
+                assertFalse(u.consumed); assertTrue(u.intents.isEmpty())
+            }
+        }
     }
 
     @Test fun activity_generic_83_is_consumed_directions_need_actions_enter_fires() {
