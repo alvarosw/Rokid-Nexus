@@ -550,3 +550,196 @@ Every item has a test that failed before the change (JVM or Robolectric) except 
 
 Unchanged on purpose: the B1 back guard stays off (`unclaimedBackGuardMs = 0`).
 
+
+### Parity coverage
+
+Every item of `01-current-behavior.md` §7, mapped to what covers it. **Tests** are JVM/Robolectric/Roborazzi test classes and cases in `glasses-hub` unless another module is named (`*` = a family of cases). **EMU** marks an item whose behavior needs the emulator (real windows, key injection); it was exercised by the delivery agents under §4 and their captures are described in the delivery notes above, but the raw frames were pruned and are not indexed per item, so an EMU cell is a claim to re-verify on the API 32 run, not fresh evidence. **DEVICE** marks items only real glasses can settle. **Changed** cites the decision or delivery that changed `HEAD` behavior, so the test asserts the new behavior. A `-` in Tests means no automated test exists (the item is EMU or DEVICE only).
+
+| # | Tests | EMU | DEVICE | Intentionally changed / note |
+|---|---|---|---|---|
+| 1 | - | EMU |  | Window is now HudHost's one window (§2.3); params not asserted on the JVM |
+| 2 | - | EMU |  | Overlay-path surfaces share HudHost's window (§2.3, U3) |
+| 3 | AmbientScreenshotTest (pixels only) | EMU |  |  |
+| 4 | AmbientScreenshotTest (pixels only) | EMU |  |  |
+| 5 | - | EMU |  |  |
+| 6 | - | EMU |  |  |
+| 7 | AmbientStackTest: the_declared_order_..., every_add_order_of_the_six_windows_... | EMU |  | Order owned by AmbientStack (§2.7, U6) |
+| 8 | AmbientStackTest: a_new_window_re_adds_only_the_windows_that_belong_above_it | EMU |  | The surface is now HudHost, layer HOST, below every ambient layer |
+| 9 | AmbientStackTest: the_host_attaching_puts_every_visible_ambient_window_back_above_it_once | EMU |  |  |
+| 10 | AmbientStackTest: F17_a_pin_created_while_a_notice_is_visible_... | EMU |  | Decision 10: pin always below notice |
+| 11 | HudHostTest: the_window_is_added_once_...; HudStateMachineTest: item_22_... | EMU |  |  |
+| 12 | HudHostTest: item12_detach_is_guarded_when_the_host_is_not_attached, the_window_is_added_once_...; HudRunnerTest: the_host_is_attached_once_... | EMU |  |  |
+| 13 | HudStateMachineTest: item_13_14_15_...; item_77_...; HudControllerTest: a_second_connect_without_a_destroy_... | EMU |  |  |
+| 14 | HudStateMachineTest: item_13_14_15_reconnect_restores_an_overlay_surface_but_not_the_launcher; SurfaceControllerHudTest: item15_* | EMU |  |  |
+| 15 | HudStateMachineTest: item_13_14_15_..., item_15_F25_...; SurfaceControllerHudTest: item15_the_active_surface_survives_..., item15_a_surface_hidden_while_the_service_was_down_... |  |  |  |
+| 16 | SurfaceHudSeeThroughTest (see-through card, not the focus veil) |  | DEVICE | HudHost sets defaultFocusHighlightEnabled=false; only a device shows the veil |
+| 17 | ListHomeTest/GridHomeTest: whole-row fit inside the safe area; HudHostTest: the_viewport_is_the_one_configured_value |  | DEVICE | Canvas is 480x640, not 480x352 (HARDWARE Q1/Q2) |
+| 18 | HudStateMachineTest: item_18_...; HudInputTest: T2_three_contacts_at_0_250_500_...; TouchpadGestureDetectorsTest: tripleTap_triggersOn...; HudControllerGlueTest: a_triple_tap_opens_the_launcher_in_one_persistent_window, the_third_contact_..._is_consumed | EMU |  |  |
+| 19 | TouchpadGestureDetectorsTest: tripleTap_dropsContactsOutsideWindow, tripleTap_normalClassificationsClearPendingContacts; HudInputTest: T2_window_edges_600_triggers_601_does_not, T2_three_fast_swipes_never_trigger |  |  |  |
+| 20 | TouchpadGestureDetectorsTest: tripleTap_suppressesTrailingBackAndEnterClassifications; HudInputTest: T2_classifications_are_swallowed_for_800ms_and_pass_at_801 |  |  |  |
+| 21 | TouchpadGestureDetectorsTest: tripleTap_expiryReturnsSingleAndDoubleTapCounts, tripleTap_expiryReturnsNothingAfterTriggerOrSwipeClear |  |  |  |
+| 22 | HudStateMachineTest: item_22_...; HudInputTest: T2_trigger_works_while_the_launcher_is_already_shown | EMU |  |  |
+| 23 | HudStateMachineTest: item_23_...; HudInputTest: editable_card_passes_everything_but_back_and_never_triggers | EMU |  |  |
+| 24 | HudStateMachineTest: item_24_...; HudControllerTest: the_broadcast_toggle_from_another_thread_...; HudControllerGlueTest: the_broadcast_toggle_and_the_app_icon_... | EMU |  |  |
+| 25 | HudStateMachineTest: item_25_...; HudControllerGlueTest: dismissing_the_home_hides_the_window_and_frees_the_ring, back_dismisses_the_notice_first_... | EMU |  |  |
+| 26 | HudInputTest: item124_taps_resolve_..., item126_ring_double_tap_...; RingTapPolicyTest | EMU |  | Ring double tap is a Dismiss intent; on R08 it also reaches the launcher (§2.2) |
+| 27 | RingTapPolicyTest (4 cases); HudInputTest: R5_taps_340ms_..., R5_exactly_350ms_... |  |  |  |
+| 28 | HudStateMachineTest: item_28_...; HudInputTest: launcher_maps_and_consumes_every_key_including_unmapped_ones | EMU |  |  |
+| 29 | HudInputTest: T3_swipe_pairs_at_20_50_80ms_count_once_...; HudControllerGlueTest: a_swipe_moves_the_selection_and_select_sends_...; TouchpadGestureDetectorsTest: dpadPairDedupe_* | EMU |  |  |
+| 30 | TouchpadGestureDetectorsTest: dpadPairDedupe_countsPairedForwardCodesAsOneSwipe, dpadPairDedupe_countsPairedBackwardCodesAsOneSwipe |  |  |  |
+| 31 | HudInputTest: item132_..., launcher_maps_...; ring 87/88 wrap: HudStateMachineTest: item_32_... | EMU |  | Decision 132: a ring on a non-R08 device is a launcher no-op |
+| 32 | HudStateMachineTest: item_32_selection_wraps_both_ways_and_empty_list_does_not_move |  |  |  |
+| 33 | HudStateMachineTest: item_33_selection_persists_across_close_and_open; HudControllerGlueTest (selection survives a reconnect) | EMU |  |  |
+| 34 | HudStateMachineTest: item_34_* (4 cases) |  |  | Decision 34: selection by plugin id |
+| 35 | HudStateMachineTest: item_35_select_sends_launcher_open_...; HudControllerGlueTest: a_swipe_moves_the_selection_and_select_sends_the_launcher_open_through_the_hub | EMU |  |  |
+| 36 | GlassesHubLauncherTest: item36_a_blank_id_..., item36_the_camera_entry_without_a_hub_context_..., item36_a_send_error_...; HudControllerGlueTest: a_send_that_fails_returns_to_the_home_with_a_status, item36_a_camera_that_cannot_start_keeps_the_launcher_and_says_so; HudStateMachineTest: item_37_open_failure_... |  |  | Failure now becomes an OpenFailed status on the home (§2.1) |
+| 37 | HudStateMachineTest: item_35_..., item_37_*; HudControllerGlueTest: the_surface_that_answers_the_open_shows_in_the_app_layer_and_dismiss_returns_home | EMU |  | Handoff is the machine's Opening state (§2.1) |
+| 38 | HudStateMachineTest: item_38_*; GlassesHubLauncherTest: item36_38_the_camera_entry_starts_the_camera_activity_...; HudControllerGlueTest: item36_38_the_camera_entry_starts_... | EMU |  |  |
+| 39 | - |  | DEVICE | Gap measured on the device only |
+| 40 | ListHomeTest: the_header_counts_position_and_the_empty_state_is_a_status |  |  | Empty state text is now the Status component (§2.4) |
+| 41 | ListHomeTest: rows_are_32_px_..., the_focused_row_is_the_one_focus_element |  |  | Rows are the design-system ListItem, 32 px (§2.4), not 18 sp with a 2 dp outline |
+| 42 | HudModeStoreTest; HudModeContractTest |  |  |  |
+| 43 | HudModeContractTest |  |  |  |
+| 44 | GlassesHubLauncherTest: item44_a_valid_hud_mode_config_is_stored_..., item44_an_invalid_hud_mode_payload_leaves_the_stored_mode_unchanged |  |  |  |
+| 45 | HudStateMachineTest: item_45_mode_change_applies_on_the_next_open_only; HomeLayerTest: the_rendering_follows_the_mode_and_is_kept_while_the_mode_stays | EMU |  |  |
+| 46 | TileControllerTest: while_inactive_publish_is_consumed_but_never_cached; GlassesHubLauncherTest: item44_a_valid_hud_mode_config_... (starts/stops the subsystem); HomeLayerTest: tile_data_is_ignored_in_list_mode |  |  |  |
+| 47 | TileLayoutStoreTest: a_custom_order_is_applied_...; TileLayoutIntegrationTest; GlassesHubLauncherTest: item49_...; HudControllerGlueTest: item36_38_... (camera first) |  |  |  |
+| 48 | GlassesHubLauncherTest: item48_launcher_list_skips_blank_ids_defaults_the_name_and_drops_a_blank_icon_key, item48_a_list_without_plugins_is_an_empty_launcher |  |  |  |
+| 49 | GlassesHubLauncherTest: item49_a_tile_layout_push_re_notifies_launcher_observers_in_the_new_order, item49_an_invalid_tile_layout_notifies_nobody |  |  |  |
+| 50 | AmbientStackTest (host never above an ambient layer); HudControllerGlueTest: a_visible_notice_takes_enter_before_the_launcher_does | EMU |  | Notice keeps ring priority: HudInput asks the notice first (§2.2) |
+| 51 | TileGridPackerTest (8 cases) |  |  |  |
+| 52 | GridHomeTest: default_eight_plugins_fill_two_rows_..., wide_tall_and_large_tiles_use_the_layout_store_sizes |  |  | GridLauncherView replaced by GridHome (§2.4) |
+| 53 | GridHomeTest: a_selection_move_changes_focus_on_two_tiles_..., live_and_fallback_tiles_show_selection_and_focus_alike |  |  |  |
+| 54 | GridHomeTest: live_and_fallback_tiles_...; HomeLayerTest: a_tile_data_write_refreshes_an_open_grid_in_place; LiveTileIdentityTest |  |  |  |
+| 55 | GridHomeTest / LiveTileIdentityTest (fallback tile name and focus chrome); GridColorLiteralLintTest |  |  | Fill/stroke now come from HomeChrome tokens |
+| 56 | GridHomeTest: live_and_fallback_tiles_show_selection_and_focus_alike |  |  | Decision 56: live tiles show selection and focus |
+| 57 | LiveTileViewBindingTest: item57_* (7 cases); LiveTileViewTest |  |  |  |
+| 58 | LiveTileViewTest: every_tone_renders_...; LiveTileIdentityTest; CriticalBlinkTest |  |  | Tone vocabulary redone by U5/U7b: WARN dashed alert icon, CRITICAL one blinking tile |
+| 59 | TileCacheTest: staleness_boundary_... |  |  |  |
+| 60 | TileRateLimiterTest (4 cases); TileControllerTest: publishing_above_the_rate_ceiling_... |  |  |  |
+| 61 | GridHomeTest: four_columns_fit_the_448_px_content_width_exactly; HomeScreenshotTest (grid-*) | EMU |  | Decision: 4 columns in 448 px on 480x640; F-8 fixed |
+| 62 | HudHostMotionTest; HudMorphPlanTest; HudMotionDriverTest | EMU |  | Decision 62: real 220 ms morph inside HudHost, replaces the 320 ms ghost tween |
+| 63 | HudMotionDriverTest: reduced_motion_is_read_when_an_animation_starts_...; HudHostMotionTest: reduced_motion_lands_every_transition_... |  |  | TileExpansionAnimator retired; HudMotionDriver is the reduced-motion owner |
+| 64 | HudMotionDriverTest: snap_and_cancel_stop_the_animation_without_its_end_hook, a_retarget_...drops_the_old_end_hook |  |  | No tween callback reaches the machine (§2.6) |
+| 65 | HudStateMachineTest: F9_back_during_opening_cancels_it_...; HudHostMotionTest: playing_out_every_animation_produces_no_effect_and_no_state_change | EMU |  | F-9 fixed: BACK during Opening cancels and sends nothing |
+| 66 | HudStateMachineTest: item_66_* (3 cases) |  |  | LauncherReturnCoordinator folded into the machine |
+| 67 | HudStateMachineTest: item_67_the_claim_is_consumed_by_the_first_hide |  |  |  |
+| 68 | HudStateMachineTest: item_66_..., item_69_* |  |  | Pending is token-matched state, not a coordinator field |
+| 69 | HudStateMachineTest: item_69_F3_* (4 cases); HudReviewFixesTest |  |  | Decision 69: token-matched, expires at the Opening deadline |
+| 70 | HudStateMachineTest: item_70_* (2 cases); HudControllerGlueTest: the_surface_that_answers_the_open_shows_in_the_app_layer_and_dismiss_returns_home | EMU |  |  |
+| 71 | HudStateMachineTest: item_71_an_unsolicited_surface_hides_back_to_hidden | EMU |  |  |
+| 72 | HudStateMachineTest: item_72_metadata_updates_never_complete_a_handoff |  |  |  |
+| 73 | HudStateMachineTest: item_73_app_icon_uses_the_same_launcher_and_return; HudControllerTest / LauncherHandoffTest | EMU |  | [decide] resolved: the app icon returns to the launcher like every other entry |
+| 74 | HudStateMachineTest: item_74_ring_focus_is_the_union_and_publishes_only_on_edges; HudRunnerTest: ring_focus_is_published_only_on_edges_... |  |  | RingFocusCoordinator folded into HudState.ringFocus() |
+| 75 | HudStateMachineTest: item_75_76_focus_is_held_through_the_handoff_... |  |  |  |
+| 76 | HudStateMachineTest: item_75_76_... |  |  |  |
+| 77 | HudStateMachineTest: item_77_service_destroy_releases_everything_and_focus |  |  |  |
+| 78 | RingFocusPublisherTest: item78_* (2 cases); HudControllerGlueTest: dismissing_the_home_hides_the_window_and_frees_the_ring (edge order) | EMU |  |  |
+| 79 | - |  | DEVICE |  |
+| 80 | HudStateMachineTest: item_80_activity_path_handoff_steps_the_host_aside | EMU |  |  |
+| 81 | SurfaceControllerHudTest: item81_an_ink_surface_whose_overlay_is_unavailable_closes_with_renderer_error, item81_an_ink_surface_shown_with_no_service_closes_with_renderer_error | EMU |  |  |
+| 82 | HudStateMachineTest: item_23_..., editable cases; surfaceDisplayPath: InkCardPresentationTest | EMU |  |  |
+| 83 | InkCardPresentationTest (surfaceDisplayPath) |  |  |  |
+| 84 | - | EMU |  |  |
+| 85 | SurfaceControllerHudTest: item85_a_card_whose_overlay_cannot_attach_falls_back_to_the_activity, item85_on_overlay_unavailable_moves_an_on_screen_card_to_the_activity_path; HudStateMachineTest: item_85_F21_...; HudReviewFixesTest | EMU |  |  |
+| 86 | SurfaceControllerHudTest: item102_closed_carries_the_reason_... (link_lost) | EMU |  |  |
+| 87 | - | EMU |  | Decision 87: HEAD behavior kept (surface stays), flagged for product review |
+| 88 | HudStateMachineTest: item_88_native_app_launch_steps_nexus_aside_and_returns_to_hidden | EMU |  | [decide] resolved: native launch steps Nexus aside (External NATIVE_APP) |
+| 89 | SurfaceOrderingCoordinatorTest |  |  |  |
+| 90 | SurfaceIngressModelTest: item90_* (2 cases) |  |  |  |
+| 91 | SurfaceIngressModelTest: item91_an_unknown_kind_is_rejected_and_an_empty_kind_is_a_card |  |  |  |
+| 92 | ReaderSurfaceModelsTest: reader_parser_truncates_every_SDK_cap_without_throwing |  |  |  |
+| 93 | ReaderSurfaceModelsTest (resolveReaderScrollTarget); ReaderSurfaceViewTest: item93_* (6 cases: own offset, 45% page, clamps, anchors, same-surface re-render) |  |  | Own-offset scrolling replaces ScrollView (HARDWARE S5) |
+| 94 | SurfaceListViewportTest |  |  |  |
+| 95 | SurfaceHudSeeThroughTest; NoticeComposeMirrorTest |  |  |  |
+| 96 | NoticeComposeMirrorTest |  |  |  |
+| 97 | SurfaceControllerHudTest: item97_* (5 cases: hardware Enter, IME send, BACK cancel, handlesBack failsafe cancel, no text-committed without a field) | EMU |  | Cancel is now the machine's CloseApp(WEARER_DISMISSED) or BACK_FAILSAFE, not the view |
+| 98 | HudInputTest: editable_card_passes_everything_but_back_and_never_triggers | EMU |  |  |
+| 99 | ImageSurfaceStateTest; ImageSurfaceContractTest |  |  |  |
+| 100 | SurfaceIngressModelTest: item100_* (3 cases); InkRenderLogicTest: document_or_base_revision_mismatch_requests_resync |  |  |  |
+| 101 | SurfaceControllerHudTest: item102_ready_is_sent_once_...; InkPresentationGateTest (gate, forced timeout) | EMU |  |  |
+| 102 | SurfaceControllerHudTest: item102_ready_..., item102_closed_carries_the_reason_..., item102_a_patch_for_another_document_asks_for_a_resync_...; item115 (action payload) |  |  |  |
+| 103 | - | EMU |  |  |
+| 104 | - | EMU |  |  |
+| 105 | HudInputTest: item105_generic_order_notice_launcher_surface_activity_pass; hook_position_notice_is_asked_before_the_owner_chain_...; HudControllerGlueTest: a_visible_notice_takes_enter_before_the_launcher_does |  |  | Router is HudInput (§2.2) |
+| 106 | HudInputTest: item106_*, R6_prog_blue_...; HudStateMachineTest: item_106_prog_blue_is_passed_in_every_state |  |  |  |
+| 107 | HudInputTest: item107_*, R3_* (6 cases) |  |  | Owed UPs stamped and expire after 5 s (review fixes) |
+| 108 | NoticeKeyInputRouterTest (4 cases) |  |  |  |
+| 109 | NoticeKeyInputRouterTest; HudKeyEventAdapterTest (press identity survives the raw event) |  |  |  |
+| 110 | NoticeTouchpadInputPolicyTest |  |  |  |
+| 111 | HudInputTest: item111_*; HudStateMachineTest: item_111_surface_keys_and_intents_are_forwarded_not_passed; SurfaceControllerHudTest: item124_raw_keys_... | EMU |  |  |
+| 112 | HudInputTest: item112_*; HudStateMachineTest: item_112_* (4 cases); SurfaceControllerHudTest: item97_back_on_a_card_that_handles_back_... | EMU |  |  |
+| 113 | HudInputTest: item113_*, T3_* |  |  |  |
+| 114 | HudInputTest: item114_*, reader_leaves_space_and_media_play_pause_to_the_system; SurfaceControllerHudTest: item114_124_a_reader_scrolls_... |  |  | Reader forwards only BACK/ENTER/CENTER (review fixes) |
+| 115 | InkNavigationTest (view rules, 26 cases); SurfaceControllerHudTest: item115_next_moves_the_ink_selection_locally_and_select_emits_the_selected_action, item115_without_a_selectable_action_ink_directions_fall_through_as_a_forwarded_pair |  |  | Ink now receives synthesized KeyEvents from SurfaceController.deliverKey (down time = event time = uptime, repeat 0): the down time itself is not observable without a spy, its effect (one selection move per DOWN) is asserted |
+| 116 | ActivityPresentationPolicyTest (canResolveActivityTap); HudControllerGlueTest: item130_* (claim through ActivityController.claimsInput) |  |  |  |
+| 117 | HudInputTest: activity_generic_83_is_consumed_directions_need_actions_enter_fires |  |  |  |
+| 118 | HudInputTest: item118_* (2 cases), a_non_contact_down_cancels_the_pending_flush |  |  |  |
+| 119 | HudInputTest: item119_...; HudStateMachineTest: item_119_* (5 cases) |  |  | Decision 119: launcher has exclusive input |
+| 120 | HudInputTest: item120_*, device_classifier_by_name_R1; HudKeyEventAdapterTest |  |  |  |
+| 121 | HudInputTest: item121_*; HudStateMachineTest: item_121_hidden_passes_every_key_to_the_system; HudControllerGlueTest: a_hidden_hud_passes_every_key_to_the_system |  |  |  |
+| 122 | HudInputTest: item122_ring_precedence_... |  |  |  |
+| 123 | HudInputTest: item123_* |  |  |  |
+| 124 | HudInputTest: item124_taps_resolve_...; SurfaceControllerHudTest: item124_next_prev_and_select_become_a_dpad_pair_each, item124_raw_keys_keep_their_direction_..., item124_dismiss_forwards_back_down_once_... |  |  | RingSurfaceInputPolicy deleted; mapping is HudInput + SurfaceController.onHudIntent (review fixes) |
+| 125 | SurfaceControllerHudTest: item124_next_prev_and_select_... (same events as the touchpad) | EMU |  |  |
+| 126 | HudInputTest: item126_*; HudStateMachineTest: item_112_* | EMU |  |  |
+| 127 | HudInputTest: item127_reader_ring_scroll_is_deduped_at_150ms; SurfaceControllerHudTest: item114_124_... | EMU |  |  |
+| 128 | HudInputTest: item128_*; HudControllerGlueTest: item128_* (4 cases: single tap, direction then tap, double tap, unclaimed key) |  |  |  |
+| 129 | HudInputTest: item129_cancel_drops_a_pending_tap; HudControllerGlueTest: item129_* (replaced, closed, update keeps the tap) |  |  | Trigger is HudController's notice observer comparing interaction identity |
+| 130 | HudInputTest: item130_*; HudControllerGlueTest: item130_the_activity_a_ring_tap_is_for_is_fixed_by_its_first_tap, item130_a_tap_whose_activity_ended_... |  |  |  |
+| 131 | - |  | DEVICE |  |
+| 132 | HudInputTest: item132_ring_keycodes_from_a_non_R08_device_are_launcher_noops, debug_seam_injected_R08_sequence_produces_intents; HudKeyEventAdapterTest | EMU |  | Decision 132: debug injection seam carries an R08 device class |
+| 133 | - |  | DEVICE |  |
+| 134 | NoticeStateMachineTest |  |  |  |
+| 135 | NoticeInteractionStateTest; NoticeStateMachineTest: a_band_answers_once_... |  |  |  |
+| 136 | NoticeStateMachineTest: show_sets_the_ttl_..., first_page_turn_kills_both_countdowns_... |  |  |  |
+| 137 | NoticeStateMachineTest: forward_and_backward_wrap_..., an_update_keeps_the_wearer_on_the_action_... |  |  |  |
+| 138 | NoticeStateMachineTest: a_notice_with_one_answer_still_pages_... |  |  |  |
+| 139 | NoticeStateMachineTest: backdrop_owns_all_input_..., non_backdrop_interactive_...; AmbientCameraFanOutTest: item181_... |  |  |  |
+| 140 | NoticeStateMachineTest: height_driven_body_capacity_..., image_page_spends_five_grown_lines_... |  |  |  |
+| 141 | NoticeInteractionStateTest: failed_delivery_stays_spent_displays_uncertainty_... |  |  |  |
+| 142 | NoticeOverlayRendererTest (motion helpers) | EMU |  |  |
+| 143 | NoticeStateMachineTest: renderer_gives_fade_alpha_only_to_an_opted_in_backdrop; NoticeOverlayRendererTest | EMU |  |  |
+| 144 | InkCardPresentationTest (band geometry); AmbientScreenshotTest | EMU |  | HudBandGeometry.topPx in dp (Q17) |
+| 145 | NoticeStateMachineTest; NoticeInteractionStateTest: back_ttl_and_owner_hide_...; HudControllerGlueTest: item128_a_ring_double_tap_dismisses_the_notice_as_the_wearer (user) |  |  |  |
+| 146 | NoticeSleepPolicyTest; DisplayWakePolicyTest |  |  |  |
+| 147 | InkCardMorphStateTest | EMU |  |  |
+| 148 | NoticeOverlayRendererTest |  |  |  |
+| 149 | PinControllerTest |  |  |  |
+| 150 | PinSurfaceContractTest (:shared); PinControllerTest: carries_the_size_tier_... |  |  |  |
+| 151 | AmbientScreenshotTest (pin corners) | EMU |  |  |
+| 152 | AmbientCameraFanOutTest: item152_* (pin, activity, receiver broadcast); item181 (notice) | EMU |  | Fan-out now reaches pin, notice and activity in the main process (U6; F-16 fixed) |
+| 153 | ActivityStateMachineTest |  |  |  |
+| 154 | ActivityPresentationPolicyTest |  |  |  |
+| 155 | ActivityPresentationPolicyTest; ActivityStateMachineTest (flare budgets) |  |  |  |
+| 156 | ActivityStateMachineTest; ActivityPresentationPolicyTest |  |  |  |
+| 157 | ActivityPresentationPolicyTest (corner allocation) |  |  |  |
+| 158 | HudControllerGlueTest item130_* and AmbientCameraFanOutTest start activities only with the '<owner>:activity' identity; the rejection of any other id has no test |  |  | Local surface id is '<owner>:activity' |
+| 159 | ActivityStateMachineTest |  |  |  |
+| 160 | AmbientScreenshotTest | EMU |  |  |
+| 161 | ActivityPresentationSettingsTest |  |  |  |
+| 162 | AmbientCameraFanOutTest (activity HIDDEN under camera) | EMU |  |  |
+| 163 | See items 116, 117 |  |  |  |
+| 164 | StatusBadgeReserveTest |  |  |  |
+| 165 | StatusBadgeGeometryTest |  |  |  |
+| 166 | - |  | DEVICE |  |
+| 167 | - |  | DEVICE |  |
+| 168 | PhoneBatteryControllerTest: item168_*; PhoneBatteryContractTest (:shared) |  |  |  |
+| 169 | HudTopInsetTest |  |  |  |
+| 170 | HudControllerGlueTest: item170_a_top_inset_change_repositions_the_open_home_without_recreating_the_window; ListHomeTest: a_top_inset_takes_rows_away_...; notice/pin/activity/ink card top: AmbientScreenshotTest, InkCardPresentationTest | EMU |  |  |
+| 171 | RemotePointerGeometryTest |  |  |  |
+| 172 | - | EMU |  |  |
+| 173 | RemotePointerGestureCompletionGateTest |  |  |  |
+| 174 | NativeAppsControllerTest |  |  |  |
+| 175 | RemoteNavigationPolicyTest |  |  |  |
+| 176 | MainActivityScreenshotTest (stopped stage only) | EMU |  |  |
+| 177 | SelfArmOnboardingStateMachineTest |  |  |  |
+| 178 | - |  | DEVICE |  |
+| 179 | - | EMU |  |  |
+| 180 | CameraInputRouterTest | EMU |  |  |
+| 181 | AmbientCameraFanOutTest: item181_the_camera_overlay_takes_the_notice_out_of_view_and_out_of_input, item152_181_the_broadcast_from_the_camera_process_... |  | DEVICE | Decision (U6): main-process notice and pin honour the camera-overlay flag; F-16 fixed. The JVM covers the fan-out; a real :camera process broadcast is device-only |
+| 182 | - |  | DEVICE |  |
+| 183 | - | EMU |  |  |
+| 184 | HudStateMachineTest: item_184_B1_back_guard_is_off_by_default_... |  | DEVICE | Guard exists in the machine, off by default (HARDWARE B1/Q5) |
+| 185 | - |  | DEVICE |  |
+| 186 | DisplayStandbyLauncherGateTest: item186_the_launcher_gate_follows_the_host_and_blocks_standby; DisplayStandbyPolicyTest |  |  | Gate reads HudController::isLauncherShown |
