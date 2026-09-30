@@ -38,6 +38,11 @@
     <string name="onb_failed_body">%1$s\n\nTap retry — Nexus reopens the secure setup and finishes arming.</string>
     <string name="onb_failed_action">RETRY</string>
 
+    <string name="onb_stopped_eyebrow">SETUP</string>
+    <string name="onb_stopped_title">Nexus is not running</string>
+    <string name="onb_stopped_body">The “Rokid Nexus Glasses” accessibility service is off or has stopped, so the launcher cannot open.\n\nSwitch it on again in Settings, then come back.</string>
+    <string name="onb_stopped_action">OPEN SETTINGS</string>
+
     <string name="onb_unsupported_eyebrow">SETUP UNAVAILABLE</string>
     <string name="onb_unsupported_title">Android 11 required</string>
     <string name="onb_unsupported_body">This firmware has no Wireless Debugging pairing API. Use the documented ADB pm grant fallback.</string>

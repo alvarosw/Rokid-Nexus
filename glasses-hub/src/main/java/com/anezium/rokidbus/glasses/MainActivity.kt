@@ -38,6 +38,17 @@ class MainActivity : Activity() {
     private var insetUnsubscribe: (() -> Unit)? = null
     private var onboardingReceiverRegistered = false
     private var confirmationShownForSession = ""
+
+    /**
+     * Set by every start of this activity (the app icon, a setup hand-back) and kept until the
+     * launcher actually opened. A plain resume or a store broadcast does not set it, so it never
+     * opens the launcher over an app screen the wearer is in.
+     */
+    private var openLauncherRequested = false
+
+    /** The launch was requested but the accessibility service is not running: the setup view says so. */
+    private var serviceStopped = false
+    private val recheckService = Runnable { if (serviceStopped && !isFinishing) renderScreen() }
     private val swipeDedupe = DpadPairDedupe()
     private val onboardingReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -47,6 +58,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        openLauncherRequested = true
         liveInstance = this
         window.statusBarColor = RokidHudTokens.GROUND
         window.navigationBarColor = RokidHudTokens.GROUND
@@ -55,6 +67,12 @@ class MainActivity : Activity() {
         GlassesHub.start(applicationContext)
         insetUnsubscribe = HudTopInset.observe(this, ::applyHudTopInset)
         log("Launcher activity opened")
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openLauncherRequested = true
     }
 
     override fun onStart() {
@@ -111,7 +129,7 @@ class MainActivity : Activity() {
             return super.dispatchKeyEvent(event)
         }
         val direction = swipeDedupe.onKey(event.keyCode, event.action, event.repeatCount, event.eventTime)
-        if (onboardingState.stage != SelfArmOnboardingState.Stage.COMPLETE) {
+        if (onboardingState.stage != SelfArmOnboardingState.Stage.COMPLETE || serviceStopped) {
             if (direction != null) return true
             return when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_RIGHT,
@@ -212,10 +230,10 @@ class MainActivity : Activity() {
             // Land on a moment of confirmation rather than blinking straight to the launcher:
             // the wearer just did the one thing we asked of them and deserves to see it took.
             if (showSetupConfirmation()) return
-            onboardingView.visibility = View.GONE
-            openLauncherAndFinish()
+            handOffToLauncher()
             return
         }
+        serviceStopped = false
         confirmationShownForSession = ""
         onboardingView.visibility = View.VISIBLE
 
@@ -351,29 +369,69 @@ class MainActivity : Activity() {
 
     /**
      * The app icon opens the same launcher as every other entry point, in the configured mode, and
-     * gets out of the way: the launcher is the HUD's window, not this activity's.
+     * gets out of the way: the launcher is the HUD's window, not this activity's. It only finishes
+     * when the launcher actually opened; with the service down it says so instead of leaving a blank
+     * screen, and opens the launcher as soon as the service is back.
      */
-    private fun openLauncherAndFinish() {
-        val opened = HudController.openLauncher(LauncherTrigger.APP_ICON)
-        log("Launcher activity handed off to HUD opened=$opened")
-        finish()
+    private fun handOffToLauncher() {
+        val serviceUp = HudController.isServiceConnected()
+        when (LauncherHandoff.decide(openLauncherRequested, serviceUp)) {
+            LauncherHandoff.Outcome.OPEN -> {
+                val opened = HudController.openLauncher(LauncherTrigger.APP_ICON)
+                log("Launcher activity handed off to HUD opened=$opened")
+                if (opened) {
+                    openLauncherRequested = false
+                    serviceStopped = false
+                    onboardingView.visibility = View.GONE
+                    finish()
+                } else {
+                    showServiceStopped()
+                }
+            }
+            LauncherHandoff.Outcome.SHOW_SERVICE_STOPPED -> showServiceStopped()
+            LauncherHandoff.Outcome.FINISH -> {
+                log("Launcher activity resumed without a launch request; not opening the launcher")
+                onboardingView.visibility = View.GONE
+                finish()
+            }
+        }
+    }
+
+    private fun showServiceStopped() {
+        serviceStopped = true
+        interactiveFlowActive = true
+        confirmationShownForSession = ""
+        onboardingStepView.setText(R.string.onb_stopped_eyebrow)
+        onboardingTitleView.setText(R.string.onb_stopped_title)
+        onboardingBodyView.setText(R.string.onb_stopped_body)
+        onboardingDiagnosticView.visibility = View.GONE
+        onboardingActionView.setText(R.string.onb_stopped_action)
+        onboardingActionView.background = SurfaceChrome.focused()
+        onboardingActionView.setTextColor(RokidHudTokens.FOCUS)
+        onboardingView.visibility = View.VISIBLE
+    }
+
+    private fun openAccessibilitySettings() {
+        val sessionId = SelfArmOnboardingStore.beginSession(applicationContext)
+        SelfArmOnboardingStore.markAwaitingAccessibility(applicationContext)
+        val landing = SelfArmAccessibilityHandoff.open(this)
+        if (landing == SelfArmAccessibilityHandoff.Landing.UNAVAILABLE) {
+            SelfArmOnboardingStore.finish(
+                context = applicationContext,
+                sessionId = sessionId,
+                setupState = "accessibility_settings_unavailable",
+                success = false,
+            )
+        }
     }
 
     private fun performOnboardingAction() {
+        if (serviceStopped) {
+            openAccessibilitySettings()
+            return
+        }
         when (onboardingState.action) {
-            SelfArmOnboardingState.Action.OPEN_ACCESSIBILITY -> {
-                val sessionId = SelfArmOnboardingStore.beginSession(applicationContext)
-                SelfArmOnboardingStore.markAwaitingAccessibility(applicationContext)
-                val landing = SelfArmAccessibilityHandoff.open(this)
-                if (landing == SelfArmAccessibilityHandoff.Landing.UNAVAILABLE) {
-                    SelfArmOnboardingStore.finish(
-                        context = applicationContext,
-                        sessionId = sessionId,
-                        setupState = "accessibility_settings_unavailable",
-                        success = false,
-                    )
-                }
-            }
+            SelfArmOnboardingState.Action.OPEN_ACCESSIBILITY -> openAccessibilitySettings()
             SelfArmOnboardingState.Action.START_WIRELESS,
             SelfArmOnboardingState.Action.RETRY_WIRELESS,
             -> {
@@ -476,6 +534,23 @@ class MainActivity : Activity() {
 
         /** Long enough to read four words, short enough that nobody waits on it. */
         const val SETUP_CONFIRMATION_MS = 1_600L
+        private const val SERVICE_RECHECK_MS = 2_000L
         const val CONFIRMATION_SESSIONLESS = "-"
+    }
+}
+
+/** What the app icon's activity does once setup is complete. Pure so the rule is testable. */
+internal object LauncherHandoff {
+    enum class Outcome { OPEN, SHOW_SERVICE_STOPPED, FINISH }
+
+    /**
+     * Only a start of the activity ([requested]) may open the launcher; a resume that brought no
+     * new intent must not put it over whatever the wearer is looking at. With the service down a
+     * requested open waits on a visible explanation.
+     */
+    fun decide(requested: Boolean, serviceConnected: Boolean): Outcome = when {
+        !requested -> Outcome.FINISH
+        serviceConnected -> Outcome.OPEN
+        else -> Outcome.SHOW_SERVICE_STOPPED
     }
 }
