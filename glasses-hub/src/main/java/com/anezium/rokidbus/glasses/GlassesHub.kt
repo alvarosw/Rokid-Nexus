@@ -783,7 +783,8 @@ object GlassesHub {
                     "pinVersion=${PinSurfaceContract.VERSION} " +
                     "activityVersion=${ActivitySurfaceContract.VERSION} " +
                     "inkVersion=${InkWire.VERSION} " +
-                    "ttsVersion=${if (ttsAvailable) TtsContract.VERSION else 0}",
+                    "ttsVersion=${if (ttsAvailable) TtsContract.VERSION else 0} " +
+                    "homeGridVisibleRows=$homeGridRows",
             )
         } else {
             log("renderer capability announcement failed code=$error")
