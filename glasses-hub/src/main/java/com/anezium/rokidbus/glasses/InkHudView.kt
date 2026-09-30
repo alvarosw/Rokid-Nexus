@@ -19,7 +19,7 @@ import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ScrollView
 import android.widget.TextView
-import com.anezium.rokidbus.client.ui.BusTheme
+import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.ink.RenderChange
 import com.anezium.rokidbus.ink.RenderNode
 import com.google.android.flexbox.AlignItems
@@ -45,13 +45,18 @@ internal class InkHudView(context: Context) : FrameLayout(context) {
         val textOwnerId: String? = null,
     )
 
+    // The tiers are intensities of the one hue: accent 100 %, text 72 %, muted and dim 48 %. `dim`
+    // is not the 24 % `line` step: that one is for structure and is never text (design system), and
+    // pages draw dim text. The design system has no red, so `danger` is `critical`, the accent's
+    // intensity, and the alert reads through the page's own words and icons.
     private val palette = InkColorPalette(
-        phosphor = BusTheme.phosphor,
-        text = BusTheme.text,
-        muted = BusTheme.muted,
-        dim = BusTheme.dim,
-        danger = BusTheme.danger,
-        black = BusTheme.glassesBg,
+        phosphor = RokidHudTokens.FOCUS,
+        text = RokidHudTokens.TEXT_PRIMARY,
+        muted = RokidHudTokens.TEXT_SECONDARY,
+        dim = RokidHudTokens.LINE_CONTROL,
+        danger = RokidHudTokens.CRITICAL,
+        black = RokidHudTokens.GROUND,
+        matching = InkTierReference.PALETTE,
     )
     private val rootFlex = InkFlexboxLayout(context).apply {
         flexDirection = FlexDirection.COLUMN
@@ -85,9 +90,9 @@ internal class InkHudView(context: Context) : FrameLayout(context) {
         // transparent and only the hairline and the content light up.
         background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            setColor(BusTheme.glassesBg)
-            setStroke(BusTheme.dp(context, 1), BusTheme.hairline)
-            cornerRadius = BusTheme.dp(context, 7).toFloat()
+            setColor(RokidHudTokens.GROUND)
+            setStroke(RokidHudTokens.BORDER_DEFAULT, RokidHudTokens.LINE)
+            cornerRadius = RokidHudTokens.RADIUS_PANEL.toFloat()
         }
         addView(rootFlex, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(rootAbsolute, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -292,10 +297,10 @@ internal class InkHudView(context: Context) : FrameLayout(context) {
             .let { Record(node, parentId, it) }
         "nx-canvas" -> InkNxCanvasView(context, palette, frameGate).apply { updateNode(node) }
             .let { Record(node, parentId, it) }
-        "text", "#text" -> monoHudText(context, DEFAULT_TEXT_SP, BusTheme.text).apply {
+        "text", "#text" -> monoHudText(context, DEFAULT_TEXT_SP, RokidHudTokens.TEXT_PRIMARY).apply {
             text = node.text.orEmpty()
         }.let { Record(node, parentId, it) }
-        else -> monoHudText(context, DEFAULT_TEXT_SP, BusTheme.danger).apply {
+        else -> monoHudText(context, DEFAULT_TEXT_SP, RokidHudTokens.CRITICAL).apply {
             text = "[UNSUPPORTED ${node.type}]"
         }.let { Record(node, parentId, it) }
     }
@@ -980,7 +985,7 @@ internal class InkHudView(context: Context) : FrameLayout(context) {
                 record.view.isSelected = selected
                 record.view.foreground = if (selected) GradientDrawable().apply {
                     setColor(Color.TRANSPARENT)
-                    setStroke(px(2), BusTheme.phosphor)
+                    setStroke(px(2), RokidHudTokens.FOCUS)
                     cornerRadius = px(4).toFloat()
                 } else null
             }
@@ -1163,7 +1168,7 @@ private class InkScrollContainer(context: Context, horizontal: Boolean) : FrameL
 }
 
 private class InkImagePlaceholderView(context: Context) : FrameLayout(context) {
-    private val label = monoHudText(context, 11f, BusTheme.muted).apply {
+    private val label = monoHudText(context, 11f, RokidHudTokens.TEXT_SECONDARY).apply {
         gravity = Gravity.CENTER
         maxLines = 2
         ellipsize = TextUtils.TruncateAt.MIDDLE
@@ -1186,7 +1191,7 @@ private class InkImagePlaceholderView(context: Context) : FrameLayout(context) {
         background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             setColor(Color.TRANSPARENT)
-            setStroke((1 * resources.displayMetrics.density).roundToInt().coerceAtLeast(1), BusTheme.dim)
+            setStroke((1 * resources.displayMetrics.density).roundToInt().coerceAtLeast(1), RokidHudTokens.LINE_CONTROL)
             cornerRadius = 4 * resources.displayMetrics.density
         }
     }

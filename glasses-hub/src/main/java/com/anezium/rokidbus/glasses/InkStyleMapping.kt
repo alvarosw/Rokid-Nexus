@@ -134,7 +134,29 @@ internal data class InkColorPalette(
     val dim: Int,
     val danger: Int,
     val black: Int,
+    /**
+     * The colors a literal is matched against to pick its tier, when they differ from what is
+     * drawn. Matching by distance needs colors that are far apart in RGB; a host whose tiers are
+     * intensities of one hue would otherwise send every literal to the same tier.
+     */
+    val matching: InkColorPalette? = null,
 )
+
+/**
+ * The tier anchors literal colors are matched to: a nearest-color choice among a bright green, a
+ * muted and a dim gray-green and a red, as authors of `.ink` pages have always seen it. Only the
+ * choice of tier depends on these; what a tier looks like is the host palette's business.
+ */
+internal object InkTierReference {
+    val PALETTE = InkColorPalette(
+        phosphor = 0xff71ff97.toInt(),
+        text = 0xffecf4ec.toInt(),
+        muted = 0xff7e9585.toInt(),
+        dim = 0xff47584d.toInt(),
+        danger = 0xffff7070.toInt(),
+        black = 0xff000000.toInt(),
+    )
+}
 
 internal enum class InkColorTier { PHOSPHOR, TEXT, MUTED, DIM, DANGER, BLACK }
 
@@ -147,7 +169,8 @@ internal object InkColorClamp {
         if (normalized == "transparent") return resolved(InkColorTier.BLACK, palette, wasLiteral = false)
         val literal = parseColor(normalized) ?: return resolved(fallback, palette, wasLiteral = false)
         val candidates = listOf(InkColorTier.PHOSPHOR, InkColorTier.MUTED, InkColorTier.DIM, InkColorTier.DANGER)
-        val nearest = candidates.minBy { colorDistance(literal, color(it, palette)) }
+        val anchors = palette.matching ?: palette
+        val nearest = candidates.minBy { colorDistance(literal, color(it, anchors)) }
         return resolved(nearest, palette, wasLiteral = true)
     }
 
