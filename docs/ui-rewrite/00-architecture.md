@@ -347,3 +347,56 @@ debug `CameraFixtureActivity`, not a real camera session.
 
 For U7: nothing in surface content depends on window order. The activity and notice renderers still
 own their visuals and state machines; only their window handling moved.
+
+### U7a (plugin-surface content in the design system)
+
+Implemented in `glasses-hub/.../glasses/`: `SurfaceHudView`, `MediaHudView`, `MediaProgressView`,
+`ImageHudView`, `ReaderSurfaceView`, the new `SurfaceStyle.kt` (`SurfaceType` text styles,
+`SurfaceChrome` outlines) and the Ink palette in `InkHudView`. None of them uses `BusTheme` colors
+any more (`BusTheme.dp` remains only in the Ink card geometry shared with the notice band, U7b).
+`RokidHudTokens` gained `heading` and `display` (16/22 and 22/28, semibold).
+
+- **Host.** Full-bleed surfaces are laid out on the app safe area: 16 px sides, `12 + HUD top inset`
+  (converted once with `HudTopInset.toPx`) at the top, 12 px at the bottom. Inside it: the status
+  row (`mono`, `text-secondary`) and one `Panel` (1 px `line`, `radius-panel`) that holds title
+  (`heading`), subtitle (`body-small`), the content and the footer. The morph's panel ends on the same
+  rect, so the frame it fades out of is the one the surface fades in. A see-through surface removes
+  the panel border along with the rest of its chrome. The Ink card stays a direct child of the host
+  with no chrome, as before. `surfaceHostChrome`'s legacy dp padding is kept because
+  `InkCardPresentationTest` pins it; the view no longer reads it for full-bleed surfaces.
+- **Plain card and lyrics.** The body takes the largest of `display`, `heading`, `body` that fits (a
+  short message is the screen's one `display`; long text shrinks instead of losing its tail); the
+  current lyric line is `display` at `focus`, neighbours `body` at `text-secondary`.
+- **Rows.** Board rows: route as a `line-control` outlined `data` chip, destination `body`, wait times
+  `data` then `mono`. List rows are `ListItem`s: 32 px minimum, `body` title, `body-small` sub line,
+  `data` value at the end, the selected row in the focus chrome (`surface-selected`, 2 px `focus`).
+  `ALERT` shows the alert icon and a heavier title, `DIM` is `text-secondary`. The row window
+  (`surfaceListViewport`) is untouched; its overflow markers are chevron icons and a `mono` count.
+- **Media.** Title is the screen's `display`; artist `body`; album `body-small`; the bar is `Loader`
+  `progress` (`text-primary` on `line`); elapsed and duration are `data`, the state a `label`. The
+  artwork takes whatever height the text leaves (max 224 px) and is dropped below 64 px.
+- **Reader.** `ScrollView` is gone: the reader scrolls by `View.scrollTo` with a `duration-default`
+  tween through `HudMotionDriver`, with a 2 px position track, so S5 holds here too. Headers are
+  `label` (speaker in `text-primary`, `focus` when emphasised, uppercase), prose `body`, aside
+  `body-small`. `resolveReaderScrollTarget` and the page step (45 % of the viewport) are unchanged.
+- **Editable card.** The field is the focused control: `surface-selected` fill, 2 px `focus` border,
+  `focus` caret, `heading`-sized text.
+- **Image.** Same drawing, framed by the panel; decoded pixels are the only non-token pixels.
+- **Ink.** The SDK leaves colors to the host (`InkColorPalette`, tiers by name). The tiers became
+  intensities of the one hue: accent 100 %, text 72 %, muted and dim 48 %, `danger` = `critical`
+  (100 %; the design has no red), black = ground. `dim` is 48 % and not the 24 % `line` step because
+  that step is never text. Literal colors are still matched to a tier with the historical anchor
+  colors (`InkTierReference`, carried in `InkColorPalette.matching`), so a red literal is still
+  `danger`; with one-hue tiers nearest-color matching would send everything to the same tier.
+  Typography (monospace, sp sizes) and every layout metric are unchanged, since rpx layout and
+  wrapping depend on them; the first-frame gate and morph code are untouched.
+
+Fixed baseline bugs: media title, artist and progress were pushed out of the screen (a fixed 168 dp
+artwork ahead of them); list-row `badge` values were never drawn for list rows (only for `BODY`).
+
+Deviations and limits: emulator captures are on an opaque black ground, as always; `RokidHudTokens`
+`heading`/`display` use the semibold cut, not a true 600; the media artwork placeholder is a "note"
+glyph in an outlined square (the icon set has no music icon); Ink text stays monospace; the
+`ALERT` row is told apart by icon and weight only. The notice, pin, activity, action row and
+waveform views (`HudActionRowView`, `HudWaveformView`, `ParagraphTranslationLayout` users) are U7b.
+`SurfaceScreenshotTest` renders every kind at 480x640 and checks the single hue on the pixels.

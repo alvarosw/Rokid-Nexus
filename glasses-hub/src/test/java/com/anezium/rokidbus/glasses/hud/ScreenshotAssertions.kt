@@ -9,13 +9,16 @@ import org.junit.Assert.assertTrue
 /**
  * The design system's hard rules on real pixels: the PNG is exactly 480x640, every lit pixel is
  * the one green hue (black composited with #40FF5E at some intensity) and no large area is lit.
+ * [exempt] is the rectangle of a decoded image, which keeps its own pixels.
  */
-internal fun assertSingleHue(file: File) {
+internal fun assertSingleHue(file: File, exempt: android.graphics.Rect? = null) {
     val image = ImageIO.read(file)
     assertEquals("$file width", 480, image.width)
     assertEquals("$file height", 640, image.height)
     var lit = 0
     for (y in 0 until image.height) for (x in 0 until image.width) {
+        // Image content itself (a decoded picture) is not ours to recolor.
+        if (exempt != null && exempt.contains(x, y)) continue
         val argb = image.getRGB(x, y)
         val r = argb shr 16 and 0xFF
         val g = argb shr 8 and 0xFF

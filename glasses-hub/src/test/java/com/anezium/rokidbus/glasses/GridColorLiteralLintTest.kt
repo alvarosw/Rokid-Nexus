@@ -80,4 +80,55 @@ class GridColorLiteralLintTest {
             assertTrue("removeAllViews in $name", !text(name).contains("removeAllViews"))
         }
     }
+
+    // Plugin-surface rendering (U7a): every color is a RokidHudTokens intensity.
+    private val surfaceFiles = listOf(
+        "SurfaceHudView.kt",
+        "SurfaceStyle.kt",
+        "MediaHudView.kt",
+        "MediaProgressView.kt",
+        "ImageHudView.kt",
+        "ReaderSurfaceView.kt",
+        "SurfaceActivity.kt",
+        "InkHudView.kt",
+        "InkCardPresentation.kt",
+    )
+
+    // The Ink card keeps its dp geometry (the rpx layout depends on it), so only its colors are
+    // policed; the other surface files are pixels and tokens through and through.
+    private val inkFiles = setOf("InkHudView.kt", "InkCardPresentation.kt")
+
+    @Test
+    fun `no raw color literal or BusTheme color in the surface views`() {
+        val glassesBg = Regex("""BusTheme\.glassesBg\b""")
+        surfaceFiles.forEach { name ->
+            val text = text(name)
+            (forbidden + glassesBg).forEach { pattern ->
+                val match = pattern.find(text)
+                assertTrue(
+                    "forbidden color pattern ${pattern.pattern} found in $name: ${match?.value}",
+                    match == null,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `the surface views use no ScrollView and no density-scaled units`() {
+        val forbiddenUnits = listOf(
+            Regex("""\bScrollView\b"""),
+            Regex("""COMPLEX_UNIT_(SP|DIP)"""),
+            Regex("""displayMetrics\.(density|scaledDensity)"""),
+            Regex("""BusTheme\.dp\("""),
+        )
+        surfaceFiles.filterNot { it in inkFiles }.forEach { name ->
+            val code = text(name).lineSequence()
+                .filterNot { it.trimStart().startsWith("*") || it.trimStart().startsWith("//") }
+                .joinToString("\n")
+            forbiddenUnits.forEach { pattern ->
+                val match = pattern.find(code)
+                assertTrue("forbidden ${pattern.pattern} found in $name: ${match?.value}", match == null)
+            }
+        }
+    }
 }
