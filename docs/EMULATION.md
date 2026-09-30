@@ -9,8 +9,8 @@ The tooling lives in `tools/emulator/` and targets a Cuttlefish instance, but an
   2026-09-29; `RokidHudTokens.CANVAS_WIDTH/HEIGHT`, `HudGeometry`). The 480x352 / 480x400 figures used
   briefly on 2026-09-29 (AIUI reference viewport, panel size) are superseded.
 - Density: **240 dpi (hdpi, 1.5x)**, i.e. 320 x 234.67 dp. Evidence in the repo:
-  - `GridLauncherView` history (`git show stash@{0}`): "a 4-column row of TILE_UNIT_DP tiles is wider
-    than this display on the glasses (408dp vs. 320dp)" - 480 px / 320 dp = 1.5.
+  - The old grid launcher's on-device overflow report: a 4-column row of 96 dp tiles (408 dp with gaps)
+    was wider than the glasses display (320 dp) - 480 px / 320 dp = 1.5.
   - `InkWrappedTextLayoutTest` and `InkTemplateTortureTest` pin Robolectric to
     `w320dp-h427dp-hdpi` (480x640 px at hdpi).
   - Counter-evidence, not adopted: `GridLauncherScreenshotTest` uses `w480dp-h400dp-mdpi`
@@ -34,6 +34,9 @@ SKIP_BUILD=1 tools/emulator/install-and-arm.sh
 tools/emulator/ring.sh fwd|back|tap|double|dismiss|launcher|overlay|state
 tools/emulator/capture.sh <name>           # PNG in $OUT_DIR
 tools/emulator/capture.sh <name> 8         # 8 s screenrecord MP4
+tools/emulator/dense-capture.sh <label> <evdev-code> [seconds]   # ~150 ms raw frames around one key press
+tools/emulator/analyze-frames.py <frame-dir> [--home-ref F] [--from S] [--to S] [--fail-on-home]
+tools/emulator/frame-sheet.py <frame-dir> <from-s> <to-s> <out.png> [scale]
 ```
 
 Ring mapping: `input keyevent` is injected above the accessibility key filter on the API 37 image, so
@@ -52,6 +55,29 @@ broadcasts inside one 350 ms window, which two `adb` invocations cannot meet, so
 device shell. Tap timing in this mode is wall-clock between broadcasts (each event is
 stamped with the uptime clock on delivery). `launcher` broadcasts `OPEN_LAUNCHER` (it toggles).
 `overlay` runs the debug `probe=surface-overlay` demo card.
+
+### Frame analysis: is a Nexus window always in front?
+
+`dense-capture.sh` loops `screencap` on the device (about 150 ms per frame, faster than `adb exec-out`
+can) around one evdev key press and pulls the frames to `$OUT_DIR/dense-<label>/`, each named by its
+offset from the press in seconds. `analyze-frames.py` classifies every frame as `home` (the ROM
+wallpaper shows, so no Nexus window covers the screen) or `nexus` (anything else: black ground,
+launcher, surface, image, mid-morph). Only those two classes exist: Nexus draws one green hue on
+pure black, so a green panel or a colorful photo is never mistaken for the launcher. The wallpaper
+is recognised by its navy ground (a slightly blue black over most of the screen; Nexus never draws
+it); `--home-ref <frame>` with a raw frame taken on the home screen matches against that frame
+instead and is the safer choice for flows that show photos. `--from/--to` bound the window that the
+summary covers and `--fail-on-home` makes the exit status 1 when any frame in it is `home`, so a
+tour can assert "0 frames without a Nexus window" for the stretch between the press and the end of a
+morph. A Nexus notice floating over the wallpaper still counts as `home`: the check is for flows where
+the host window is supposed to cover the screen. `frame-sheet.py` builds a contact sheet of a time
+range (identical neighbours collapsed) for the report.
+
+```
+tools/emulator/dense-capture.sh list-open 28 4          # ENTER (evdev 28) with the launcher up
+tools/emulator/analyze-frames.py /tmp/nexus-emu/dense-list-open --from 0 --fail-on-home
+tools/emulator/frame-sheet.py /tmp/nexus-emu/dense-list-open -0.2 1.5 /tmp/nexus-emu/list-open.png
+```
 
 The hubs link the vendor CXR library: build without `-PskipCxrGlobal=true` (the script does).
 
