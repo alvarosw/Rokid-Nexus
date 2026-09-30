@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Upgrade together
+
+Install **both Nexus hubs** from this change: the phone saves tile positions the
+glasses now honor (tile layout config v2), and the glasses report how many grid
+rows fit on screen. An older glasses hub still accepts the new layout but
+re-packs it by order and drops the new sizes. A plugin declaring `3x1`, `3x2`
+or `3x3` in `TILE_SIZES` needs hubs with this change.
+
+### Phone hub
+
+- **Place tiles where you want them.** Tile layout is now a live preview of the
+  glasses grid: drag a tile and the others slide into the nearest space that
+  fits, tap it to pick one of seven sizes, auto-pack or reset, then save. The
+  preview uses the glasses' real grid, each plugin's last published tile, and
+  a "SCROLL ↓" line where the glasses screen actually ends.
+
+### Glasses hub
+
+- **The grid shows the layout you saved.** Tiles keep the column and row set on
+  the phone, empty cells included, and the ring moves through them in reading
+  order. Tiles come in 1x1, 2x1, 3x1, 1x2, 2x2, 3x2 and 3x3, with the icon
+  beside the name, rows by height and a progress track.
+
 ## 1.5.0
 
 ### Upgrade together
