@@ -25,7 +25,7 @@ class StoreActivity : Activity() {
     private lateinit var list: LinearLayout
     private lateinit var chipRow: LinearLayout
     private lateinit var headerSub: TextView
-    private lateinit var registryClient: RegistryClient
+    private lateinit var registryClient: StoreRegistry
     private lateinit var iconLoader: StoreIconLoader
     private var registrySnapshot: RegistrySnapshot? = null
     private var registryLoading = true
@@ -37,7 +37,7 @@ class StoreActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        registryClient = RegistryClient.create(applicationContext)
+        registryClient = StoreRegistry.create(applicationContext)
         iconLoader = StoreIconLoader(applicationContext)
         buildUi()
         refreshRegistry()

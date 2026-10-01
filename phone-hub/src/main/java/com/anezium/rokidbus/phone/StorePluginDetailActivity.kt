@@ -28,7 +28,7 @@ import com.anezium.rokidbus.client.ui.NexusUi
  */
 class StorePluginDetailActivity : Activity() {
     private lateinit var content: LinearLayout
-    private lateinit var registryClient: RegistryClient
+    private lateinit var registryClient: StoreRegistry
     private lateinit var iconLoader: StoreIconLoader
     private lateinit var pluginInstaller: PluginInstaller
     private lateinit var postInstallCoordinator: PluginPostInstallCoordinator
@@ -47,7 +47,7 @@ class StorePluginDetailActivity : Activity() {
             finish()
             return
         }
-        registryClient = RegistryClient.create(applicationContext)
+        registryClient = StoreRegistry.create(applicationContext)
         iconLoader = StoreIconLoader(applicationContext)
         postInstallCoordinator = PluginPostInstallCoordinator(
             discoverPackage = PhonePluginDiscovery(packageManager)::discoverPackage,

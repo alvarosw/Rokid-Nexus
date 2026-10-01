@@ -14,6 +14,16 @@ android {
         targetSdk = 36
         versionCode = 10500
         versionName = "1.5.0"
+        buildConfigField(
+            "String",
+            "FORK_REGISTRY_URL",
+            "\"https://raw.githubusercontent.com/alvarosw/Rokid-Nexus/main/dist/nexus-plugins.v1.json\"",
+        )
+        buildConfigField(
+            "String",
+            "UPSTREAM_REGISTRY_URL",
+            "\"https://raw.githubusercontent.com/Anezium/RokidBrew-Registry/main/dist/nexus-plugins.v1.json\"",
+        )
     }
 
     buildTypes {
@@ -24,6 +34,10 @@ android {
                 "proguard-rules.pro",
             )
         }
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     compileOptions {

@@ -67,7 +67,7 @@ object PluginUpdateChecker {
         val appContext = context.applicationContext
         executor.execute {
             val updates = runCatching {
-                val snapshot = RegistryClient.create(appContext).cachedSnapshot()
+                val snapshot = StoreRegistry.create(appContext).cachedSnapshot()
                     ?: return@runCatching cachedUpdates(appContext)
                 val installedVersions = installedVersions(
                     appContext,
@@ -125,7 +125,7 @@ object PluginUpdateChecker {
         executor.execute {
             val previousUpdates = cachedUpdates(context)
             runCatching {
-                val registryClient = RegistryClient.create(context)
+                val registryClient = StoreRegistry.create(context)
                 val previousRegistryFetch = registryClient.cachedSnapshot()?.lastFetchEpochMillis
                 registryClient.refresh { result ->
                     executor.execute {

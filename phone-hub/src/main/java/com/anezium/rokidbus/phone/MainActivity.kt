@@ -498,7 +498,7 @@ class MainActivity : Activity() {
             }
             pluginSection.addView(BusTheme.gap(this, 6))
         }
-        val feed = RegistryClient.create(applicationContext).cachedSnapshot()?.feed
+        val feed = StoreRegistry.create(applicationContext).cachedSnapshot()?.feed
             ?: RegistryFeed(RegistryClient.SUPPORTED_VERSION, emptyList())
         val installedPackages = feed.plugins
             .map { it.artifact.packageName }
