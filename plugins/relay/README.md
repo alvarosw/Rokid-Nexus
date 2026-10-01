@@ -19,3 +19,31 @@ updates that document in place without interrupting an active reply flow.
 Notification content, sender names, images, and speech text are process-memory
 only. The settings screen stores only feature flags and the thread message
 limit.
+
+## Grid tile
+
+With the optional `widget_tile` grant, Relay publishes a list tile for the
+glasses grid in every size from `1x1` to `3x3`: the inbox's conversations,
+newest first, each with the sender, the app, the newest message (prefixed with
+its speaker in a group) and its age, with the sender's initials beside it,
+under an `N new` summary. Up to six are sent; the rest count as "+N more". With
+nothing in the inbox the tile reads "No new messages".
+
+The tile reads the inbox only between `onNexusTileActive(true)` and
+`onNexusTileActive(false)`, the hub's tile lease. Inside it, Relay republishes
+on a capture, a removal, a sent reply, a cleared inbox, a hide switch and each
+hub refresh, at most once every 12 seconds so the glasses' tile rate limit
+never drops the newest state.
+
+Conversations whose text Android redacted never reach the tile, not even as a
+sender. While *Hide message text on the glasses* or *Hide previews in the
+inbox* is on, every message on the tile reads "New message".
+
+## One bus registration
+
+The notice band does not open a client of its own: it binds `RelayPluginService`
+for as long as a band is up and talks through that service's client, which
+forwards the band's notice, typed-reply, link and registration callbacks. The
+hub holds the same service for the inbox and the tile lease, so Relay has a
+single registration on the hub however those overlap, and the hub's lifecycle
+deliveries (open, close, tile lease, refresh) always find it.

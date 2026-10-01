@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.0
+
+- **Live grid tile** (optional `widget_tile` capability, all seven tile sizes):
+  the inbox's conversations with sender, app, newest message, age and initials
+  under an "N new" summary, republished as messages arrive, are removed or are
+  answered. The inbox is read for the tile only while the hub's tile lease is
+  active. Conversations Android redacted never appear on it, and the hide
+  switches hide the message text there too.
+- The layout editor previews the tile with sample conversations until a real
+  one is published.
+- **One bus registration.** The notice band now talks through the plugin
+  service's own connection instead of opening a second one under the same id,
+  so a band, the inbox and the tile lease can overlap without the hub losing
+  track of Relay.
+
 ## 1.2.4
 
 - **Switch to typing mid-dictation.** About a second after dictation starts, a

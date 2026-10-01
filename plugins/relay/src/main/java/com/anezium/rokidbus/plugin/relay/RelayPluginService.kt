@@ -3,6 +3,8 @@ package com.anezium.rokidbus.plugin.relay
 import android.view.KeyEvent
 import com.anezium.rokidbus.client.plugin.NexusCard
 import com.anezium.rokidbus.client.plugin.NexusCardLine
+import com.anezium.rokidbus.client.plugin.NexusNoticeCloseReason
+import com.anezium.rokidbus.client.plugin.NexusPluginClient
 import com.anezium.rokidbus.client.plugin.NexusPluginService
 import com.anezium.rokidbus.client.plugin.NexusReader
 import com.anezium.rokidbus.client.plugin.NexusReaderSegment
@@ -15,10 +17,15 @@ import com.anezium.rokidbus.client.plugin.NexusSpeechSession
 import com.anezium.rokidbus.client.plugin.NexusSpeechState
 import com.anezium.rokidbus.client.plugin.NexusSpeechStopReason
 import com.anezium.rokidbus.client.plugin.NexusSurfaceSession
+import com.anezium.rokidbus.client.plugin.WidgetTileSession
 import com.anezium.rokidbus.shared.NoticeSurfaceContract
 import com.anezium.rokidbus.shared.plugin.NexusInputEvent
 
-/** Menu-launched inbox. The notification-band runtime remains a separate, untouched flow. */
+/**
+ * Menu-launched inbox and the grid tile. It also carries the band's traffic: the notification-band
+ * runtime binds this service and talks through its client, so Relay has one registration on the
+ * hub whoever is using it (see [RelayBusLink]).
+ */
 class RelayPluginService : NexusPluginService() {
     private enum class ThreadMode {
         READING,
@@ -57,6 +64,72 @@ class RelayPluginService : NexusPluginService() {
     private var speechFinalReceived = false
     private var speechGeneration = 0
     private var speech: NexusSpeechSession? = null
+    private var tileSession: WidgetTileSession? = null
+    private val tileRuntime by lazy {
+        RelayTileRuntime(
+            publish = { snapshot -> tileSession?.publish(snapshot) },
+            entries = ReplyRepository::inboxEntries,
+            hideText = { settings.hideInboxPreviews() || settings.hideNoticeText() },
+            now = System::currentTimeMillis,
+            schedule = { delayMs, action -> main.postDelayed(action, delayMs) },
+        )
+    }
+
+    internal val busClient: NexusPluginClient?
+        get() = nexusClient
+
+    override fun onCreate() {
+        super.onCreate()
+        NotificationControl.serviceCreated(this)
+    }
+
+    override fun onDestroy() {
+        // Before the client closes: the band drops what it opened on it while it still exists.
+        NotificationControl.serviceDestroyed(this)
+        tileRuntime.stop()
+        tileSession = null
+        super.onDestroy()
+    }
+
+    override fun onNexusTileActive(active: Boolean) {
+        if (active) {
+            tileSession = nexusWidgetTileSession(TILE_ID)
+            tileRuntime.start()
+        } else {
+            tileRuntime.stop()
+            tileSession = null
+        }
+    }
+
+    override fun onNexusTileRefresh() {
+        tileRuntime.refresh()
+    }
+
+    /** A capture, a removal, a sent reply or a cleared inbox; the tile decides whether it shows. */
+    internal fun onInboxChanged() {
+        tileRuntime.inboxChanged()
+    }
+
+    // The band's notice, typed-reply field and registration travel on this service's client.
+    override fun onNexusNoticeAction(id: String) {
+        NotificationControl.bandCallbacks(this)?.onNoticeAction(id)
+    }
+
+    override fun onNexusNoticeClosed(reason: NexusNoticeCloseReason) {
+        NotificationControl.bandCallbacks(this)?.onNoticeClosed(reason)
+    }
+
+    override fun onNexusSurfaceTextCommitted(surfaceId: String, text: String, cancelled: Boolean) {
+        NotificationControl.bandCallbacks(this)?.onSurfaceTextCommitted(surfaceId, text, cancelled)
+    }
+
+    override fun onNexusLinkState(state: Int) {
+        NotificationControl.bandCallbacks(this)?.onLinkState(state)
+    }
+
+    override fun onNexusRegistrationState(result: Int) {
+        NotificationControl.bandCallbacks(this)?.onRegistrationState(result)
+    }
 
     override fun onNexusOpen() {
         // One client per plugin id on the bus: the band steps aside while the
@@ -639,6 +712,7 @@ class RelayPluginService : NexusPluginService() {
 
     private companion object {
         const val SURFACE_ID = "relay-inbox"
+        const val TILE_ID = "relay"
         const val LIST_CONTENT_KEY = "relay-inbox-v1"
         const val THREAD_CONTENT_PREFIX = "relay-thread-"
         const val MAX_CARD_TITLE_CHARS = 120

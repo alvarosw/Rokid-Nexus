@@ -136,6 +136,7 @@ internal object ReplyRepository {
                 appLabel = content.appLabel,
                 renderedText = content.renderedText,
                 capturedAtMs = capturedAtMs,
+                redacted = redacted,
             ),
             content = content,
         )
@@ -178,6 +179,7 @@ internal object ReplyRepository {
             if (pending[notificationId] === reply) pending.remove(notificationId)
             recent.remove(notificationId)
         }
+        NotificationControl.notifyInboxChanged()
         return ReplySendResult.Sent
     }
 

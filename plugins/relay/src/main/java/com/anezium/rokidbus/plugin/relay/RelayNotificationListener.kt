@@ -5,9 +5,11 @@ import android.content.ComponentName
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import com.anezium.rokidbus.client.plugin.NexusPluginCallbacks
 
 class RelayNotificationListener : NotificationListenerService() {
-    private val runtime by lazy { RelayNoticeRuntime(applicationContext) }
+    private val runtimeDelegate = lazy { RelayNoticeRuntime(applicationContext) }
+    private val runtime by runtimeDelegate
 
     override fun onCreate() {
         super.onCreate()
@@ -48,6 +50,7 @@ class RelayNotificationListener : NotificationListenerService() {
     override fun onListenerDisconnected() {
         RelayDiagnostics.recordListenerDisconnected(this)
         ReplyRepository.clear()
+        NotificationControl.notifyInboxChanged()
         NotificationControl.detach(this)
         runtime.shutdown()
         Log.w(TAG, "notification listener disconnected")
@@ -74,14 +77,26 @@ class RelayNotificationListener : NotificationListenerService() {
         super.onDestroy()
     }
 
-    /** Hands the bus to the inbox: the band's client closes and its notice goes. */
+    /** Stands the band down for the inbox: its notice goes and it lets go of the service. */
     internal fun suspendBand() {
         runtime.shutdown()
     }
 
+    internal fun onPluginServiceCreated(service: RelayPluginService) {
+        if (runtimeDelegate.isInitialized()) runtime.onPluginServiceCreated(service)
+    }
+
+    internal fun onPluginServiceDestroyed(service: RelayPluginService) {
+        if (runtimeDelegate.isInitialized()) runtime.onPluginServiceDestroyed(service)
+    }
+
+    internal fun bandCallbacks(service: RelayPluginService): NexusPluginCallbacks? =
+        if (runtimeDelegate.isInitialized()) runtime.callbacksFor(service) else null
+
     internal fun refreshFromSettings() {
         if (!RelaySettings(this).enabled()) {
             ReplyRepository.clear()
+            NotificationControl.notifyInboxChanged()
             runtime.shutdown()
             return
         }

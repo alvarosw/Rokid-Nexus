@@ -12,6 +12,8 @@ internal data class RelayInboxSnapshot(
     val appLabel: String,
     val renderedText: String,
     val capturedAtMs: Long,
+    /** Android hid the text, so [renderedText] is Relay's placeholder; the tile leaves these out. */
+    val redacted: Boolean = false,
 )
 
 internal data class RelayInboxEntry(
