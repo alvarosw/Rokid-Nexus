@@ -24,6 +24,13 @@ android {
             "UPSTREAM_REGISTRY_URL",
             "\"https://raw.githubusercontent.com/Anezium/RokidBrew-Registry/main/dist/nexus-plugins.v1.json\"",
         )
+        // App updates come only from the fork: an upstream build carries another signer and
+        // cannot be installed over this one.
+        buildConfigField(
+            "String",
+            "APP_RELEASES_URL",
+            "\"https://api.github.com/repos/alvarosw/Rokid-Nexus/releases?per_page=100\"",
+        )
     }
 
     buildTypes {
