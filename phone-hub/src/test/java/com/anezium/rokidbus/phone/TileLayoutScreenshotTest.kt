@@ -76,6 +76,8 @@ class ScreenshotTileLayoutActivity : TileLayoutSettingsActivity() {
             "camera" to "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0",
             "sys:clock" to "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18 M12 7v5l4 2",
             "sys:status" to "M4 7h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z M22 11v2 M6 11v2 M10 11v2",
+            "sys:weather" to "M8 5a3 3 0 1 0 0 6a3 3 0 1 0 0-6 M8 1.5v1 M1.5 8h1 M3.4 3.4l.7.7 M12.6 3.4l-.7.7 " +
+                "M8 20h10a4 4 0 0 0 0-8a5 5 0 0 0-8.6 1.2A3.5 3.5 0 0 0 8 20z",
         )
         /** Thursday 1 October 2026, 14:32 UTC. */
         const val FIXED_TIME_MS = 1_790_865_120_000L
@@ -367,5 +369,32 @@ class TileLayoutScreenshotTest {
             visibleRows = 5,
         )
         render(view, "tile-layout-grid-17")
+    }
+
+    @Test
+    fun `a selected weather widget previews the sample and links to its settings`() {
+        val stored = listOf(
+            TileLayoutEntry("sys:weather", TileSize.PANEL, 0, 0),
+            TileLayoutEntry("sys:clock", TileSize.SMALL, 3, 0),
+            TileLayoutEntry("media", TileSize.WIDE, 0, 2),
+            TileLayoutEntry("relay", TileSize.SMALL, 2, 2),
+        )
+        var preview: TileSizePreviewView? = null
+        capture("tile-layout-weather-selected", stored, height = 3000) { activity ->
+            val state = ReflectionHelpers.getField<TileLayoutEditorState>(activity, "state")
+            state.select("sys:weather")
+            ReflectionHelpers.callInstanceMethod<Unit>(activity, "onEditorChanged")
+            val after = activity.window.decorView
+            assertEquals(true, clickable(after, "3×2").isEnabled)
+            assertEquals(false, find(after, View::class.java) { it.contentDescription == "3×3, not supported by Weather" }!!.isEnabled)
+            preview = find(after, TileSizePreviewView::class.java)
+            clickable(after, "Weather settings").performClick()
+            val started = org.robolectric.Shadows.shadowOf(activity).nextStartedActivity
+            assertEquals(WeatherSettingsActivity::class.java.name, started.component?.className)
+        }
+        assertEquals(TileSize.PANEL, preview!!.size)
+        val sample = preview!!.widgetForTest as SystemWidgetContent.Weather
+        assertEquals("Lisbon", sample.reading?.location)
+        assertEquals(0L, sample.ageMs)
     }
 }

@@ -230,11 +230,14 @@ class TileLayoutEditorStateTest {
     @Test
     fun `adding a widget places it at its default size in the first free cell and selects it`() {
         val state = widgetEditor(three)
-        assertEquals(listOf("sys:clock", "sys:status"), state.unplacedWidgets().map { it.id })
+        assertEquals(listOf("sys:clock", "sys:status", "sys:weather"), state.unplacedWidgets().map { it.id })
         assertTrue(state.addWidget("sys:status"))
         assertEquals(GridRect(3, 0, 1, 1), state.layout["sys:status"])
         assertEquals("sys:status", state.selectedId)
-        assertEquals(listOf("sys:clock"), state.unplacedWidgets().map { it.id })
+        assertEquals(listOf("sys:clock", "sys:weather"), state.unplacedWidgets().map { it.id })
+        // Weather defaults to 2x1: the first free cell that fits it is under the first row.
+        assertTrue(state.addWidget("sys:weather"))
+        assertEquals(GridRect(1, 1, 2, 1), state.layout["sys:weather"])
         // Placed once only, and a plugin is no widget.
         assertFalse(state.addWidget("sys:status"))
         assertFalse(state.addWidget("a"))
@@ -260,7 +263,7 @@ class TileLayoutEditorStateTest {
         assertTrue(state.removeWidget("sys:clock"))
         assertEquals(three, state.layout)
         assertEquals("a", state.selectedId)
-        assertEquals(listOf("sys:clock", "sys:status"), state.unplacedWidgets().map { it.id })
+        assertEquals(listOf("sys:clock", "sys:status", "sys:weather"), state.unplacedWidgets().map { it.id })
         assertFalse(state.removeWidget("sys:clock"))
     }
 
@@ -293,7 +296,7 @@ class TileLayoutEditorStateTest {
         )
         state.reset()
         assertEquals(setOf("a"), state.layout.keys)
-        assertEquals(listOf("sys:clock", "sys:status"), state.unplacedWidgets().map { it.id })
+        assertEquals(listOf("sys:clock", "sys:status", "sys:weather"), state.unplacedWidgets().map { it.id })
     }
 
     @Test

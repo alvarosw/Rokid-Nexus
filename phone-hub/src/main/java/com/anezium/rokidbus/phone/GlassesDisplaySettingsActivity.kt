@@ -91,6 +91,19 @@ class GlassesDisplaySettingsActivity : Activity() {
                 },
                 NexusUi.block(),
             )
+            addView(BusTheme.gap(this@GlassesDisplaySettingsActivity, 10))
+            addView(
+                NexusUi.navCard(
+                    this@GlassesDisplaySettingsActivity,
+                    "Weather widget",
+                    "Location, city and units for the grid's weather widget",
+                ) {
+                    startActivity(
+                        Intent(this@GlassesDisplaySettingsActivity, WeatherSettingsActivity::class.java),
+                    )
+                },
+                NexusUi.block(),
+            )
         }
 
         val scroll = ScrollView(this).apply {

@@ -2,6 +2,7 @@ package com.anezium.rokidbus.phone
 
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.DashPathEffect
@@ -28,6 +29,7 @@ import com.anezium.rokidbus.client.ui.NexusPluginIcons
 import com.anezium.rokidbus.client.ui.NexusUi
 import com.anezium.rokidbus.client.ui.PluginCustomIcon
 import com.anezium.rokidbus.hudtiles.SystemWidgetContent
+import com.anezium.rokidbus.shared.WeatherContract
 import com.anezium.rokidbus.shared.plugin.PluginCapability
 import com.anezium.rokidbus.shared.tile.GridRect
 import com.anezium.rokidbus.shared.tile.SystemWidget
@@ -128,7 +130,7 @@ open class TileLayoutSettingsActivity : Activity() {
 
     /**
      * What a system widget shows in the editor: the current time for the clock, sample readings
-     * for status. Null draws the header alone.
+     * for status, the phone's last weather (else a sample) for weather. Null draws the header alone.
      */
     internal open fun widgetSample(widget: SystemWidget): SystemWidgetContent? = when (widget) {
         SystemWidgets.CLOCK -> SystemWidgetContent.Clock(
@@ -142,6 +144,9 @@ open class TileLayoutSettingsActivity : Activity() {
             phone = SystemWidgetContent.Battery(level = 64, charging = true),
             phoneLinked = true,
         )
+        SystemWidgets.WEATHER -> WeatherSettingsStore(this).lastReading()
+            ?.let { SystemWidgetContent.Weather(it.reading, (System.currentTimeMillis() - it.fetchedAtMs).coerceAtLeast(0L)) }
+            ?: SystemWidgetContent.Weather(WEATHER_SAMPLE, ageMs = 0L)
         else -> null
     }
 
@@ -480,6 +485,15 @@ open class TileLayoutSettingsActivity : Activity() {
                 },
                 NexusUi.block().apply { topMargin = dp(10) },
             )
+            if (tile.widget == SystemWidgets.WEATHER) {
+                addView(
+                    footerButton("WEATHER SETTINGS", filled = false).apply {
+                        contentDescription = "Weather settings"
+                        setOnClickListener { startActivity(Intent(this@TileLayoutSettingsActivity, WeatherSettingsActivity::class.java)) }
+                    },
+                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply { topMargin = dp(14) },
+                )
+            }
             if (tile.widget != null) {
                 addView(
                     footerButton("REMOVE", filled = false).apply {
@@ -769,5 +783,32 @@ open class TileLayoutSettingsActivity : Activity() {
         const val SAVED_LABEL_MS = 1800L
         val EMPTY_BORDER = 0xFF2C4A37.toInt()
         val CHIP_DISABLED_BORDER = 0xFF1F3325.toInt()
+
+        /** The weather preview before the phone has fetched any. */
+        val WEATHER_SAMPLE = WeatherContract.Reading(
+            location = "Lisbon",
+            temperature = 19,
+            unit = WeatherContract.TemperatureUnit.CELSIUS,
+            code = 2,
+            condition = WeatherContract.conditionText(2),
+            high = 23,
+            low = 17,
+            hourly = listOf(
+                WeatherContract.Hour("11:00", 20, 2),
+                WeatherContract.Hour("12:00", 21, 1),
+                WeatherContract.Hour("13:00", 22, 0),
+                WeatherContract.Hour("14:00", 23, 0),
+                WeatherContract.Hour("15:00", 23, 1),
+                WeatherContract.Hour("16:00", 22, 2),
+            ),
+            daily = listOf(
+                WeatherContract.Day("Fri", 26, 17, 3),
+                WeatherContract.Day("Sat", 25, 18, 61),
+                WeatherContract.Day("Sun", 22, 16, 63),
+                WeatherContract.Day("Mon", 24, 17, 2),
+                WeatherContract.Day("Tue", 25, 18, 0),
+                WeatherContract.Day("Wed", 24, 17, 1),
+            ),
+        )
     }
 }
