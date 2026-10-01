@@ -2048,6 +2048,14 @@ glasses capabilities announce. `size` is one of `1x1 2x1 3x1 1x2 2x2 3x2 3x3`.
 - Degradation: glasses that predate v2 accept it (they only reject
   `version < 1`) but ignore `col`/`row`, pack the entries in order, and drop any
   entry whose `size` they do not know (the 3-wide shapes).
+- System widgets: an entry's `pluginId` may be a reserved `sys:` id (`sys:clock`,
+  `sys:status`; `sys:weather` is reserved). `:` is invalid in a plugin id, so no
+  plugin can collide. The entry is what enables the widget: present in the
+  layout means shown, absent means not shown; there is no other switch. The
+  glasses place a widget they know like any stored entry, draw it from their own
+  data, and never select or open it (it is not a launcher entry). A `sys:` id the
+  glasses do not know is dropped like an entry for an uninstalled plugin, and
+  glasses that predate widgets drop every one the same way.
 
 ## Transport selection (hub-side routing)
 
