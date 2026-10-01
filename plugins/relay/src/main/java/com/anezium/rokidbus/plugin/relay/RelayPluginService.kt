@@ -3,6 +3,8 @@ package com.anezium.rokidbus.plugin.relay
 import android.view.KeyEvent
 import com.anezium.rokidbus.client.plugin.NexusCard
 import com.anezium.rokidbus.client.plugin.NexusCardLine
+import com.anezium.rokidbus.client.plugin.NexusNoticeCloseReason
+import com.anezium.rokidbus.client.plugin.NexusPluginClient
 import com.anezium.rokidbus.client.plugin.NexusPluginService
 import com.anezium.rokidbus.client.plugin.NexusReader
 import com.anezium.rokidbus.client.plugin.NexusReaderSegment
@@ -18,7 +20,11 @@ import com.anezium.rokidbus.client.plugin.NexusSurfaceSession
 import com.anezium.rokidbus.shared.NoticeSurfaceContract
 import com.anezium.rokidbus.shared.plugin.NexusInputEvent
 
-/** Menu-launched inbox. The notification-band runtime remains a separate, untouched flow. */
+/**
+ * Menu-launched inbox. It also carries the band's traffic: the notification-band
+ * runtime binds this service and talks through its client, so Relay has one registration on the
+ * hub whoever is using it (see [RelayBusLink]).
+ */
 class RelayPluginService : NexusPluginService() {
     private enum class ThreadMode {
         READING,
@@ -57,6 +63,41 @@ class RelayPluginService : NexusPluginService() {
     private var speechFinalReceived = false
     private var speechGeneration = 0
     private var speech: NexusSpeechSession? = null
+
+    internal val busClient: NexusPluginClient?
+        get() = nexusClient
+
+    override fun onCreate() {
+        super.onCreate()
+        NotificationControl.serviceCreated(this)
+    }
+
+    override fun onDestroy() {
+        // Before the client closes: the band drops what it opened on it while it still exists.
+        NotificationControl.serviceDestroyed(this)
+        super.onDestroy()
+    }
+
+    // The band's notice, typed-reply field and registration travel on this service's client.
+    override fun onNexusNoticeAction(id: String) {
+        NotificationControl.bandCallbacks(this)?.onNoticeAction(id)
+    }
+
+    override fun onNexusNoticeClosed(reason: NexusNoticeCloseReason) {
+        NotificationControl.bandCallbacks(this)?.onNoticeClosed(reason)
+    }
+
+    override fun onNexusSurfaceTextCommitted(surfaceId: String, text: String, cancelled: Boolean) {
+        NotificationControl.bandCallbacks(this)?.onSurfaceTextCommitted(surfaceId, text, cancelled)
+    }
+
+    override fun onNexusLinkState(state: Int) {
+        NotificationControl.bandCallbacks(this)?.onLinkState(state)
+    }
+
+    override fun onNexusRegistrationState(result: Int) {
+        NotificationControl.bandCallbacks(this)?.onRegistrationState(result)
+    }
 
     override fun onNexusOpen() {
         // One client per plugin id on the bus: the band steps aside while the
