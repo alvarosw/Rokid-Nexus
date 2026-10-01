@@ -8,6 +8,7 @@ import com.anezium.rokidbus.client.ui.GlyphDrawable
 import android.view.View
 import org.robolectric.RobolectricTestRunner
 import com.anezium.rokidbus.shared.tile.GridRect
+import com.anezium.rokidbus.shared.tile.TileContent
 import com.anezium.rokidbus.shared.tile.TileLayoutEntry
 import com.anezium.rokidbus.shared.tile.TileSize
 import com.anezium.rokidbus.shared.tile.TileSnapshot
@@ -44,6 +45,8 @@ class ScreenshotTileLayoutActivity : TileLayoutSettingsActivity() {
 
     override fun glyphFor(tileId: String): Drawable = GlyphDrawable(GLYPHS[tileId] ?: GLYPHS.getValue("camera"))
 
+    override fun tilePreviewSample(tileId: String): TileSnapshot? = SAMPLES[tileId]
+
     companion object {
         // The reference design's icon paths; the bundled vectors are not in this test's resources.
         private val GLYPHS = mapOf(
@@ -54,6 +57,25 @@ class ScreenshotTileLayoutActivity : TileLayoutSettingsActivity() {
             "assistant" to "M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z M5 11a7 7 0 0 0 14 0 M12 18v4 M9 22h6",
             "tasker" to "M13 2 4 14h6l-1 8 9-12h-6l1-8z",
             "camera" to "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0",
+        )
+        /** What a plugin's `TILE_PREVIEW` raw resource would decode to. */
+        val SAMPLES = mapOf(
+            "assistant" to TileSnapshot(
+                pluginId = "assistant",
+                contentKey = "sample",
+                content = TileContent.ListContent(
+                    sections = listOf(
+                        TileContent.ListContent.Section(
+                            items = listOf(
+                                TileContent.ListContent.Item("Ana Ribeiro", "WhatsApp", "Leaving now, ten minutes away."),
+                                TileContent.ListContent.Item("Family", "WhatsApp", "Dad: dinner moved to 8"),
+                            ),
+                        ),
+                    ),
+                    summary = "3 new",
+                    summaryShort = "3",
+                ),
+            ),
         )
         val PLUGINS = listOf(
             Triple("media", "Media Deck", "music"),
@@ -84,7 +106,12 @@ class TileLayoutScreenshotTest {
         )
     }
 
-    private fun capture(name: String, stored: List<TileLayoutEntry>, height: Int = 1688) {
+    private fun capture(
+        name: String,
+        stored: List<TileLayoutEntry>,
+        height: Int = 1688,
+        prepare: (Activity) -> Unit = {},
+    ) {
         val app = org.robolectric.RuntimeEnvironment.getApplication()
         TileLayoutSettingsStore(app).setEntries(stored)
         snapshot("media", "Midnight Transit", "Analog Youth", listOf("1:24 / 3:40", "Up next  Night Drive", "Queue  12"), 0.38f)
@@ -92,6 +119,7 @@ class TileLayoutScreenshotTest {
         snapshot("feeds", "@kaelan.bsky", "rewired the desk lamp", listOf("@noa.codes  22m", "@ferra.dev  1h", "@lin.ink  2h", "@oskar.bsky  3h"))
         snapshot("relay", "3", "Maya Liu", emptyList())
         val activity = Robolectric.buildActivity(ScreenshotTileLayoutActivity::class.java).setup().get()
+        prepare(activity)
         val root = activity.window.decorView
         val width = 780
         root.measure(
@@ -121,6 +149,46 @@ class TileLayoutScreenshotTest {
         capture("tile-layout-editor", representative)
         // The same screen tall enough to show the selected-tile card below the preview.
         capture("tile-layout-editor-full", representative, height = 2500)
+    }
+
+    private fun <T : View> find(root: View, type: Class<T>, match: (T) -> Boolean = { true }): T? {
+        if (type.isInstance(root) && match(type.cast(root)!!)) return type.cast(root)
+        if (root is android.view.ViewGroup) {
+            for (i in 0 until root.childCount) find(root.getChildAt(i), type, match)?.let { return it }
+        }
+        return null
+    }
+
+    @Test
+    fun `the selected card previews the last tapped size, with the plugin's sample before any publish`() {
+        val stored = listOf(TileLayoutEntry("assistant", TileSize.SMALL, 0, 0), TileLayoutEntry("camera", TileSize.SMALL, 1, 0))
+        var preview: TileSizePreviewView? = null
+        capture("tile-layout-preview", stored, height = 2600) { activity ->
+            val root = activity.window.decorView
+            assertEquals(TileSize.SMALL, find(root, TileSizePreviewView::class.java)!!.size)
+            find(root, View::class.java) { it.contentDescription == "3×3" && it.isClickable }!!.performClick()
+            preview = find(activity.window.decorView, TileSizePreviewView::class.java)
+        }
+        assertEquals(TileSize.JUMBO, preview!!.size)
+        assertEquals(ScreenshotTileLayoutActivity.SAMPLES["assistant"], preview!!.snapshotForTest)
+    }
+
+    @Test
+    fun `the preview prefers the live tile over the sample and shows the header alone without either`() {
+        val stored = listOf(TileLayoutEntry("assistant", TileSize.WIDE, 0, 0))
+        TileSnapshotCache.record("assistant", WidgetTileContract.toPayload(TileSnapshot("assistant", "k", "Live")))
+        val activity = Robolectric.buildActivity(ScreenshotTileLayoutActivity::class.java)
+            .also { TileLayoutSettingsStore(org.robolectric.RuntimeEnvironment.getApplication()).setEntries(stored) }
+            .setup().get()
+        val live = find(activity.window.decorView, TileSizePreviewView::class.java)!!
+        assertEquals(TileSize.WIDE, live.size)
+        assertEquals("Live", (live.snapshotForTest?.content as TileContent.Generic).title)
+
+        TileSnapshotCache.clear()
+        TileLayoutSettingsStore(org.robolectric.RuntimeEnvironment.getApplication())
+            .setEntries(listOf(TileLayoutEntry("tasker", TileSize.SMALL, 0, 0)))
+        val bare = Robolectric.buildActivity(ScreenshotTileLayoutActivity::class.java).setup().get()
+        assertEquals(null, find(bare.window.decorView, TileSizePreviewView::class.java)!!.snapshotForTest)
     }
 
     private fun render(view: TileLayoutCanvasView, name: String, width: Int = 780): Bitmap {

@@ -109,6 +109,7 @@ class PhonePluginDiscovery(private val packageManager: PackageManager) {
             BusConstants.META_PLUGIN_ICON,
             BusConstants.META_PLUGIN_ICON_DRAWABLE,
             BusConstants.META_PLUGIN_GLYPHS,
+            BusConstants.META_PLUGIN_TILE_PREVIEW,
             BusConstants.META_PLUGIN_API_VERSION,
             BusConstants.META_PLUGIN_CAPABILITIES,
             BusConstants.META_PLUGIN_RECEIVE_PREFIXES,
