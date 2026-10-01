@@ -120,6 +120,18 @@ class FakePhoneTest {
     }
 
     @Test
+    fun `a phone reading without a seq gets a fresh one on every play`() {
+        val script = phone.parse("""{"path":"/phone/weather","payload":{"temperature":19}}""")
+        phone.play(script)
+        phone.play(script)
+
+        assertEquals(listOf(BusPaths.PHONE_WEATHER, BusPaths.PHONE_WEATHER), delivered.map { it.path })
+        val seqs = delivered.map { it.payload.getLong("seq") }
+        assertTrue(seqs[1] > seqs[0])
+        assertEquals(19, delivered[1].payload.getInt("temperature"))
+    }
+
+    @Test
     fun `a never rule and a missing rule consume the open without replying`() {
         phone.play(phone.parse("""{"onOpen":{"slow":{"never":true,"envelopes":[]}}}"""))
 

@@ -27,7 +27,8 @@ internal data class FakeScript(val steps: List<FakeStep>, val onOpen: Map<String
  *
  * Script JSON is either one envelope `{path, id?, payload?, binaryBase64?, delayMs?}`, an array
  * of envelopes, or `{envelopes: [...], onOpen: {pluginId: {never?, delayMs?, envelopes: [...]}}}`.
- * surface envelopes without a `seq` get a monotonic one, as the phone hub would assign.
+ * surface envelopes without a `seq` get a monotonic one, as the phone hub would assign. So do the
+ * hub-to-hub `/phone/` readings, whose seq the phone also seeds from its clock.
  */
 internal class FakePhone(
     private val sink: (BusEnvelope) -> Unit,
@@ -141,6 +142,6 @@ internal class FakePhone(
 
     private companion object {
         /** Paths whose payload carries the phone hub's own `seq`. */
-        val STAMPED_PREFIXES = listOf("/surface/", "/notice/", "/pin/", "/activity/")
+        val STAMPED_PREFIXES = listOf("/surface/", "/notice/", "/pin/", "/activity/", "/phone/")
     }
 }

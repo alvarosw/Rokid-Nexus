@@ -118,6 +118,19 @@ LINE, PANEL, AMBER…):
   `widget_tile`, else "APP"), "TILE SIZE" + "k of 7 supported", 4-column grid of 7 size chips
   (mini 3x3 cell icon + label; selected filled GREEN, supported outlined, unsupported dashed and
   disabled), amber status line for "No room for …". Empty state: "Tap a tile to pick its size."
+- System widgets (added with live tiles, `docs/live-tiles/00-plan.md` §6): "+ ADD WIDGET" under the
+  preview opens a list of the widgets not on the grid (icon, name, one-line description, ADD);
+  adding places the widget at its default size in the first free cell and selects it, or shows
+  "No room for …" in the list. A selected widget's card shows the "SYSTEM" chip, only its
+  supported sizes, a preview with sample content (current time; sample readings) and REMOVE.
+  Widgets drag and auto-pack like tiles; RESET drops them (the default layout has none). The
+  editor loads with `TileGridLayout.resolveWithWidgets`, so saving keeps stored `sys:` entries.
+- The weather widget's preview shows the phone's last reading (else a Lisbon sample), and its card
+  adds "WEATHER SETTINGS" above REMOVE, opening `WeatherSettingsActivity` (also linked from Display
+  settings as "Weather widget"): "Use approximate location" (asks for coarse location there, never
+  at app start), a City field with SET (confirmed through Open-Meteo geocoding: "Found: …" or "No
+  place by that name."), AUTO/°C/°F unit chips and a STATUS card (on the grid or not, what the
+  forecast is for, last update).
 - Footer: "AUTO-PACK" (outlined) and "SAVE LAYOUT" (filled). Save writes
   `TileLayoutSettingsStore` (reading order), pushes via `BusHubService.onTileLayoutSettingChanged`,
   and shows "SENT TO GLASSES" for 1.8 s when the link is up, "SAVED · SYNCS ON CONNECT" otherwise.

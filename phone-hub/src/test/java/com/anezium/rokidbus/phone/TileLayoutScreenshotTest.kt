@@ -7,7 +7,9 @@ import android.graphics.drawable.Drawable
 import com.anezium.rokidbus.client.ui.GlyphDrawable
 import android.view.View
 import org.robolectric.RobolectricTestRunner
+import com.anezium.rokidbus.hudtiles.SystemWidgetContent
 import com.anezium.rokidbus.shared.tile.GridRect
+import com.anezium.rokidbus.shared.tile.SystemWidget
 import com.anezium.rokidbus.shared.tile.TileContent
 import com.anezium.rokidbus.shared.tile.TileLayoutEntry
 import com.anezium.rokidbus.shared.tile.TileSize
@@ -15,6 +17,8 @@ import com.anezium.rokidbus.shared.tile.TileSnapshot
 import com.anezium.rokidbus.shared.tile.TileTone
 import com.anezium.rokidbus.shared.tile.WidgetTileContract
 import java.io.File
+import java.util.Locale
+import java.util.TimeZone
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -22,6 +26,9 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.util.ReflectionHelpers
+import android.widget.Button
+import android.widget.TextView
 
 class ScreenshotTileLayoutActivity : TileLayoutSettingsActivity() {
     override fun launchableEntries(): List<PluginCatalogEntry> =
@@ -47,6 +54,16 @@ class ScreenshotTileLayoutActivity : TileLayoutSettingsActivity() {
 
     override fun tilePreviewSample(tileId: String): TileSnapshot? = SAMPLES[tileId]
 
+    /** A fixed 14:32 so the captures do not change with the clock. */
+    override fun widgetSample(widget: SystemWidget): SystemWidgetContent? =
+        super.widgetSample(widget).let { sample ->
+            if (sample is SystemWidgetContent.Clock) {
+                sample.copy(epochMs = FIXED_TIME_MS, timeZone = TimeZone.getTimeZone("UTC"), locale = Locale.US, use24Hour = true)
+            } else {
+                sample
+            }
+        }
+
     companion object {
         // The reference design's icon paths; the bundled vectors are not in this test's resources.
         private val GLYPHS = mapOf(
@@ -57,7 +74,13 @@ class ScreenshotTileLayoutActivity : TileLayoutSettingsActivity() {
             "assistant" to "M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z M5 11a7 7 0 0 0 14 0 M12 18v4 M9 22h6",
             "tasker" to "M13 2 4 14h6l-1 8 9-12h-6l1-8z",
             "camera" to "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0",
+            "sys:clock" to "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18 M12 7v5l4 2",
+            "sys:status" to "M4 7h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z M22 11v2 M6 11v2 M10 11v2",
+            "sys:weather" to "M8 5a3 3 0 1 0 0 6a3 3 0 1 0 0-6 M8 1.5v1 M1.5 8h1 M3.4 3.4l.7.7 M12.6 3.4l-.7.7 " +
+                "M8 20h10a4 4 0 0 0 0-8a5 5 0 0 0-8.6 1.2A3.5 3.5 0 0 0 8 20z",
         )
+        /** Thursday 1 October 2026, 14:32 UTC. */
+        const val FIXED_TIME_MS = 1_790_865_120_000L
         /** What a plugin's `TILE_PREVIEW` raw resource would decode to. */
         val SAMPLES = mapOf(
             "assistant" to TileSnapshot(
@@ -191,6 +214,75 @@ class TileLayoutScreenshotTest {
         assertEquals(null, find(bare.window.decorView, TileSizePreviewView::class.java)!!.snapshotForTest)
     }
 
+    private val withWidgets = listOf(
+        TileLayoutEntry("sys:clock", TileSize.WIDE, 0, 0),
+        TileLayoutEntry("media", TileSize.WIDE, 2, 0),
+        TileLayoutEntry("camera", TileSize.SMALL, 0, 1),
+        TileLayoutEntry("relay", TileSize.SMALL, 1, 1),
+        TileLayoutEntry("sys:status", TileSize.WIDE, 2, 1),
+        TileLayoutEntry("transit", TileSize.PANEL, 0, 2),
+        TileLayoutEntry("feeds", TileSize.TALL, 3, 2),
+        TileLayoutEntry("assistant", TileSize.BANNER, 0, 5),
+        TileLayoutEntry("tasker", TileSize.SMALL, 3, 5),
+    )
+
+    private fun clickable(root: View, description: String): View =
+        find(root, View::class.java) { it.contentDescription == description && it.isClickable }
+            ?: error("no clickable \"$description\"")
+
+    @Test
+    fun `a selected widget shows the SYSTEM chip, its supported sizes, its preview and REMOVE`() {
+        var preview: TileSizePreviewView? = null
+        var canvas: TileLayoutCanvasView? = null
+        capture("tile-layout-widget-selected", withWidgets, height = 2900) { activity ->
+            val root = activity.window.decorView
+            canvas = find(root, TileLayoutCanvasView::class.java)
+            // Select the status widget as a TalkBack click would.
+            val state = ReflectionHelpers.getField<TileLayoutEditorState>(activity, "state")
+            state.select("sys:status")
+            ReflectionHelpers.callInstanceMethod<Unit>(activity, "onEditorChanged")
+            val after = activity.window.decorView
+            assertEquals("SYSTEM", find(after, TextView::class.java) { it.text == "SYSTEM" }?.text)
+            assertEquals(true, clickable(after, "2×1").isEnabled)
+            assertEquals(false, find(after, View::class.java) { it.contentDescription == "2×2, not supported by Status" }!!.isEnabled)
+            assertEquals(true, clickable(after, "Remove Status widget") is Button)
+            preview = find(after, TileSizePreviewView::class.java)
+        }
+        assertEquals(TileSize.WIDE, preview!!.size)
+        assertEquals(true, preview!!.widgetForTest is SystemWidgetContent.Status)
+        assertEquals(
+            "Status, system widget, 2 by 1, column 3, row 2. Drag or use actions to move.",
+            canvas!!.descriptionForTest("sys:status"),
+        )
+    }
+
+    @Test
+    fun `remove takes the widget off and the add list offers it again`() {
+        val app = org.robolectric.RuntimeEnvironment.getApplication()
+        capture("tile-layout-add-widget", withWidgets.filterNot { it.pluginId == "sys:clock" }, height = 2600) { activity ->
+            val root = activity.window.decorView
+            clickable(root, "Add a system widget").performClick()
+            val list = activity.window.decorView
+            assertEquals(true, clickable(list, "Add Clock widget") is Button)
+            assertEquals(null, find(list, View::class.java) { it.contentDescription == "Add Status widget" })
+            assertEquals("Local time and date", find(list, TextView::class.java) { it.text == "Local time and date" }?.text)
+        }
+        // Adding selects the widget, closes the list and saves with it.
+        val activity = Robolectric.buildActivity(ScreenshotTileLayoutActivity::class.java).setup().get()
+        clickable(activity.window.decorView, "Add a system widget").performClick()
+        clickable(activity.window.decorView, "Add Clock widget").performClick()
+        val state = ReflectionHelpers.getField<TileLayoutEditorState>(activity, "state")
+        assertEquals("sys:clock", state.selectedId)
+        assertEquals(GridRect(0, 0, 1, 1), state.layout["sys:clock"])
+        clickable(activity.window.decorView, "Remove Clock widget").performClick()
+        assertEquals(null, state.layout["sys:clock"])
+        find(activity.window.decorView, Button::class.java) { it.text == "SAVE LAYOUT" }!!.performClick()
+        assertEquals(
+            listOf("sys:status"),
+            TileLayoutSettingsStore(app).getEntries().map { it.pluginId }.filter { it.startsWith("sys:") },
+        )
+    }
+
     private fun render(view: TileLayoutCanvasView, name: String, width: Int = 780): Bitmap {
         org.robolectric.shadows.ShadowLooper.idleMainLooper(400, java.util.concurrent.TimeUnit.MILLISECONDS)
         view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.UNSPECIFIED)
@@ -277,5 +369,32 @@ class TileLayoutScreenshotTest {
             visibleRows = 5,
         )
         render(view, "tile-layout-grid-17")
+    }
+
+    @Test
+    fun `a selected weather widget previews the sample and links to its settings`() {
+        val stored = listOf(
+            TileLayoutEntry("sys:weather", TileSize.PANEL, 0, 0),
+            TileLayoutEntry("sys:clock", TileSize.SMALL, 3, 0),
+            TileLayoutEntry("media", TileSize.WIDE, 0, 2),
+            TileLayoutEntry("relay", TileSize.SMALL, 2, 2),
+        )
+        var preview: TileSizePreviewView? = null
+        capture("tile-layout-weather-selected", stored, height = 3000) { activity ->
+            val state = ReflectionHelpers.getField<TileLayoutEditorState>(activity, "state")
+            state.select("sys:weather")
+            ReflectionHelpers.callInstanceMethod<Unit>(activity, "onEditorChanged")
+            val after = activity.window.decorView
+            assertEquals(true, clickable(after, "3×2").isEnabled)
+            assertEquals(false, find(after, View::class.java) { it.contentDescription == "3×3, not supported by Weather" }!!.isEnabled)
+            preview = find(after, TileSizePreviewView::class.java)
+            clickable(after, "Weather settings").performClick()
+            val started = org.robolectric.Shadows.shadowOf(activity).nextStartedActivity
+            assertEquals(WeatherSettingsActivity::class.java.name, started.component?.className)
+        }
+        assertEquals(TileSize.PANEL, preview!!.size)
+        val sample = preview!!.widgetForTest as SystemWidgetContent.Weather
+        assertEquals("Lisbon", sample.reading?.location)
+        assertEquals(0L, sample.ageMs)
     }
 }

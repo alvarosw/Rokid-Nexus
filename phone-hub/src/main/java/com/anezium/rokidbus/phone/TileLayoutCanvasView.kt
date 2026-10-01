@@ -21,13 +21,21 @@ import androidx.customview.widget.ExploreByTouchHelper
 import com.anezium.rokidbus.client.ui.HudGridMetrics
 import com.anezium.rokidbus.client.ui.NexusUi
 import com.anezium.rokidbus.client.ui.RokidHudTokens
+import com.anezium.rokidbus.hudtiles.SystemWidgetContent
 import com.anezium.rokidbus.shared.tile.GridRect
 import com.anezium.rokidbus.shared.tile.TileSnapshot
 import kotlin.math.abs
 import kotlin.math.max
 
-/** What one tile shows in the preview: its plugin glyph and the last live snapshot, if any. */
-internal class TileVisual(val glyph: Drawable?, val snapshot: TileSnapshot?)
+/**
+ * What one tile shows in the preview: its plugin glyph and the last live snapshot, if any. A system
+ * widget has [widget] instead, sampled on every draw so a clock shows the current time.
+ */
+internal class TileVisual(
+    val glyph: Drawable?,
+    val snapshot: TileSnapshot?,
+    val widget: (() -> SystemWidgetContent?)? = null,
+)
 
 /**
  * The glasses' home grid, drawn where the phone can drag it. The canvas is the glasses content
@@ -84,6 +92,7 @@ internal class TileLayoutCanvasView(context: Context) : View(context) {
         override fun getVisibleVirtualViews(ids: MutableList<Int>) {
             val current = state ?: return
             current.tiles.indices
+                .filter { current.tiles[it].id in current.layout }
                 .sortedWith(compareBy({ current.layout[current.tiles[it].id]?.row }, { current.layout[current.tiles[it].id]?.col }))
                 .forEach { ids += it }
         }
@@ -97,7 +106,7 @@ internal class TileLayoutCanvasView(context: Context) : View(context) {
                 info.setBoundsInParent(Rect(0, 0, 1, 1))
                 return
             }
-            info.contentDescription = describe(tile.name, rect)
+            info.contentDescription = describe(tile, rect)
             info.isSelected = current.selectedId == tile.id
             info.isClickable = true
             info.addAction(AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_CLICK)
@@ -110,7 +119,7 @@ internal class TileLayoutCanvasView(context: Context) : View(context) {
             val current = state ?: return
             val tile = current.tiles.getOrNull(index) ?: return
             val rect = current.layout[tile.id] ?: return
-            event.contentDescription = describe(tile.name, rect)
+            event.contentDescription = describe(tile, rect)
         }
 
         override fun onPerformActionForVirtualView(index: Int, action: Int, arguments: Bundle?): Boolean {
@@ -148,6 +157,12 @@ internal class TileLayoutCanvasView(context: Context) : View(context) {
         requestLayout()
         invalidate()
         access.invalidateRoot()
+    }
+
+    /** Adds or replaces what [id] shows, for a tile placed after [bind] (an added widget). */
+    fun setVisual(id: String, visual: TileVisual) {
+        visuals = visuals + (id to visual)
+        invalidate()
     }
 
     /** The state changed outside a gesture (reset, auto-pack, resize): animate to it. */
@@ -230,6 +245,13 @@ internal class TileLayoutCanvasView(context: Context) : View(context) {
         }
     }
 
+    /** What TalkBack reads for the tile [id], or null when it is not on the grid. */
+    internal fun descriptionForTest(id: String): String? {
+        val current = state ?: return null
+        val tile = current.tiles.firstOrNull { it.id == id } ?: return null
+        return current.layout[id]?.let { describe(tile, it) }
+    }
+
     /** Where [id] was last drawn, in canvas pixels. */
     internal fun drawnRect(id: String): RectF? = drawn[id]?.let { RectF(it) }
 
@@ -274,8 +296,9 @@ internal class TileLayoutCanvasView(context: Context) : View(context) {
 
     private fun indexOf(id: String) = state?.tiles?.indexOfFirst { it.id == id } ?: -1
 
-    private fun describe(name: String, rect: GridRect) =
-        "$name, ${rect.cols} by ${rect.rows}, column ${rect.col + 1}, row ${rect.row + 1}. " +
+    private fun describe(tile: EditorTile, rect: GridRect) =
+        "${tile.name}${if (tile.widget != null) ", system widget" else ""}, " +
+            "${rect.cols} by ${rect.rows}, column ${rect.col + 1}, row ${rect.row + 1}. " +
             "Drag or use actions to move."
 
     private fun changed() {
@@ -418,6 +441,7 @@ internal class TileLayoutCanvasView(context: Context) : View(context) {
             selected = selected,
             lifted = lifted,
             sizeLabel = TileLayoutEditorState.sizeLabel(cells),
+            widget = visual?.widget?.invoke(),
         )
     }
 

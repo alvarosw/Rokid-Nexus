@@ -1,0 +1,31 @@
+{
+  "description": "Widgets only (debug; the phone editor places them on a real phone): weather 2x1 and clock 2x1 on the first row, status 3x1 on row 7, below the screen. With no plugin entries each ring step scrolls one row. tile-sizes-clear removes it.",
+  "envelopes": [
+    {
+      "path": "/glasses/tile-layout/config",
+      "payload": {
+        "version": 2,
+        "entries": [
+          {
+            "pluginId": "sys:weather",
+            "size": "2x1",
+            "col": 0,
+            "row": 0
+          },
+          {
+            "pluginId": "sys:clock",
+            "size": "2x1",
+            "col": 2,
+            "row": 0
+          },
+          {
+            "pluginId": "sys:status",
+            "size": "3x1",
+            "col": 0,
+            "row": 6
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -11,7 +11,7 @@ object PathRules {
         "/security",
         "/error",
     )
-    private val hubOnlyPaths = setOf(BusPaths.TTS_CANCEL)
+    private val hubOnlyPaths = setOf(BusPaths.TTS_CANCEL, BusPaths.PHONE_WEATHER)
     private val lifecyclePrefixes = setOf("/system/plugin")
     private val httpReplyPrefixes = setOf("/http/request/reply")
     private val audioReplyPrefixes = setOf(

@@ -98,7 +98,11 @@ internal abstract class HomeScreenView(
         applied = model
         animateMoves = animate
         val empty = model.entries.isEmpty()
-        if (empty) {
+        if (empty && model.widgets.isNotEmpty()) {
+            // Widgets fill the body on their own and are never counted: nothing to wait for or count.
+            header.setCounter("")
+            emptyView.hide()
+        } else if (empty) {
             header.setCounter("WAITING FOR PHONE")
             emptyView.show(HudStatusView.Kind.OFF, EMPTY_TEXT)
         } else {
@@ -152,8 +156,11 @@ internal abstract class HomeScreenView(
     }
 
     /** Moves the strip to [offsetPx]: animated for a selection move, at once otherwise. */
-    protected fun scrollTo(offsetPx: Int) {
-        if (animateMoves) {
+    /** Scrolls the body by [rows] when it has no entries to select; only the grid has rows to scroll. */
+    open fun scrollRows(rows: Int) = Unit
+
+    protected fun scrollTo(offsetPx: Int, animate: Boolean = animateMoves) {
+        if (animate) {
             scroll.animateTo(offsetPx.toFloat(), RokidHudTokens.DURATION_DEFAULT_MS)
         } else {
             scroll.snapTo(offsetPx.toFloat())
@@ -217,6 +224,8 @@ internal abstract class HomeScreenView(
 
     internal fun failureTextForTest(): String? =
         statusView.takeIf { it.kind == HudStatusView.Kind.WARN }?.message
+
+    internal fun counterTextForTest(): String = header.counterForTest
 
     internal fun emptyTextForTest(): String? =
         emptyView.takeIf { it.kind == HudStatusView.Kind.OFF }?.message

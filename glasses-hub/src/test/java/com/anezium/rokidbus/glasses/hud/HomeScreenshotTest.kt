@@ -12,6 +12,8 @@ import com.anezium.rokidbus.glasses.HomeScreenshotHostActivity
 import com.anezium.rokidbus.shared.tile.TileLayoutEntry
 import com.anezium.rokidbus.shared.tile.TileSize
 import com.anezium.rokidbus.shared.tile.TileTone
+import com.anezium.rokidbus.hudtiles.SystemWidgetContent
+import com.anezium.rokidbus.client.ui.NexusPluginIcons
 import com.github.takahirom.roborazzi.captureRoboImage
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -62,6 +64,7 @@ class HomeScreenshotTest {
                     placementSource = stored?.let(::placementsOf) ?: placementsOf(*sizes.toList().toTypedArray()),
                     tileSource = { live[it] },
                     motion = HudMotionDriver.instant(),
+                    widgetSource = FakeWidgetSource(),
                 )
                 activity.setContentView(layer, FrameLayout.LayoutParams(480, 640))
                 setup(layer)
@@ -306,4 +309,157 @@ class HomeScreenshotTest {
     private fun settleBlink() {
         org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(1_500))
     }
+
+    // ---- system widgets ---------------------------------------------------------------------
+
+    private fun widget(id: String, size: TileSize, col: Int, row: Int) = TileLayoutEntry(id, size, col, row)
+
+    /** Clock and status between plugin tiles, and a second status-sized row of widgets below the last plugin. */
+    private val widgetLayout = listOf(
+        widget("sys:clock", TileSize.WIDE, 0, 0),
+        at(0, TileSize.SMALL, 2, 0),
+        at(1, TileSize.SMALL, 3, 0),
+        at(2, TileSize.WIDE, 0, 1),
+        widget("sys:status", TileSize.WIDE, 2, 1),
+        at(3, TileSize.SMALL, 0, 2),
+        at(4, TileSize.SMALL, 1, 2),
+        at(5, TileSize.WIDE, 2, 2),
+        at(6, TileSize.SMALL, 0, 3),
+        at(7, TileSize.SMALL, 1, 4),
+    )
+
+    @Test
+    fun grid_widgets_among_plugin_tiles() =
+        capture("grid-21-widgets", stored = widgetLayout, live = freeLive) {
+            it.show(HomeMode.GRID, withIcons(8), "plugin0")
+        }
+
+    @Test
+    fun grid_widget_below_the_last_plugin_scrolls_into_view() =
+        capture(
+            "grid-22-widgets-scrolled-to-end",
+            stored = widgetLayout.map { if (it.pluginId == "sys:status") widget("sys:status", TileSize.BANNER, 0, 6) else it },
+        ) {
+            it.show(HomeMode.GRID, withIcons(8), "plugin0")
+            it.select("plugin7")
+        }
+
+    @Test
+    fun grid_widgets_only() =
+        capture(
+            "grid-23-widgets-only",
+            stored = listOf(widget("sys:clock", TileSize.LARGE, 0, 0), widget("sys:status", TileSize.SMALL, 2, 0)),
+        ) {
+            it.show(HomeMode.GRID, emptyList(), null)
+        }
+
+    @Test
+    fun widgets_at_every_offered_size() {
+        launchHost().use { scenario ->
+            scenario.onActivity { activity ->
+                val frame = FrameLayout(activity)
+                val source = FakeWidgetSource()
+                fun place(widget: com.anezium.rokidbus.shared.tile.SystemWidget, size: TileSize, col: Int, row: Int) {
+                    val view = com.anezium.rokidbus.glasses.SystemWidgetView(
+                        activity, widget, size, android.graphics.drawable.ColorDrawable(0), source,
+                    )
+                    frame.addView(
+                        view,
+                        FrameLayout.LayoutParams(
+                            com.anezium.rokidbus.hudtiles.TileRenderer.widthOf(size),
+                            com.anezium.rokidbus.hudtiles.TileRenderer.heightOf(size),
+                        ).apply {
+                            leftMargin = 16 + col * GridHome.PITCH
+                            topMargin = 12 + row * GridHome.PITCH
+                        },
+                    )
+                }
+                val clock = com.anezium.rokidbus.shared.tile.SystemWidgets.CLOCK
+                val status = com.anezium.rokidbus.shared.tile.SystemWidgets.STATUS
+                place(clock, TileSize.SMALL, 0, 0)
+                place(clock, TileSize.WIDE, 1, 0)
+                place(status, TileSize.SMALL, 3, 0)
+                place(clock, TileSize.BANNER, 0, 1)
+                place(clock, TileSize.LARGE, 0, 2)
+                place(status, TileSize.WIDE, 2, 2)
+                place(status, TileSize.BANNER, 0, 4)
+                activity.setContentView(frame, FrameLayout.LayoutParams(480, 640))
+            }
+            val path = "build/outputs/roborazzi/widgets-01-sizes.png"
+            onView(isRoot()).captureRoboImage(path)
+            assertSingleHue(File(path))
+        }
+    }
+
+    private fun captureWeather(name: String, placements: List<Triple<TileSize, Pair<Int, Int>, Boolean>>) {
+        launchHost().use { scenario ->
+            scenario.onActivity { activity ->
+                val frame = FrameLayout(activity)
+                val fresh = FakeWidgetSource()
+                val stale = FakeWidgetSource(weather = SystemWidgetContent.Weather(WEATHER_SAMPLE, ageMs = 3 * 3_600_000L))
+                val weather = com.anezium.rokidbus.shared.tile.SystemWidgets.WEATHER
+                placements.forEach { (size, cell, isStale) ->
+                    frame.addView(
+                        com.anezium.rokidbus.glasses.SystemWidgetView(
+                            activity, weather, size, NexusPluginIcons.resolve(activity, weather.iconKey, null),
+                            if (isStale) stale else fresh,
+                        ),
+                        FrameLayout.LayoutParams(
+                            com.anezium.rokidbus.hudtiles.TileRenderer.widthOf(size),
+                            com.anezium.rokidbus.hudtiles.TileRenderer.heightOf(size),
+                        ).apply {
+                            leftMargin = 16 + cell.first * GridHome.PITCH
+                            topMargin = 12 + cell.second * GridHome.PITCH
+                        },
+                    )
+                }
+                activity.setContentView(frame, FrameLayout.LayoutParams(480, 640))
+            }
+            val path = "build/outputs/roborazzi/$name.png"
+            onView(isRoot()).captureRoboImage(path)
+            assertSingleHue(File(path))
+        }
+    }
+
+    /** 1x1, 2x1, 3x1 and 3x2 fresh; a stale 1x1 and 2x1 (three hours old) dim and show their age. */
+    @Test
+    fun weather_one_row_sizes_and_panel() = captureWeather(
+        "widgets-02-weather-sizes",
+        listOf(
+            Triple(TileSize.SMALL, 0 to 0, false),
+            Triple(TileSize.WIDE, 1 to 0, false),
+            Triple(TileSize.SMALL, 3 to 0, true),
+            Triple(TileSize.BANNER, 0 to 1, false),
+            Triple(TileSize.PANEL, 0 to 2, false),
+            Triple(TileSize.WIDE, 0 to 4, true),
+        ),
+    )
+
+    /** 2x2 fresh beside a stale 1x2, and a 3x1 that is stale. */
+    @Test
+    fun weather_two_row_sizes() = captureWeather(
+        "widgets-03-weather-large",
+        listOf(
+            Triple(TileSize.LARGE, 0 to 0, false),
+            Triple(TileSize.TALL, 2 to 0, true),
+            Triple(TileSize.SMALL, 3 to 0, false),
+            Triple(TileSize.BANNER, 0 to 2, true),
+        ),
+    )
+
+    @Test
+    fun grid_widgets_only_scrolled_by_the_ring() =
+        capture(
+            "grid-24-widgets-only-scrolled",
+            stored = listOf(
+                widget("sys:clock", TileSize.LARGE, 0, 0),
+                widget("sys:status", TileSize.SMALL, 2, 0),
+                widget("sys:weather", TileSize.PANEL, 0, 5),
+            ),
+        ) {
+            it.show(HomeMode.GRID, emptyList(), null)
+            it.layoutOnCanvas()
+            it.scrollRows(1)
+            it.scrollRows(1)
+        }
 }

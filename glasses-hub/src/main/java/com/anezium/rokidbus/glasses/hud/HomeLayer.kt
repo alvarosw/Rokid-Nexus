@@ -15,19 +15,27 @@ import com.anezium.rokidbus.glasses.TileArtworkCache
 import com.anezium.rokidbus.glasses.TileCache
 import com.anezium.rokidbus.glasses.TileController
 import com.anezium.rokidbus.glasses.TileLayoutStore
+import com.anezium.rokidbus.glasses.DeviceWidgetSource
+import com.anezium.rokidbus.glasses.SystemWidgetSource
+import com.anezium.rokidbus.shared.tile.SystemWidgets
 import com.anezium.rokidbus.shared.tile.TileContent
 import com.anezium.rokidbus.shared.tile.TileGridLayout
 import com.anezium.rokidbus.shared.tile.TilePlacement
 
 /**
- * The placements the hub resolved when it ordered [entries], so each tile is placed exactly once. If
- * the hub's last resolution covers a different set of ids (a race, a test with its own entries), the
- * entries are resolved from the stored layout instead.
+ * The placements the hub resolved when it ordered [entries], so each tile is placed exactly once: the
+ * entries' in [entries] order, then the system widgets'. If the hub's last resolution covers a
+ * different set of entries (a race, a test with its own entries), the entries are resolved from the
+ * stored layout instead.
  */
 internal fun resolvedPlacements(context: Context, entries: List<GlassesHub.LauncherEntry>): List<TilePlacement> {
-    val byId = GlassesHub.launcherPlacements().associateBy { it.pluginId }
-    if (byId.size == entries.size && entries.all { it.id in byId }) return entries.map { byId.getValue(it.id) }
-    return TileGridLayout.resolve(entries.map { it.id to null }, TileLayoutStore.getEntries(context))
+    val resolved = GlassesHub.launcherPlacements()
+    val byId = resolved.associateBy { it.pluginId }
+    val widgets = resolved.filter { SystemWidgets.byId(it.pluginId) != null }
+    if (byId.size - widgets.size == entries.size && entries.all { it.id in byId }) {
+        return entries.map { byId.getValue(it.id) } + widgets
+    }
+    return TileGridLayout.resolveWithWidgets(entries.map { it.id to null }, TileLayoutStore.getEntries(context))
 }
 
 /**
@@ -59,6 +67,7 @@ internal class HomeLayer(
         }
     },
     internal val motion: HudMotionDriver = HudMotionDriver.forContext(context),
+    private val widgetSource: SystemWidgetSource = DeviceWidgetSource(context),
 ) : FrameLayout(context) {
     private var screen: HomeScreenView? = null
     private var model = HomeViewModel()
@@ -79,10 +88,12 @@ internal class HomeLayer(
     fun show(mode: HomeMode, entries: List<GlassesHub.LauncherEntry>, selectedId: String?) {
         handler.removeCallbacks(expireFailure)
         val tileData = if (mode == HomeMode.GRID && isOnScreen) loadTileData(entries, emptyMap()) else emptyMap()
+        val grid = gridFor(mode, entries)
         apply(
             HomeViewModel(
                 entries, selectedId, mode, HomeStatus.None, tileData,
-                placements = placementsFor(mode, entries),
+                placements = grid.placements,
+                widgets = grid.widgets,
                 noticeOwnsRing = model.noticeOwnsRing,
             ),
         )
@@ -91,12 +102,14 @@ internal class HomeLayer(
     fun update(entries: List<GlassesHub.LauncherEntry>, selectedId: String?) {
         val tileData =
             if (model.mode == HomeMode.GRID && isOnScreen) loadTileData(entries, model.tileData) else emptyMap()
+        val grid = gridFor(model.mode, entries)
         apply(
             model.copy(
                 entries = entries,
                 selectedId = selectedId,
                 tileData = tileData,
-                placements = placementsFor(model.mode, entries),
+                placements = grid.placements,
+                widgets = grid.widgets,
             ),
         )
     }
@@ -109,6 +122,11 @@ internal class HomeLayer(
         handler.removeCallbacks(expireFailure)
         val status = if (model.status is HomeStatus.Failed) HomeStatus.None else model.status
         apply(model.copy(selectedId = selectedId, status = status), animate = selectedId != model.selectedId)
+    }
+
+    /** A ring step with nothing to select; the grid scrolls, the list ignores it. */
+    fun scrollRows(rows: Int) {
+        screen?.scrollRows(rows)
     }
 
     fun showOpening(pluginId: String) {
@@ -243,15 +261,25 @@ internal class HomeLayer(
         screen?.let(::removeView)
         val next: HomeScreenView = when (mode) {
             HomeMode.LIST -> ListHome(context, iconLoader, motion)
-            HomeMode.GRID -> GridHome(context, iconLoader, motion)
+            HomeMode.GRID -> GridHome(context, iconLoader, motion, widgetSource)
         }
         next.setTopInsetPx(topInsetPx)
         addView(next, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         screen = next
     }
 
-    private fun placementsFor(mode: HomeMode, entries: List<GlassesHub.LauncherEntry>): List<TilePlacement> =
-        if (mode == HomeMode.GRID) placementSource(entries) else emptyList()
+    private class Grid(val placements: List<TilePlacement>, val widgets: List<TilePlacement>)
+
+    /** The entries' placements and, apart, the system widgets'; anything else the source places is dropped. */
+    private fun gridFor(mode: HomeMode, entries: List<GlassesHub.LauncherEntry>): Grid {
+        if (mode != HomeMode.GRID) return Grid(emptyList(), emptyList())
+        val ids = entries.mapTo(HashSet()) { it.id }
+        val all = placementSource(entries)
+        return Grid(
+            placements = all.filter { it.pluginId in ids },
+            widgets = all.filter { it.pluginId !in ids && SystemWidgets.byId(it.pluginId) != null },
+        )
+    }
 
     private fun loadTileData(
         entries: List<GlassesHub.LauncherEntry>,

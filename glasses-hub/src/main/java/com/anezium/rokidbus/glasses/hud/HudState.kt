@@ -81,7 +81,10 @@ data class HudState(
     val screen: HudScreen = HudScreen.Hidden,
     /** Launcher entry ids in display order, without duplicates. */
     val entries: List<String> = emptyList(),
-    /** What the home last drew for each entry besides its id; a change refreshes the home. */
+    /**
+     * What the home last drew for each entry besides its id, and where it drew each system widget
+     * (keyed by widget id; widgets are never entries); a change refreshes the home.
+     */
     val entryAppearance: Map<String, String> = emptyMap(),
     /** Applied when the launcher is next shown, never to a launcher already on screen. */
     val configuredMode: HomeMode = HomeMode.LIST,

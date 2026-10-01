@@ -54,6 +54,26 @@ or `3x3` in `TILE_SIZES` needs hubs with this change.
 - A tile turns stale after the time its plugin set (`staleAfterMs`) instead of a
   fixed ten minutes, and the cached tile of a plugin that leaves the launcher is
   deleted.
+- **System widgets.** The grid can show a clock (time and date, redrawn on the
+  minute) and a status tile (glasses and phone charge, phone link) placed like
+  any tile. The ring passes them by: they are never selected or opened, and
+  selecting the first or last tile scrolls to show a widget beyond it. The
+  phone's layout editor adds them ("+ ADD WIDGET"), moves and sizes them like
+  tiles and removes them; a widget shows a "SYSTEM" chip and previews with
+  sample content. Status has a battery icon of its own, and a grid of widgets
+  only no longer reads "WAITING FOR PHONE".
+- Fix the phone layout editor dropping system widgets on save, which the next
+  glasses connection then erased from the glasses too.
+- **Weather widget.** A third system widget shows the temperature, condition,
+  today's high and low and the place, with the next hours and days at 2x2 and
+  3x2. The phone fetches it from Open-Meteo (no account) about every 30 minutes,
+  only while the widget is on the grid and the glasses are connected, for its
+  approximate location (coarse location, asked for in the new Weather settings,
+  never at start) or a typed city, in °C or °F by region or by choice. The
+  glasses keep the last reading across restarts and dim it after two hours.
+  It travels on a new hub-only path, `/phone/weather`, that no plugin can use.
+- A grid of system widgets only now scrolls one row per ring step, so widgets
+  below the screen can be read; nothing is ever selected.
 
 ### Plugin SDK
 

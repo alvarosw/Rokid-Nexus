@@ -35,6 +35,9 @@ enum class TileTextStyle(
     /** The data face at label size: the badge. */
     DATA_DETAIL(RokidHudTokens.LABEL_TEXT_SIZE, 0f, true),
 
+    /** The data face at display size: a system widget's headline value, the clock's time. */
+    DATA_DISPLAY(RokidHudTokens.DISPLAY_TEXT_SIZE, 0f, true),
+
     /** `heading`, 16 / 22: a template's emphasized title or current line. */
     HEADING(RokidHudTokens.HEADING_TEXT_SIZE, 0f, false, 22),
 
@@ -63,7 +66,7 @@ enum class TileTextStyle(
     fun typeface(): Typeface = when (this) {
         LABEL, CAPTION, TEXT_MEDIUM, SMALL_MEDIUM -> RokidHudTokens.labelTypeface()
         BODY, DETAIL, TEXT, SMALL -> RokidHudTokens.bodyTypeface()
-        DATA, DATA_DETAIL, FIGURE -> RokidHudTokens.dataTypeface()
+        DATA, DATA_DETAIL, DATA_DISPLAY, FIGURE -> RokidHudTokens.dataTypeface()
         MONO, META -> RokidHudTokens.monoTypeface()
         HEADING -> RokidHudTokens.headingTypeface()
     }

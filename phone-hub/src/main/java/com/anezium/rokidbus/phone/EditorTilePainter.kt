@@ -1,6 +1,7 @@
 package com.anezium.rokidbus.phone
 
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Path
@@ -9,6 +10,9 @@ import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.text.TextPaint
 import com.anezium.rokidbus.client.ui.RokidHudTokens
+import com.anezium.rokidbus.hudtiles.SystemWidgetContent
+import com.anezium.rokidbus.hudtiles.SystemWidgetInput
+import com.anezium.rokidbus.hudtiles.SystemWidgetRenderer
 import com.anezium.rokidbus.hudtiles.TileOp
 import com.anezium.rokidbus.hudtiles.TileRenderInput
 import com.anezium.rokidbus.hudtiles.TileRenderer
@@ -20,7 +24,8 @@ import com.anezium.rokidbus.shared.tile.TileTone
 /**
  * One glasses tile as the editor shows it, in glasses pixels: the editor's chrome (fill, border by
  * tone, the alert mark, the size label) around the interior [TileRenderer] draws, which is exactly
- * what the glasses draw inside the tile.
+ * what the glasses draw inside the tile. A system widget's interior is [SystemWidgetRenderer]'s,
+ * in the resting chrome of a tile with no snapshot, as the glasses draw it.
  */
 internal class EditorTilePainter {
     // Subpixel text keeps measured widths equal to drawn widths under a canvas scale.
@@ -30,7 +35,10 @@ internal class EditorTilePainter {
     private val tmp = RectF()
     private val path = Path()
 
-    /** [sizeLabel] is the editor-only size caption at the bottom-right; null draws none. */
+    /**
+     * [sizeLabel] is the editor-only size caption at the bottom-right; null draws none. A non-null
+     * [widget] draws that system widget content and ignores [snapshot].
+     */
     fun draw(
         canvas: Canvas,
         rect: RectF,
@@ -41,8 +49,10 @@ internal class EditorTilePainter {
         selected: Boolean,
         lifted: Boolean = false,
         sizeLabel: String? = null,
+        widget: SystemWidgetContent? = null,
     ) {
         val layer = if (lifted) canvas.saveLayerAlpha(rect, LIFTED_ALPHA) else canvas.save()
+        val snapshot = snapshot.takeIf { widget == null }
         val tone = snapshot?.tone
         val alert = tone == TileTone.WARN || tone == TileTone.CRITICAL
 
@@ -50,6 +60,7 @@ internal class EditorTilePainter {
         fill.color = when {
             lifted -> LIFTED_FILL
             selected -> RokidHudTokens.GREEN_12
+            widget != null -> Color.TRANSPARENT
             else -> RokidHudTokens.GREEN_06
         }
         canvas.drawRoundRect(rect, RADIUS, RADIUS, fill)
@@ -57,11 +68,14 @@ internal class EditorTilePainter {
         // Resting border intensity as the glasses draw it: the fallback tile at `line`, a live one by tone.
         stroke.color = when {
             selected -> RokidHudTokens.GREEN_100
+            widget != null -> RokidHudTokens.LINE
             snapshot == null -> RokidHudTokens.LINE
             tone == TileTone.OK || tone == TileTone.WARN || tone == TileTone.CRITICAL -> RokidHudTokens.GREEN_72
             else -> RokidHudTokens.GREEN_48
         }
-        stroke.pathEffect = if (tone == TileTone.WARN) DashPathEffect(floatArrayOf(4f, 3f), 0f) else null
+        // A system widget rests dashed, as the reference draws it; selected it takes the solid frame.
+        val dashed = tone == TileTone.WARN || (widget != null && !selected)
+        stroke.pathEffect = if (dashed) DashPathEffect(floatArrayOf(4f, 3f), 0f) else null
         tmp.set(rect)
         tmp.inset(borderWidth / 2f, borderWidth / 2f)
         canvas.drawRoundRect(tmp, RADIUS - borderWidth / 2f, RADIUS - borderWidth / 2f, stroke)
@@ -72,19 +86,25 @@ internal class EditorTilePainter {
         canvas.clipPath(path)
 
         val icon = RokidHudTokens.ICON_SM.toFloat()
-        val layout = TileRenderer.layout(
-            TileRenderInput(
-                name = name,
-                icon = glyph,
-                content = snapshot?.content,
-                tone = tone ?: TileTone.OFF,
-                focusAmount = if (selected) 1f else 0f,
-                headerEndInset = if (alert) RokidHudTokens.ICON_SM + RokidHudTokens.SPACE_1 else 0,
-                // Only a cover this hub received; a declared sample or an uncached key is text-only.
-                artwork = (snapshot?.content as? TileContent.Music)?.let { TileArtworkCache.bitmap(snapshot.pluginId, it.artworkKey) },
-            ),
-            size,
-        )
+        val layout = if (widget != null) {
+            SystemWidgetRenderer.layout(SystemWidgetInput(name = name, icon = glyph, content = widget), size)
+        } else {
+            TileRenderer.layout(
+                TileRenderInput(
+                    name = name,
+                    icon = glyph,
+                    content = snapshot?.content,
+                    tone = tone ?: TileTone.OFF,
+                    focusAmount = if (selected) 1f else 0f,
+                    headerEndInset = if (alert) RokidHudTokens.ICON_SM + RokidHudTokens.SPACE_1 else 0,
+                    // Only a cover this hub received; a declared sample or an uncached key is text-only.
+                    artwork = (snapshot?.content as? TileContent.Music)?.let {
+                        TileArtworkCache.bitmap(snapshot.pluginId, it.artworkKey)
+                    },
+                ),
+                size,
+            )
+        }
         canvas.save()
         canvas.translate(rect.left, rect.top)
         layout.draw(canvas)
@@ -112,7 +132,13 @@ internal class EditorTilePainter {
             text.textSize = 10f
             text.letterSpacing = 0.04f
             text.color = RokidHudTokens.GREEN_48
-            canvas.drawText(sizeLabel, right - text.measureText(sizeLabel), labelBottom - text.descent(), text)
+            val labelTop = labelBottom - text.descent() + text.ascent()
+            // A widget's body can reach the tile's foot (status' three readings); the card names the size.
+            val covered = widget != null &&
+                layout.body.filterIsInstance<TileOp.Text>().any { rect.top + it.bottom > labelTop }
+            if (!covered) {
+                canvas.drawText(sizeLabel, right - text.measureText(sizeLabel), labelBottom - text.descent(), text)
+            }
         }
         canvas.restoreToCount(layer)
     }
