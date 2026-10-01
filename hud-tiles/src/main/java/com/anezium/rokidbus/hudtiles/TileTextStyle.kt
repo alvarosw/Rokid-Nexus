@@ -31,12 +31,15 @@ enum class TileTextStyle(
 
     /** The data face at label size: the badge. */
     DATA_DETAIL(RokidHudTokens.LABEL_TEXT_SIZE, 0f, true),
+
+    /** The data face at display size: a system widget's headline value, the clock's time. */
+    DATA_DISPLAY(RokidHudTokens.DISPLAY_TEXT_SIZE, 0f, true),
     ;
 
     fun typeface(): Typeface = when (this) {
         LABEL -> RokidHudTokens.labelTypeface()
         BODY, DETAIL -> RokidHudTokens.bodyTypeface()
-        DATA, DATA_DETAIL -> RokidHudTokens.dataTypeface()
+        DATA, DATA_DETAIL, DATA_DISPLAY -> RokidHudTokens.dataTypeface()
         MONO -> RokidHudTokens.monoTypeface()
     }
 }

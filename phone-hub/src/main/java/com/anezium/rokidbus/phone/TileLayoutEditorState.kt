@@ -2,6 +2,7 @@ package com.anezium.rokidbus.phone
 
 import com.anezium.rokidbus.client.ui.HudGridMetrics
 import com.anezium.rokidbus.shared.tile.GridRect
+import com.anezium.rokidbus.shared.tile.SystemWidget
 import com.anezium.rokidbus.shared.tile.TileGridLayout
 import com.anezium.rokidbus.shared.tile.TileLayoutEntry
 import com.anezium.rokidbus.shared.tile.TilePlacement
@@ -10,7 +11,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** One tile the editor can place: a launchable plugin or the camera entry. */
+/** One tile the editor can place: a launchable plugin, the camera entry or a system widget. */
 data class EditorTile(
     val id: String,
     val name: String,
@@ -18,6 +19,8 @@ data class EditorTile(
     val sizes: Set<TileSize>,
     /** True when the plugin publishes live tiles (`widget_tile`), shown as the "LIVE" chip. */
     val live: Boolean,
+    /** Set for a system widget, which is on the grid only while the layout has a cell for it. */
+    val widget: SystemWidget? = null,
 )
 
 /** A tile being dragged: [x]/[y] is its top-left in glasses-canvas pixels, following the pointer. */
@@ -39,6 +42,9 @@ data class EditorDrag(
  * The tile-layout editor's state and rules, free of Android so the drag, resize and save behavior
  * is JVM-testable. Positions are cells of [TileGridLayout]; drag coordinates are pixels of the
  * glasses content canvas ([HudGridMetrics] geometry).
+ *
+ * [tiles] lists every system widget this build knows, placed or not; a widget is placed exactly
+ * when [layout] has a cell for it, as on the glasses.
  */
 class TileLayoutEditorState(
     val tiles: List<EditorTile>,
@@ -63,7 +69,7 @@ class TileLayoutEditorState(
     val isDragging: Boolean get() = drag?.moved == true
 
     fun select(id: String) {
-        if (id !in tileById) return
+        if (id !in tileById || id !in layout) return
         selectedId = id
         message = ""
     }
@@ -146,6 +152,7 @@ class TileLayoutEditorState(
     /** Resizes the selected tile; on no room, leaves the layout alone and sets [message]. */
     fun resize(size: TileSize): Boolean {
         val id = selectedId ?: return false
+        if (size !in tileById.getValue(id).sizes) return false
         val placed = TileGridLayout.resize(layout, id, size)
         if (placed == null) {
             message = "No room for ${sizeLabel(size)} — shrink another tile first."
@@ -154,6 +161,48 @@ class TileLayoutEditorState(
         layout = placed
         message = ""
         return true
+    }
+
+    /** The system widgets not on the grid, in catalog order: what "+ ADD WIDGET" offers. */
+    fun unplacedWidgets(): List<EditorTile> = tiles.filter { it.widget != null && it.id !in layout }
+
+    /**
+     * Places the widget [id] at its default size in the first free cell, row-major, and selects it.
+     * On no room, leaves the layout alone and sets [message].
+     */
+    fun addWidget(id: String): Boolean {
+        val tile = tileById[id] ?: return false
+        val widget = tile.widget ?: return false
+        if (id in layout) return false
+        val size = widget.defaultSize
+        val spot = firstFree(size)
+        if (spot == null) {
+            message = "No room for ${tile.name} at ${sizeLabel(size)} — shrink or remove a tile first."
+            return false
+        }
+        layout = LinkedHashMap(layout).apply { put(id, spot) }
+        selectedId = id
+        message = ""
+        return true
+    }
+
+    /** Takes the widget [id] off the grid; plugins and the camera cannot be removed. */
+    fun removeWidget(id: String): Boolean {
+        if (tileById[id]?.widget == null || id !in layout) return false
+        layout = layout - id
+        if (selectedId == id) selectedId = firstInReadingOrder(layout)
+        message = ""
+        return true
+    }
+
+    private fun firstFree(size: TileSize): GridRect? {
+        for (row in 0..TileGridLayout.MAX_ROWS - size.rows) {
+            for (col in 0..TileGridLayout.COLUMNS - size.cols) {
+                val rect = GridRect(col, row, size.cols, size.rows)
+                if (TileGridLayout.fits(rect, layout.values)) return rect
+            }
+        }
+        return null
     }
 
     fun reset() {
@@ -207,6 +256,20 @@ class TileLayoutEditorState(
 
         fun layoutOf(placements: List<TilePlacement>): Map<String, GridRect> =
             placements.associate { it.pluginId to GridRect(it.col, it.row, it.size.cols, it.size.rows) }
+
+        /**
+         * The editor over [stored], placed as the glasses place it: the plugins and the camera are
+         * resolved in [tiles] order with no declared sizes, and the system widgets [stored] has
+         * entries for keep them, so saving never drops a widget. The default layout has no widgets.
+         */
+        fun load(tiles: List<EditorTile>, stored: List<TileLayoutEntry>): TileLayoutEditorState {
+            val entries = tiles.filter { it.widget == null }.map { it.id to null }
+            return TileLayoutEditorState(
+                tiles,
+                layoutOf(TileGridLayout.resolveWithWidgets(entries, stored)),
+                layoutOf(TileGridLayout.resolve(entries, emptyList())),
+            )
+        }
 
         /**
          * Rows the glasses show before scrolling: what they last reported, else the same formula

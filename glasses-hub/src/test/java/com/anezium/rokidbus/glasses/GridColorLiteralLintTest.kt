@@ -23,6 +23,7 @@ class GridColorLiteralLintTest {
     private val homeFiles = listOf(
         "FallbackTileView.kt",
         "LiveTileView.kt",
+        "SystemWidgetView.kt",
         "hud/HomeComponents.kt",
         "hud/HomeLayer.kt",
         "hud/HomeModel.kt",

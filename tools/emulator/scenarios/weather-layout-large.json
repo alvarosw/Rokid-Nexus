@@ -1,0 +1,25 @@
+{
+  "description": "Weather at 3x2 beside a 1x1 status (debug). tile-sizes-clear removes it.",
+  "envelopes": [
+    {
+      "path": "/glasses/tile-layout/config",
+      "payload": {
+        "version": 2,
+        "entries": [
+          {
+            "pluginId": "sys:weather",
+            "size": "3x2",
+            "col": 0,
+            "row": 0
+          },
+          {
+            "pluginId": "sys:status",
+            "size": "1x1",
+            "col": 3,
+            "row": 0
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -354,6 +354,8 @@ internal class HomeHeaderView(context: Context) : FrameLayout(context) {
         counter.text = text
     }
 
+    internal val counterForTest: String get() = counter.text.toString()
+
     companion object {
         const val HEIGHT = HudGridMetrics.HEADER_HEIGHT
     }

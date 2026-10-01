@@ -1,0 +1,35 @@
+{
+  "description": "A /phone/weather reading as the phone hub sends it (Lisbon, recorded from Open-Meteo 2026-10-01). The fake phone stamps a fresh seq on every play, so it can be replayed; set ageMs to 10800000 to see a stale (3 h) reading. Play after a layout that places sys:weather (weather-layout).",
+  "envelopes": [
+    {
+      "path": "/phone/weather",
+      "payload": {
+        "version": 1,
+        "ageMs": 0,
+        "location": "Lisbon",
+        "temperature": 19,
+        "unit": "c",
+        "code": 3,
+        "condition": "Overcast",
+        "high": 23,
+        "low": 17,
+        "hourly": [
+          {"label": "11:00", "temperature": 20, "code": 3},
+          {"label": "12:00", "temperature": 21, "code": 0},
+          {"label": "13:00", "temperature": 22, "code": 0},
+          {"label": "14:00", "temperature": 23, "code": 1},
+          {"label": "15:00", "temperature": 23, "code": 1},
+          {"label": "16:00", "temperature": 22, "code": 0}
+        ],
+        "daily": [
+          {"label": "Fri", "high": 27, "low": 17, "code": 3},
+          {"label": "Sat", "high": 26, "low": 20, "code": 3},
+          {"label": "Sun", "high": 23, "low": 20, "code": 96},
+          {"label": "Mon", "high": 25, "low": 19, "code": 45},
+          {"label": "Tue", "high": 22, "low": 19, "code": 95},
+          {"label": "Wed", "high": 22, "low": 18, "code": 45}
+        ]
+      }
+    }
+  ]
+}

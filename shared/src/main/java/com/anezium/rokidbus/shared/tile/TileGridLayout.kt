@@ -124,6 +124,21 @@ object TileGridLayout {
         }
     }
 
+    /**
+     * [resolve] with the system widgets [stored] places counted as present: the glasses' placement.
+     * Widgets follow [entries] in stored order at their default size when their stored cell is
+     * rejected. A `sys:` id this build does not know has no widget and is dropped like an
+     * uninstalled plugin, which is also what a hub that predates widgets does with every one.
+     */
+    fun resolveWithWidgets(
+        entries: List<Pair<String, TileSize?>>,
+        stored: List<TileLayoutEntry>,
+    ): List<TilePlacement> {
+        val ids = entries.mapTo(HashSet()) { it.first }
+        val widgets = SystemWidgets.placedIn(stored).filter { it.id !in ids }
+        return resolve(entries + widgets.map { it.id to it.defaultSize }, stored)
+    }
+
     /** Selection and list order: by top-left corner, row then column. */
     fun readingOrder(placements: List<TilePlacement>): List<TilePlacement> =
         placements.sortedWith(compareBy({ it.row }, { it.col }))

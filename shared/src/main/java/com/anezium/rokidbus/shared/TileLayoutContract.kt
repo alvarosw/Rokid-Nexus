@@ -14,6 +14,9 @@ import org.json.JSONObject
  * record; the hub re-pushes it on every glasses capabilities announce, so a layout edited while
  * the link was down still lands. See `phone-hub/.../GlassesRepairSettingsStore.kt` for the exact
  * mechanism this mirrors.
+ *
+ * An entry's `pluginId` may also be a system widget id (`sys:clock`, see
+ * [com.anezium.rokidbus.shared.tile.SystemWidgets]); the entry is what enables the widget.
  */
 object TileLayoutContract {
     /**

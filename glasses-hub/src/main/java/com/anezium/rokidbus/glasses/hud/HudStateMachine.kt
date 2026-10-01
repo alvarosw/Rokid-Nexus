@@ -157,7 +157,10 @@ class HudStateMachine(private val config: HudConfig = HudConfig()) {
 
         fun move(home: Home, step: Int) {
             val n = s.entries.size
-            if (n == 0) return
+            if (n == 0) {
+                fx += ScrollHome(step)
+                return
+            }
             val idx = s.entries.indexOf(home.selectedId).let { if (it < 0) 0 else it }
             val next = s.entries[((idx + step) % n + n) % n]
             s = s.copy(screen = home.copy(selectedId = next), lastSelectedId = next)

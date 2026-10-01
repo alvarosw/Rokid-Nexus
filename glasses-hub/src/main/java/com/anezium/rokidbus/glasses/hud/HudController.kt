@@ -131,13 +131,18 @@ internal object HudController {
     /**
      * What the home draws for each entry besides its place in the list: name, icon and the tile's
      * grid cell and size, so a layout change that keeps the reading order still refreshes the home.
+     * The system widgets' cells are in it too: a widget is no entry, but moving one is a change.
      */
     private fun appearanceOf(context: Context, entries: List<GlassesHub.LauncherEntry>): Map<String, String> {
-        val placed = resolvedPlacements(context, entries).associateBy { it.pluginId }
+        val placements = resolvedPlacements(context, entries)
+        val placed = placements.associateBy { it.pluginId }
+        val ids = entries.mapTo(HashSet()) { it.id }
+        val widgets = placements.filter { it.pluginId !in ids }
+            .associate { it.pluginId to "widget|${it.col},${it.row},${it.size.wireValue}" }
         return entries.associate { entry ->
             val tile = placed[entry.id]
             entry.id to "${entry.displayName}|${entry.iconKey.orEmpty()}|${tile?.col},${tile?.row},${tile?.size?.wireValue}"
-        }
+        } + widgets
     }
 
     /** Ends the current connection: the machine loses its windows, and every observer and timer goes. */
@@ -385,6 +390,7 @@ internal object HudController {
                     host.home.show(effect.mode, entriesFor(effect.entries), effect.selectedId)
                 }
                 is HudEffect.SetHomeSelection -> host?.home?.select(effect.selectedId)
+                is HudEffect.ScrollHome -> host?.home?.scrollRows(effect.rows)
                 is HudEffect.RefreshHomeEntries -> host?.home?.update(entriesFor(effect.entries), effect.selectedId)
                 is HudEffect.ShowOpening -> host?.home?.showOpening(effect.pluginId)
                 is HudEffect.ShowApp -> showApp(host, effect.surfaceId)

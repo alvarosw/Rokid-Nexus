@@ -73,6 +73,7 @@ import com.anezium.rokidbus.shared.plugin.PathRules
 import com.anezium.rokidbus.shared.plugin.PluginCapability
 import com.anezium.rokidbus.shared.plugin.PluginOpenTypes
 import com.anezium.rokidbus.shared.plugin.PluginCapability.Companion.serialize
+import com.anezium.rokidbus.shared.tile.SystemWidgets
 import com.anezium.rokidbus.ink.InkProblem
 import com.anezium.rokidbus.phone.speech.HubSecretStore
 import com.anezium.rokidbus.phone.speech.InternalAudioAccess
@@ -368,6 +369,7 @@ class BusHubService : Service() {
     private var activeGlassesAppOperationId: Long? = null
     @Volatile private var lastAnnouncedPhoneCapabilities: PhoneHubCapabilities? = null
     private var phoneBatteryReporter: PhoneBatteryReporter? = null
+    private var phoneWeatherReporter: PhoneWeatherReporter? = null
     private var phoneBatteryBadgeSubscription: PhoneBatteryBadgeStore.Subscription? = null
     @Volatile private var lastNotifiedStatus: String? = null
     @Volatile private var remoteImageSurfaceVersion = 0
@@ -934,6 +936,28 @@ class BusHubService : Service() {
         phoneBatteryBadgeSubscription = PhoneBatteryBadgeStore(this).addChangeListener { enabled ->
             phoneBatteryReporter?.setEnabled(enabled)
         }
+        val weatherSettings = WeatherSettingsStore(this)
+        val weatherSource = PhoneWeatherSource(
+            settings = weatherSettings,
+            location = AndroidWeatherDeviceLocation(this),
+            http = HttpsWeatherHttp(),
+            locale = Locale::getDefault,
+            use24Hour = { android.text.format.DateFormat.is24HourFormat(applicationContext) },
+            log = ::log,
+        )
+        phoneWeatherReporter = PhoneWeatherReporter(
+            clock = System::currentTimeMillis,
+            timer = HandlerWeatherTimer(),
+            worker = executor,
+            isPlaced = {
+                TileLayoutSettingsStore(applicationContext).getEntries().any { it.pluginId == SystemWidgets.WEATHER.id }
+            },
+            isLinked = { linkState() and (LinkStateBits.CXR_CONTROL_UP or LinkStateBits.SPP_DATA_UP) != 0 },
+            fetch = weatherSource::fetch,
+            store = weatherSettings,
+            send = ::sendRemote,
+            log = ::log,
+        )
         hubEnabled = prefs().getBoolean(PREF_ENABLED, true)
         if (hubEnabled) {
             if (!canRunHub(this)) {
@@ -1084,6 +1108,8 @@ class BusHubService : Service() {
         }
         phoneBatteryReporter?.stop()
         phoneBatteryReporter = null
+        phoneWeatherReporter?.stop()
+        phoneWeatherReporter = null
         phoneBatteryBadgeSubscription?.close()
         phoneBatteryBadgeSubscription = null
         developerModeJournalSubscription?.close()
@@ -4856,8 +4882,10 @@ class BusHubService : Service() {
             pluginRegistry.syncLauncherList()
             announcePhoneCapabilities()
             phoneBatteryReporter?.resend("link_up")
+            phoneWeatherReporter?.onConditionsChanged("link_up")
         } else {
             lastAnnouncedPhoneCapabilities = null
+            phoneWeatherReporter?.onConditionsChanged("link_down")
         }
     }
 
@@ -5037,6 +5065,7 @@ class BusHubService : Service() {
         // phone cannot see as a link change. Without this the badge stays blank
         // until the phone next crosses a percent.
         phoneBatteryReporter?.resend("glasses_announced")
+        phoneWeatherReporter?.resend("glasses_announced")
         log(
             "renderer capabilities image=$imageSupported pin=$pinSupported " +
                 "notice=${advertised.features and BusCapabilityBits.NOTICE_SURFACE != 0} " +
@@ -5232,7 +5261,14 @@ class BusHubService : Service() {
         internal fun onTileLayoutSettingChanged() {
             activeInstance?.let { service ->
                 service.executor.execute { service.pushTileLayoutConfig() }
+                // Placing or removing the weather widget starts or stops its fetches.
+                service.phoneWeatherReporter?.onConditionsChanged("layout")
             }
+        }
+
+        /** The weather settings changed what is fetched: fetch again if the widget is in use. */
+        internal fun onWeatherSettingsChanged() {
+            activeInstance?.phoneWeatherReporter?.refreshNow("settings")
         }
 
         internal fun availablePhoneTtsVoices(locale: Locale): List<PhoneTtsVoiceOption> =
