@@ -1,5 +1,5 @@
 {
-  "description": "System widgets (debug, until the phone editor can add them): the clock at the top-left, the status below the last plugin tile so it is reached by selecting that tile. Play after plugins8 and hud-grid; tile-sizes-clear removes them.",
+  "description": "System widgets (debug; the phone editor adds them on a real phone): the clock at the top-left, the status below the last plugin tile so it is reached by selecting that tile. Play after plugins8 and hud-grid; tile-sizes-clear removes them.",
   "envelopes": [
     {
       "path": "/glasses/tile-layout/config",
