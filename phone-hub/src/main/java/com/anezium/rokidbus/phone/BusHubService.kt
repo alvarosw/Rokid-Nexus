@@ -225,6 +225,9 @@ class BusHubService : Service() {
     private val activityExpiryTick: Runnable = Runnable { activityRouter.expireCanonical() }
     private val assistantExitHandler = Handler(Looper.getMainLooper())
     private val updateCheckHandler = Handler(Looper.getMainLooper())
+    private val tilePublishHandler = Handler(Looper.getMainLooper())
+    private val tilePublishCoalescer = TilePublishCoalescer<BusEnvelope>(nowMs = SystemClock::elapsedRealtime)
+    private val tilePublishFlush = Runnable { flushHeldTilePublishes() }
     @Volatile private var updateCheckLoopStopped = true
     private val updateCheckTick = object : Runnable {
         override fun run() {
@@ -1057,6 +1060,7 @@ class BusHubService : Service() {
     override fun onDestroy() {
         stopPeriodicUpdateChecks()
         pinHandler.removeCallbacks(pinExpiryTick)
+        tilePublishHandler.removeCallbacks(tilePublishFlush)
         inkResultHandler.removeCallbacksAndMessages(null)
         activityHandler.removeCallbacks(activityExpiryTick)
         activityRouter.clearAllForHubStop()
@@ -1315,6 +1319,10 @@ class BusHubService : Service() {
             return
         }
         recordLocalRoute(authorizedEnvelope, senderUid, sender, PluginBusJournal.Verdict.OK)
+        if (authorizedEnvelope.path == BusPaths.TILE_PUBLISH && sender.principal != null) {
+            publishTile(sender.principal.descriptor.id, authorizedEnvelope, sender.replyBinder)
+            return
+        }
         if (handleHubPath(
                 authorizedEnvelope,
                 replyRemote = false,
@@ -2368,7 +2376,10 @@ class BusHubService : Service() {
         revokePrincipal(key)
         cameraConsumerReadiness.recompute()
         refreshMediaSyncConsent()
-        if (key.pluginId !in tilePluginIds()) TileSnapshotCache.remove(key.pluginId)
+        if (key.pluginId !in tilePluginIds()) {
+            TileSnapshotCache.remove(key.pluginId)
+            tilePublishCoalescer.remove(key.pluginId)
+        }
         notifyLinkState()
     }
 
@@ -2448,7 +2459,9 @@ class BusHubService : Service() {
                 cameraConsumerReadiness.isApprovedCameraConsumer(principal)
         }
         if (!cameraAvailable) cameraCompanionController.onPackageUnavailable(packageName)
-        TileSnapshotCache.retainOnly(tilePluginIds())
+        val tilePluginIds = tilePluginIds()
+        TileSnapshotCache.retainOnly(tilePluginIds)
+        tilePublishCoalescer.retainOnly(tilePluginIds)
         notifyLinkState()
         if (::pluginRegistry.isInitialized && isCxrUp()) pluginRegistry.syncLauncherList()
     }
@@ -3295,6 +3308,31 @@ class BusHubService : Service() {
         val error = if (bytes.size > BusConstants.CXR_CONTROL_MAX_BYTES) "NO_DATA_PLANE" else "NO_LINK"
         recordRemoteTransport(envelope, PluginBusJournal.Verdict.REJECTED, error)
         return error
+    }
+
+    private fun publishTile(pluginId: String, envelope: BusEnvelope, replyBinder: IBinder?) {
+        when (val decision = tilePublishCoalescer.offer(pluginId, envelope)) {
+            is TilePublishCoalescer.Decision.Send -> {
+                val errorCode = sendRemote(decision.item)
+                if (errorCode != null) deliverError(replyBinder, envelope.id, errorCode)
+            }
+            is TilePublishCoalescer.Decision.Held -> scheduleTilePublishFlush()
+        }
+    }
+
+    private fun flushHeldTilePublishes() {
+        tilePublishCoalescer.drainDue().forEach { (pluginId, envelope) ->
+            val errorCode = sendRemote(envelope)
+            if (errorCode != null) log("tile publish flush failed plugin=$pluginId code=$errorCode")
+        }
+        scheduleTilePublishFlush()
+    }
+
+    private fun scheduleTilePublishFlush() {
+        val flushAt = tilePublishCoalescer.nextFlushAtMs() ?: return
+        tilePublishHandler.removeCallbacks(tilePublishFlush)
+        val delay = (flushAt - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+        tilePublishHandler.postDelayed(tilePublishFlush, delay)
     }
 
     private fun sendBuiltInPluginEnvelope(envelope: BusEnvelope): String? {
