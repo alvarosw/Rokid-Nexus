@@ -1336,10 +1336,42 @@ nexusWidgetTileSession("main")?.publish(
 ```
 
 `positionMs` and `ageMs` are measured at the moment you publish; the glasses
-add the time since they received it, so neither device's clock matters. A hub
-that has no layout for a template yet draws its down-level generic tile, and
-the payload always carries those generic fields too, so an older glasses hub
-still shows something.
+add the time since they received it, so neither device's clock matters: a
+playing position, the current timed line and an item's "1 min" move on their
+own between publishes, so publish per track, seek or new item, never per
+second. A hub that has no layout for a template draws its down-level generic
+tile, and the payload always carries those generic fields too, so an older
+glasses hub still shows something.
+
+What each size shows is the hub's choice and may change; as a guide: a `Music`
+tile shows its cover from `2x1` up with the times and the track at the foot; a
+`Lines` tile keeps the current line in the middle with up to three lines on
+either side at `3x3`; a `ListContent` tile fills items while each fits whole
+(its title, and a first paragraph line), counts the rest plus your `overflow`
+as "+N more", and drops paragraphs, then details, then section headers when
+space runs out — an item title never drops. A trailing media marker such as
+`[photo]` at the end of a `paragraph` gets its own line where there is room.
+
+A music tile shows its cover when you publish it with the image bytes:
+
+```kotlin
+session.publish(
+    TileSnapshot(
+        pluginId = "media",
+        contentKey = "now-playing",
+        content = TileContent.Music(title = "Low Tide Static", playing = true, artworkKey = "album-123"),
+    ),
+    coverJpegOrPng, // <= 64 KiB, <= 256 px a side, as Media Deck's surface artwork
+)
+```
+
+The bytes cross the bus only when `artworkKey` differs from the last key that
+session sent: publish every update with the bytes and the session sends them
+once. Use a key that changes with the image (an album id, a hash). The hubs
+keep the cover with the tile (the glasses persist it) and the phone resends it
+after a reconnect. A snapshot without a cover, or whose cover is not there
+yet, takes the text-only music layout. Bytes over the limits, or a snapshot
+that is not `Music` with a non-empty `artworkKey`, return `INVALID_PAYLOAD`.
 
 `TileSnapshot` is bounded the same way `SurfaceModels` is (see
 [`WidgetTileContract`](../shared/src/main/java/com/anezium/rokidbus/shared/tile/WidgetTileContract.kt)):

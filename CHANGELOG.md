@@ -23,6 +23,9 @@ or `3x3` in `TILE_SIZES` needs hubs with this change.
   declares, else its icon and name.
 - **A plugin's declared tile sizes now count on the phone.** Discovery never
   read `TILE_SIZES`, so the layout editor offered every size to every plugin.
+- **Music tiles carry their cover.** The phone keeps a plugin's tile cover and
+  sends it to the glasses once, even when pacing replaces the publish it came
+  with; the layout editor shows it once received.
 - **A busy tile no longer loses its last update.** Tile publishes are paced per
   plugin before they reach the glasses; past the budget the newest one waits and
   goes out as soon as it can, instead of being dropped by the glasses.
@@ -42,6 +45,12 @@ or `3x3` in `TILE_SIZES` needs hubs with this change.
   beside the name, rows by height and a progress track.
 - Tiles on the glasses and in the phone's layout editor are now drawn by one
   shared renderer, so the editor shows exactly what the glasses show.
+- **Live tiles for music, lyrics and lists.** Music, Lines and List tiles get
+  their own layout at every size: a cover, the track and its times for music;
+  the current line in the middle with the lines around it for lyrics; messages,
+  headlines and posts with relative ages, "+N more" and a summary in the header
+  for lists. Positions, the current timed line and ages move on their own
+  between publishes.
 - A tile turns stale after the time its plugin set (`staleAfterMs`) instead of a
   fixed ten minutes, and the cached tile of a plugin that leaves the launcher is
   deleted.
@@ -50,8 +59,10 @@ or `3x3` in `TILE_SIZES` needs hubs with this change.
 
 - **Tile templates.** A tile can carry `TileContent.Music`, `Lines` or
   `ListContent` besides the generic fields, plus a `staleAfterMs`; the payload
-  cap rises to 12 KiB. Until each template gets its own layout, the hub draws
-  its generic form, which older glasses hubs also show.
+  cap rises to 12 KiB. Older glasses hubs show the template's generic form.
+- **Tile covers.** `WidgetTileSession.publish(snapshot, artworkBytes)` sends a
+  music tile's cover (JPEG or PNG, ≤ 64 KiB, ≤ 256 px), once per
+  `artworkKey`.
 - **`TILE_PREVIEW`**: a raw JSON resource with one sample tile, shown in the
   layout editor's size preview until the plugin publishes.
 - **Tile lease callbacks.** `onNexusTileActive(active)` tells a plugin when its

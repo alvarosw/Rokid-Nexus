@@ -999,6 +999,35 @@ matters. The receiving hub never throws on a payload: in `music`, `lines` and
 and an unusable `leading` is dropped; a generic `title` over its bound rejects
 the payload, as in v1.
 
+#### Tile artwork
+
+A `music` publish may carry its cover as the envelope's binary body (the SPP
+data plane, as image surfaces), described by an `artwork` object next to
+`template`, the same object as a media surface's artwork:
+
+```json
+"artwork": { "encoding": "binary", "mimeType": "image/jpeg", "pixelWidth": 256,
+             "pixelHeight": 256, "sha256": "<64 lowercase hex>" }
+```
+
+The limits are `MediaArtworkContract`'s: JPEG or PNG, ≤ 64 KiB, each edge
+1..256 px, `sha256` and the encoded dimensions matching the body. The cover
+belongs to the payload's `content.artworkKey`, which must be non-empty.
+
+- The SDK sends the bytes once per `artworkKey` per session.
+- The phone hub validates them (contract and decoded bounds) and rejects the
+  publish with `INVALID_IMAGE` if they do not match; otherwise it keeps the
+  cover per plugin (in memory, ≤ 16 plugins), strips `artwork` and the body
+  from the publish before pacing, and attaches them to whichever publish of
+  that plugin crosses the link while the glasses do not hold that key. It sends
+  each cover again after a link-up. Without a data plane the publish goes
+  without the cover.
+- The glasses validate the cover again and keep it per plugin next to the
+  tile cache, persisted, ≤ 32 covers, pruned with the tile; a cover is kept even
+  when the rate limiter drops its publish. The music tile draws the cover whose
+  key matches its snapshot's `artworkKey`, decoded as media surface artwork is,
+  and takes its text-only layout without one.
+
 ## Notice protocol v1
 
 A notice is a transient band across the top of the wearer's view: one
