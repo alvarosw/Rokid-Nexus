@@ -24,8 +24,9 @@ internal interface SystemWidgetSource {
 }
 
 /**
- * The glasses' own clock, battery and link, and the phone's charge as the phone last reported it
- * on `/phone/battery` ([PhoneBatteryController]). Nothing is polled: the clock's minute is the
+ * The glasses' own clock, battery and link, the phone's charge as the phone last reported it on
+ * `/phone/battery` ([PhoneBatteryController]), and its weather from `/phone/weather`
+ * ([PhoneWeatherController]). Nothing is polled: the clock's minute and the weather's age are the
  * renderer's to schedule, everything else is a broadcast or a hub callback.
  */
 internal class DeviceWidgetSource(context: Context) : SystemWidgetSource {
@@ -44,6 +45,10 @@ internal class DeviceWidgetSource(context: Context) : SystemWidgetSource {
             phone = PhoneBatteryController.reading()?.let { SystemWidgetContent.Battery(it.level, it.charging) },
             phoneLinked = GlassesHub.isPhoneLinked(),
         )
+        SystemWidgets.WEATHER.id -> {
+            val cached = PhoneWeatherController.cached(context)
+            SystemWidgetContent.Weather(cached?.reading, cached?.let { PhoneWeatherController.ageMs(context, it) })
+        }
         else -> null
     }
 
@@ -61,6 +66,7 @@ internal class DeviceWidgetSource(context: Context) : SystemWidgetSource {
                 stops += PhoneBatteryController.observe(onChange)
                 stops += GlassesHub.observePhoneLink { main.post(onChange) }
             }
+            SystemWidgets.WEATHER.id -> stops += PhoneWeatherController.observe(onChange)
         }
         if (filter.countActions() > 0) {
             val receiver = object : BroadcastReceiver() {

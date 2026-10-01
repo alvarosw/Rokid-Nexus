@@ -12,6 +12,8 @@ import com.anezium.rokidbus.glasses.HomeScreenshotHostActivity
 import com.anezium.rokidbus.shared.tile.TileLayoutEntry
 import com.anezium.rokidbus.shared.tile.TileSize
 import com.anezium.rokidbus.shared.tile.TileTone
+import com.anezium.rokidbus.hudtiles.SystemWidgetContent
+import com.anezium.rokidbus.client.ui.NexusPluginIcons
 import com.github.takahirom.roborazzi.captureRoboImage
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -388,4 +390,76 @@ class HomeScreenshotTest {
             assertSingleHue(File(path))
         }
     }
+
+    private fun captureWeather(name: String, placements: List<Triple<TileSize, Pair<Int, Int>, Boolean>>) {
+        launchHost().use { scenario ->
+            scenario.onActivity { activity ->
+                val frame = FrameLayout(activity)
+                val fresh = FakeWidgetSource()
+                val stale = FakeWidgetSource(weather = SystemWidgetContent.Weather(WEATHER_SAMPLE, ageMs = 3 * 3_600_000L))
+                val weather = com.anezium.rokidbus.shared.tile.SystemWidgets.WEATHER
+                placements.forEach { (size, cell, isStale) ->
+                    frame.addView(
+                        com.anezium.rokidbus.glasses.SystemWidgetView(
+                            activity, weather, size, NexusPluginIcons.resolve(activity, weather.iconKey, null),
+                            if (isStale) stale else fresh,
+                        ),
+                        FrameLayout.LayoutParams(
+                            com.anezium.rokidbus.hudtiles.TileRenderer.widthOf(size),
+                            com.anezium.rokidbus.hudtiles.TileRenderer.heightOf(size),
+                        ).apply {
+                            leftMargin = 16 + cell.first * GridHome.PITCH
+                            topMargin = 12 + cell.second * GridHome.PITCH
+                        },
+                    )
+                }
+                activity.setContentView(frame, FrameLayout.LayoutParams(480, 640))
+            }
+            val path = "build/outputs/roborazzi/$name.png"
+            onView(isRoot()).captureRoboImage(path)
+            assertSingleHue(File(path))
+        }
+    }
+
+    /** 1x1, 2x1, 3x1 and 3x2 fresh; a stale 1x1 and 2x1 (three hours old) dim and show their age. */
+    @Test
+    fun weather_one_row_sizes_and_panel() = captureWeather(
+        "widgets-02-weather-sizes",
+        listOf(
+            Triple(TileSize.SMALL, 0 to 0, false),
+            Triple(TileSize.WIDE, 1 to 0, false),
+            Triple(TileSize.SMALL, 3 to 0, true),
+            Triple(TileSize.BANNER, 0 to 1, false),
+            Triple(TileSize.PANEL, 0 to 2, false),
+            Triple(TileSize.WIDE, 0 to 4, true),
+        ),
+    )
+
+    /** 2x2 fresh beside a stale 1x2, and a 3x1 that is stale. */
+    @Test
+    fun weather_two_row_sizes() = captureWeather(
+        "widgets-03-weather-large",
+        listOf(
+            Triple(TileSize.LARGE, 0 to 0, false),
+            Triple(TileSize.TALL, 2 to 0, true),
+            Triple(TileSize.SMALL, 3 to 0, false),
+            Triple(TileSize.BANNER, 0 to 2, true),
+        ),
+    )
+
+    @Test
+    fun grid_widgets_only_scrolled_by_the_ring() =
+        capture(
+            "grid-24-widgets-only-scrolled",
+            stored = listOf(
+                widget("sys:clock", TileSize.LARGE, 0, 0),
+                widget("sys:status", TileSize.SMALL, 2, 0),
+                widget("sys:weather", TileSize.PANEL, 0, 5),
+            ),
+        ) {
+            it.show(HomeMode.GRID, emptyList(), null)
+            it.layoutOnCanvas()
+            it.scrollRows(1)
+            it.scrollRows(1)
+        }
 }

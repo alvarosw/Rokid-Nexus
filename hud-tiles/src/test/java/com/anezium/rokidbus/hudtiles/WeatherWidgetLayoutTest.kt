@@ -156,6 +156,11 @@ class WeatherWidgetLayoutTest {
         val dimmed = RokidHudTokens.scaleAlpha(RokidHudTokens.TEXT_PRIMARY, GenericTileLayout.STALE_ALPHA)
         assertEquals(dimmed, stale.texts(TilePart.VALUE).single().color)
         assertEquals(dimmed, stale.texts(TilePart.TITLE).single().color)
+        listOf(TileSize.BANNER, TileSize.PANEL).forEach { size ->
+            val body = layout(size, weather(ageMs = null)).body.filterIsInstance<TileOp.Text>()
+            assertTrue(body.isNotEmpty())
+            body.forEach { assertTrue("${it.text} dimmed at $size", (it.color ushr 24) <= (dimmed ushr 24)) }
+        }
 
         assertEquals(listOf("3H"), texts(layout(TileSize.SMALL, weather(ageMs = 3 * 3_600_000L)), TilePart.SUMMARY))
         assertEquals(listOf("2D AGO"), texts(layout(TileSize.WIDE, weather(ageMs = 50 * 3_600_000L)), TilePart.SUMMARY))

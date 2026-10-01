@@ -459,6 +459,7 @@ object GlassesHub {
             return
         }
         if (PhoneBatteryController.handleEnvelope(envelope)) return
+        if (PhoneWeatherController.handleEnvelope(appContext, envelope)) return
         appContext?.let { context ->
             if (TtsController.handleEnvelope(context, envelope)) return
             if (PinController.handlePinEnvelope(envelope)) return
