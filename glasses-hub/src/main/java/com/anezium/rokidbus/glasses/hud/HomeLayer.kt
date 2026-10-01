@@ -119,6 +119,11 @@ internal class HomeLayer(
         apply(model.copy(selectedId = selectedId, status = status), animate = selectedId != model.selectedId)
     }
 
+    /** A ring step with nothing to select; the grid scrolls, the list ignores it. */
+    fun scrollRows(rows: Int) {
+        screen?.scrollRows(rows)
+    }
+
     fun showOpening(pluginId: String) {
         handler.removeCallbacks(expireFailure)
         apply(model.copy(status = HomeStatus.Opening(pluginId)))

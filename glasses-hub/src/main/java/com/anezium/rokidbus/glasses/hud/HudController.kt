@@ -390,6 +390,7 @@ internal object HudController {
                     host.home.show(effect.mode, entriesFor(effect.entries), effect.selectedId)
                 }
                 is HudEffect.SetHomeSelection -> host?.home?.select(effect.selectedId)
+                is HudEffect.ScrollHome -> host?.home?.scrollRows(effect.rows)
                 is HudEffect.RefreshHomeEntries -> host?.home?.update(entriesFor(effect.entries), effect.selectedId)
                 is HudEffect.ShowOpening -> host?.home?.showOpening(effect.pluginId)
                 is HudEffect.ShowApp -> showApp(host, effect.surfaceId)

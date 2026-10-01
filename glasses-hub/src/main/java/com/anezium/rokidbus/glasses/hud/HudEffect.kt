@@ -36,6 +36,12 @@ sealed interface HudEffect {
 
     data class ShowHome(val mode: HomeMode, val selectedId: String?, val entries: List<String>) : HudEffect
     data class SetHomeSelection(val selectedId: String?) : HudEffect
+
+    /**
+     * A ring step on a home with no entries: the grid scrolls [rows] rows (bounded by its content)
+     * so system widgets below the screen can still be read. Nothing is ever focused.
+     */
+    data class ScrollHome(val rows: Int) : HudEffect
     data class RefreshHomeEntries(val entries: List<String>, val selectedId: String?) : HudEffect
     data class ShowOpening(val pluginId: String) : HudEffect
     data class ShowApp(val surfaceId: String) : HudEffect

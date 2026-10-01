@@ -156,8 +156,11 @@ internal abstract class HomeScreenView(
     }
 
     /** Moves the strip to [offsetPx]: animated for a selection move, at once otherwise. */
-    protected fun scrollTo(offsetPx: Int) {
-        if (animateMoves) {
+    /** Scrolls the body by [rows] when it has no entries to select; only the grid has rows to scroll. */
+    open fun scrollRows(rows: Int) = Unit
+
+    protected fun scrollTo(offsetPx: Int, animate: Boolean = animateMoves) {
+        if (animate) {
             scroll.animateTo(offsetPx.toFloat(), RokidHudTokens.DURATION_DEFAULT_MS)
         } else {
             scroll.snapTo(offsetPx.toFloat())

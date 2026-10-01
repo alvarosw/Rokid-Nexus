@@ -156,7 +156,9 @@ class HudStateMachineTest {
         val e = Harness(entries = emptyList())
         e.open()
         assertNull(e.home().selectedId)
-        assertTrue(e.next().isEmpty())
+        // Nothing is selected; the step only scrolls (a grid of system widgets, B4).
+        assertEquals(listOf(ScrollHome(1)), e.next())
+        assertNull(e.home().selectedId)
         assertTrue(e.select().isEmpty())
         assertTrue(e.screen is Home)
     }
@@ -949,5 +951,23 @@ class HudStateMachineTest {
         val fx = h.send(HudEvent.LauncherEntriesChanged(ids, mapOf("sys:clock" to "widget|0,2,1x1")))
         assertEquals(listOf(RefreshHomeEntries(ids, "b")), fx)
         assertEquals("b", h.home().selectedId)
+    }
+
+    @Test
+    fun ring_steps_on_a_home_without_entries_scroll_and_never_select() {
+        val h = Harness(entries = emptyList())
+        h.send(HudEvent.LauncherEntriesChanged(emptyList(), mapOf("sys:clock" to "widget|0,0,2x2", "sys:weather" to "widget|0,6,2x1")))
+        h.open()
+        assertEquals(listOf(ScrollHome(1)), h.next())
+        assertEquals(listOf(ScrollHome(1)), h.next())
+        assertEquals(listOf(ScrollHome(-1)), h.prev())
+        assertNull(h.home().selectedId)
+        assertNull(h.state.lastSelectedId)
+        assertTrue("Select opens nothing", h.select().isEmpty())
+        assertTrue(h.screen is Home)
+
+        // Once there is an entry the ring selects again and never scrolls on its own.
+        h.send(HudEvent.LauncherEntriesChanged(listOf("a"), emptyMap()))
+        assertTrue(h.next().none { it is ScrollHome })
     }
 }

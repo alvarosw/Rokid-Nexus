@@ -222,6 +222,19 @@ internal class GridHome(
         setPosition(offsetRow, visibleRows, totalRows)
     }
 
+    /**
+     * A grid of widgets only has no selection to follow, so each ring step moves it one row toward
+     * the content's end or start, stopping there: every widget can be read and none is focused.
+     */
+    override fun scrollRows(rows: Int) {
+        if (tiles.isNotEmpty()) return
+        val next = (offsetRow + rows).coerceIn(0, (totalRows - visibleRows).coerceAtLeast(0))
+        if (next == offsetRow) return
+        offsetRow = next
+        scrollTo(offsetRow * PITCH, animate = true)
+        setPosition(offsetRow, visibleRows, totalRows)
+    }
+
     override fun itemBounds(id: String): Rect? {
         val view = tiles[id]?.view ?: return null
         return boundsOf(view)

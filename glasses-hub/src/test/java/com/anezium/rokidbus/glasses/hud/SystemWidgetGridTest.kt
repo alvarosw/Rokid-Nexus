@@ -50,6 +50,8 @@ class SystemWidgetGridTest {
 
     private fun status(size: TileSize, col: Int, row: Int) = TileLayoutEntry("sys:status", size, col, row)
 
+    private fun weather(size: TileSize, col: Int, row: Int) = TileLayoutEntry("sys:weather", size, col, row)
+
     private fun showGrid(count: Int, selected: String?) {
         layer.show(HomeMode.GRID, entries(count), selected)
         layer.layoutOnCanvas()
@@ -152,6 +154,46 @@ class SystemWidgetGridTest {
         showGrid(0, null)
         assertEquals("WAITING FOR PHONE", grid.counterTextForTest())
         assertEquals(HomeScreenView.EMPTY_TEXT, grid.emptyTextForTest())
+    }
+
+    @Test
+    fun ring_steps_scroll_a_grid_of_widgets_only_one_row_at_a_time_within_its_content() {
+        // Seven rows of widgets on a five-row screen: two rows below the fold.
+        stored = listOf(
+            clock(TileSize.LARGE, 0, 0),
+            weather(TileSize.WIDE, 0, 4),
+            status(TileSize.BANNER, 0, 6),
+        )
+        showGrid(0, null)
+        assertEquals(0, grid.offsetRowForTest)
+
+        layer.scrollRows(1)
+        assertEquals(1, grid.offsetRowForTest)
+        layer.scrollRows(1)
+        assertEquals(2, grid.offsetRowForTest)
+        val top = widgetTop("sys:status")
+        assertTrue("status at $top", top >= bodyTop && top + 106 <= bodyBottom)
+        layer.scrollRows(1)
+        assertEquals("bounded at the content's end", 2, grid.offsetRowForTest)
+
+        layer.scrollRows(-1)
+        layer.scrollRows(-1)
+        layer.scrollRows(-1)
+        assertEquals("bounded at the start", 0, grid.offsetRowForTest)
+        assertNull(layer.currentModel.selectedId)
+
+        // A model refresh keeps the scrolled offset: there is no selection to pull it back.
+        layer.scrollRows(1)
+        layer.update(entries(0), null)
+        assertEquals(1, grid.offsetRowForTest)
+    }
+
+    @Test
+    fun ring_steps_never_scroll_a_grid_that_has_entries() {
+        stored = (0 until 4).map { plugin(it, TileSize.SMALL, 0, it) } + status(TileSize.BANNER, 0, 6)
+        showGrid(4, "plugin0")
+        layer.scrollRows(1)
+        assertEquals(0, grid.offsetRowForTest)
     }
 
     @Test
