@@ -36,6 +36,18 @@ or `3x3` in `TILE_SIZES` needs hubs with this change.
   every 15 minutes. Lease changes and refreshes show in the bus journal.
 - The editor forgets the last tile of a plugin that is uninstalled, loses
   `widget_tile`, or leaves the launcher.
+- **The Store reads this fork's registry first.** Plugins published by the
+  fork (`dist/nexus-plugins.v1.json`) replace the upstream RokidBrew entry for
+  the same plugin; every other plugin still comes from upstream. Each registry
+  is cached on its own, so an unreachable fork registry is served from its last
+  copy and an unreachable upstream no longer hides the fork's plugins. Both
+  URLs are build config.
+- **Updates come only from the installed signer.** The Store and the home
+  `UPDATE` badge offer a new version only when the registry build is signed
+  with the same key as the installed copy. A plugin installed from another
+  publisher shows *Switch* instead: after an explicit confirmation the Store
+  opens the Android uninstaller, installs the registry build, and asks you to
+  approve the plugin's access again.
 
 ### Glasses hub
 
