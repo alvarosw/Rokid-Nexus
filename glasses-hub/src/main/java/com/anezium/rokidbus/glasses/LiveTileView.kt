@@ -2,13 +2,10 @@ package com.anezium.rokidbus.glasses
 
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.RectF
 import android.graphics.drawable.Drawable
+import android.os.SystemClock
 import android.view.Gravity
-import android.view.View
 import android.widget.FrameLayout
-import android.widget.LinearLayout
 import android.widget.TextView
 import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.glasses.hud.FocusTransition
@@ -17,10 +14,11 @@ import com.anezium.rokidbus.glasses.hud.HomeItemView
 import com.anezium.rokidbus.glasses.hud.HudIconView
 import com.anezium.rokidbus.glasses.hud.HudLoaderView
 import com.anezium.rokidbus.glasses.hud.HudMotionDriver
-import com.anezium.rokidbus.glasses.hud.HudType
-import com.anezium.rokidbus.glasses.hud.TileHeaderView
-import com.anezium.rokidbus.shared.tile.TileContentRules
-import com.anezium.rokidbus.shared.tile.TileContentRules.TitleStyle
+import com.anezium.rokidbus.hudtiles.TileLayout
+import com.anezium.rokidbus.hudtiles.TileOp
+import com.anezium.rokidbus.hudtiles.TilePart
+import com.anezium.rokidbus.hudtiles.TileRenderInput
+import com.anezium.rokidbus.hudtiles.TileRenderer
 import com.anezium.rokidbus.shared.tile.TileSnapshot
 import com.anezium.rokidbus.shared.tile.TileTone
 import com.anezium.rokidbus.shared.tile.TileSize
@@ -30,11 +28,10 @@ import com.anezium.rokidbus.shared.tile.TileSize
  * 03-delivery-3-tile-data-pipeline.md`. Only ever shown once a snapshot exists (cached or fresh);
  * [FallbackTileView] stays the permanent no-data/no-adoption path.
  *
- * Every live tile carries its plugin's identity in the top-left corner, exactly like a fallback
- * tile: the 16 px icon beside the `label`-styled uppercase name. The live value is the content
- * below it, left-aligned and top-down as the reference tile draws it, and a 3 px progress track
- * sits at the foot while the snapshot carries a progress. What is shown at which size is decided by
- * [TileContentRules], which the phone's layout preview follows too.
+ * The tile's interior (the plugin's icon and uppercase name top-left, the content below it, the
+ * progress track at the foot) is drawn by [TileRenderer], the same renderer the phone's layout
+ * editor uses. This view keeps the chrome around it: the border and focus fill, the loaders and
+ * the alert mark.
  *
  * `tone` renders via the `Status` component: never a distinct color, and never a second 2 px frame,
  * because the 2 px `focus` frame is the one full-intensity frame the screen may have. `WARN` is the
@@ -48,11 +45,15 @@ import com.anezium.rokidbus.shared.tile.TileSize
  * Focus (the home layer's one selection) is `surface-selected` plus a 2 px `focus` border, dashed
  * where the tile shows a warning, so a live tile is as visibly selected as a fallback one (F-10).
  * A stale snapshot dims its content only, never the border.
+ *
+ * A template whose drawing moves on its own (a playing position, an age) is redrawn once at
+ * [TileRenderer.nextChangeAtElapsed], and only while the tile is attached and visible.
  */
 internal class LiveTileView(
     context: Context,
     private val size: TileSize,
     motion: HudMotionDriver? = null,
+    private val clock: () -> Long = SystemClock::elapsedRealtime,
 ) : FrameLayout(context), HomeItemView {
     /** The blink-then-settle emphasis of a newly critical tile; null = static icon only. */
     var criticalEmphasis: ((LiveTileView) -> Unit)? = { view -> view.criticalBlink = CriticalBlink.animate(view.alertMark) }
@@ -64,6 +65,17 @@ internal class LiveTileView(
     private var bound = false
     private var focusAmount = 0f
 
+    private var name = ""
+    private var icon: Drawable? = null
+    private var snapshot: TileSnapshot? = null
+    private var stale = false
+    private var receivedAtElapsed = 0L
+    private var alertShown = false
+    private var onScreen = false
+    private var input: TileRenderInput? = null
+    private var tileLayout: TileLayout = TileRenderer.layout(TileRenderInput(name = ""), size)
+    private val redraw = Runnable { relayout() }
+
     /** Whether this is the one tile allowed the full `critical` treatment on the screen. */
     var criticalPrimary = true
         private set
@@ -71,67 +83,17 @@ internal class LiveTileView(
     override val homeFocused: Boolean get() = focused
     override val homeOpening: Boolean get() = opening
 
-    private val header = TileHeaderView(context, nameLines = TileContentRules.NAME_LINES)
-    private val titleView = HudType.body(TextView(context), RokidHudTokens.TEXT_PRIMARY)
-    private val dataValueView = TextView(context).apply {
-        setTextColor(RokidHudTokens.TEXT_PRIMARY)
-        typeface = RokidHudTokens.dataTypeface()
-        RokidHudTokens.applyTextSize(this, RokidHudTokens.DATA_TEXT_SIZE)
-        maxLines = 1
-    }
-    private val unitView = HudType.mono(TextView(context), RokidHudTokens.TEXT_SECONDARY)
-    private val subtitleView = HudType.body(TextView(context), RokidHudTokens.TEXT_SECONDARY).apply {
-        RokidHudTokens.applyTextSize(this, RokidHudTokens.LABEL_TEXT_SIZE)
-    }
-    private val badgeView = TextView(context).apply {
-        setTextColor(RokidHudTokens.TEXT_PRIMARY)
-        typeface = RokidHudTokens.dataTypeface()
-        RokidHudTokens.applyTextSize(this, RokidHudTokens.LABEL_TEXT_SIZE)
-        maxLines = 1
-    }
-    private val rowsContainer = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-    private val progressTrack = ProgressTrackView(context).apply { visibility = GONE }
     private val loader = LoaderView(context)
     private val openingLoader = HudLoaderView(context).apply { visibility = GONE }
     internal val alertMark = HudIconView(context, HudIconView.Kind.ALERT).apply { visibility = GONE }
 
-    private val content = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL
-        gravity = Gravity.TOP or Gravity.START
-    }
-
     private val focusTransition = FocusTransition(motion) { amount ->
         focusAmount = amount
-        header.setFocusAmount(amount)
         if (bound) applyChrome()
+        relayout()
     }
 
     init {
-        val wrap = LinearLayout.LayoutParams.WRAP_CONTENT
-        val match = LinearLayout.LayoutParams.MATCH_PARENT
-        content.addView(titleView, LinearLayout.LayoutParams(match, wrap).apply { topMargin = RokidHudTokens.SPACE_1 })
-        content.addView(
-            LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.START
-                addView(dataValueView)
-                addView(unitView, LinearLayout.LayoutParams(wrap, wrap).apply { marginStart = RokidHudTokens.SPACE_1 })
-            },
-            LinearLayout.LayoutParams(match, wrap).apply { topMargin = RokidHudTokens.SPACE_1 },
-        )
-        content.addView(subtitleView, LinearLayout.LayoutParams(match, wrap).apply { topMargin = 2 })
-        content.addView(badgeView, LinearLayout.LayoutParams(match, wrap).apply { topMargin = RokidHudTokens.SPACE_1 })
-        content.addView(rowsContainer, LinearLayout.LayoutParams(match, wrap).apply { topMargin = 6 })
-        val column = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        column.addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        column.addView(content, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-        column.addView(
-            progressTrack,
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ProgressTrackView.HEIGHT).apply {
-                topMargin = RokidHudTokens.SPACE_1
-            },
-        )
-        addView(column, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(loader, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         addView(
             openingLoader,
@@ -143,7 +105,6 @@ internal class LiveTileView(
         )
         val pad = RokidHudTokens.SPACE_2
         setPadding(pad, pad, pad, pad)
-        header.setFocusAmount(0f)
         showLoading(null)
     }
 
@@ -151,68 +112,39 @@ internal class LiveTileView(
     fun bindEntry(
         entry: GlassesHub.LauncherEntry,
         iconLoader: (Context, GlassesHub.LauncherEntry) -> Drawable = GlassesHub::launcherDrawable,
-    ) = header.bind(entry, iconLoader)
+    ) {
+        icon = iconLoader(context, entry)
+        name = entry.displayName
+        relayout()
+    }
 
     /** No snapshot yet at all — the mandated in-flight state, never a blank view. */
     fun showLoading(progress: Float?) {
         bound = false
-        content.visibility = INVISIBLE
-        progressTrack.visibility = GONE
         loader.visibility = VISIBLE
         loader.setProgress(progress)
         alertMark.visibility = GONE
+        alertShown = false
         background = null
+        relayout()
     }
 
-    fun bind(snapshot: TileSnapshot, stale: Boolean) {
+    fun bind(snapshot: TileSnapshot, stale: Boolean, receivedAtElapsed: Long = clock()) {
         bound = true
         loader.visibility = INVISIBLE
-        content.visibility = VISIBLE
-
-        val shown = TileContentRules.contentFor(size, snapshot)
-        val dataRow = dataValueView.parent as View
-        titleView.visibility = if (shown.titleStyle == TitleStyle.TEXT) VISIBLE else GONE
-        titleView.maxLines = shown.titleMaxLines
-        titleView.text = if (shown.titleStyle == TitleStyle.TEXT) snapshot.title else ""
-        dataRow.visibility = if (shown.titleStyle == TitleStyle.DATA_VALUE) VISIBLE else GONE
-        dataValueView.text = if (shown.titleStyle == TitleStyle.DATA_VALUE) snapshot.title else ""
-        unitView.visibility = if (shown.showUnit) VISIBLE else GONE
-        unitView.text = if (shown.showUnit) snapshot.unit else ""
-
-        subtitleView.visibility = if (shown.subtitleVisible) VISIBLE else GONE
-        subtitleView.maxLines = shown.subtitleMaxLines
-        subtitleView.text = if (shown.subtitleVisible) snapshot.subtitle else ""
-        badgeView.visibility = if (shown.badgeVisible) VISIBLE else GONE
-        badgeView.text = if (shown.badgeVisible) snapshot.badge else ""
-
-        rowsContainer.removeAllViews()
-        rowsContainer.visibility = if (shown.rowCount > 0) VISIBLE else GONE
-        snapshot.rows.take(shown.rowCount).forEachIndexed { index, row ->
-            rowsContainer.addView(
-                HudType.body(TextView(context), RokidHudTokens.TEXT_PRIMARY).apply {
-                    RokidHudTokens.applyTextSize(this, RokidHudTokens.LABEL_TEXT_SIZE)
-                    text = row
-                },
-                LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-                    .apply { if (index > 0) topMargin = 3 },
-            )
-        }
-
-        progressTrack.visibility = if (shown.progressVisible) VISIBLE else GONE
-        progressTrack.setProgress(shown.progress ?: 0f)
-        progressTrack.alpha = if (stale) STALE_ALPHA else 1f
-
+        this.snapshot = snapshot
+        this.stale = stale
+        this.receivedAtElapsed = receivedAtElapsed
         tone = snapshot.tone
-        content.alpha = if (stale) STALE_ALPHA else 1f
         if (tone != TileTone.CRITICAL) {
             criticalBlink?.cancel()
             criticalBlink = null
             blinkedThisEpisode = false
         }
         applyChrome()
+        relayout()
         emphasizeIfCritical()
     }
-
     /**
      * Whether this tile is the screen's one `critical`. Losing it turns the tile into a plain
      * `WARN`, and a blink in flight is dropped.
@@ -225,7 +157,10 @@ internal class LiveTileView(
             criticalBlink = null
             blinkedThisEpisode = false
         }
-        if (bound) applyChrome()
+        if (bound) {
+            applyChrome()
+            relayout()
+        }
         emphasizeIfCritical()
     }
 
@@ -253,7 +188,7 @@ internal class LiveTileView(
 
     override fun drawContent(canvas: Canvas) {
         // Alpha, not visibility: a visibility change would stop and restart the loader's animator.
-        val hidden = listOf<View>(loader, openingLoader)
+        val hidden = listOf(loader, openingLoader)
         hidden.forEach { it.alpha = 0f }
         dispatchDraw(canvas)
         hidden.forEach { it.alpha = 1f }
@@ -266,9 +201,6 @@ internal class LiveTileView(
     private fun applyChrome() {
         val shown = effectiveTone
         val dashed = shown == TileTone.WARN
-        val text = HomeChrome.intensity(focusAmount, RokidHudTokens.TEXT_PRIMARY)
-        titleView.setTextColor(text)
-        dataValueView.setTextColor(text)
         background = HomeChrome.blended(
             focusAmount,
             restStroke = restStroke(shown),
@@ -276,16 +208,8 @@ internal class LiveTileView(
             restDashed = dashed,
             focusDashed = dashed,
         )
-        val alert = shown == TileTone.WARN || shown == TileTone.CRITICAL
-        alertMark.visibility = if (alert) VISIBLE else GONE
-        // The alert icon sits at the top-right of the eyebrow row: the name gives way to it.
-        (header.layoutParams as? LinearLayout.LayoutParams)?.let { params ->
-            val reserved = if (alert) RokidHudTokens.ICON_SM + RokidHudTokens.SPACE_1 else 0
-            if (params.marginEnd != reserved) {
-                params.marginEnd = reserved
-                header.layoutParams = params
-            }
-        }
+        alertShown = shown == TileTone.WARN || shown == TileTone.CRITICAL
+        alertMark.visibility = if (alertShown) VISIBLE else GONE
         alertMark.setIntensity(if (shown == TileTone.CRITICAL) RokidHudTokens.CRITICAL else RokidHudTokens.TEXT_PRIMARY)
     }
 
@@ -295,22 +219,69 @@ internal class LiveTileView(
         TileTone.INFO, TileTone.OFF -> RokidHudTokens.TEXT_SECONDARY
     }
 
-    internal val nameForTest: String get() = header.nameText
+    private fun relayout() {
+        val next = TileRenderInput(
+            name = name,
+            icon = icon,
+            content = if (bound) snapshot?.content else null,
+            tone = tone,
+            stale = stale,
+            receivedAtElapsed = receivedAtElapsed,
+            nowElapsed = clock(),
+            focusAmount = focusAmount,
+            // The alert icon sits at the top-right of the eyebrow row: the name gives way to it.
+            headerEndInset = if (alertShown) RokidHudTokens.ICON_SM + RokidHudTokens.SPACE_1 else 0,
+        )
+        input = next
+        tileLayout = TileRenderer.layout(next, size)
+        invalidate()
+        scheduleNextChange()
+    }
+
+    private fun scheduleNextChange() {
+        removeCallbacks(redraw)
+        if (!isAttachedToWindow || !onScreen) return
+        val at = input?.let(TileRenderer::nextChangeAtElapsed) ?: return
+        postDelayed(redraw, (at - clock()).coerceAtLeast(0L))
+    }
+
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        onScreen = isVisible
+        if (isVisible) scheduleNextChange() else removeCallbacks(redraw)
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        scheduleNextChange()
+    }
+
+    override fun onDetachedFromWindow() {
+        removeCallbacks(redraw)
+        super.onDetachedFromWindow()
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        tileLayout.draw(canvas)
+        super.dispatchDraw(canvas)
+    }
+
+    internal val nameForTest: String get() = name.uppercase()
 
     internal val alertMarkVisibleForTest: Boolean get() = alertMark.visibility == VISIBLE
 
-    internal val progressTrackVisibleForTest: Boolean get() = progressTrack.visibility == VISIBLE
+    internal val loaderVisibleForTest: Boolean get() = loader.visibility == VISIBLE
 
-    internal val progressForTest: Float get() = progressTrack.progress
+    internal val layoutForTest: TileLayout get() = tileLayout
+
+    private val track: TileOp.Track? get() = tileLayout.footer.filterIsInstance<TileOp.Track>().firstOrNull()
+
+    internal val progressTrackVisibleForTest: Boolean get() = track != null
+
+    internal val progressForTest: Float get() = track?.progress ?: 0f
 
     /** The row texts currently shown, top to bottom. */
-    internal val rowTextsForTest: List<String>
-        get() = (0 until rowsContainer.childCount).map { (rowsContainer.getChildAt(it) as TextView).text.toString() }
-
-    private companion object {
-        /** 0x60 / 0xFF, as the whole-view alpha of a stale tile used to be. */
-        const val STALE_ALPHA = 0x60 / 255f
-    }
+    internal val rowTextsForTest: List<String> get() = tileLayout.texts(TilePart.ROW).map { it.text }
 }
 
 /** Minimal `Loader` per the design system: `scan`/`point` while pending, `progress` once known. */
@@ -324,32 +295,5 @@ private class LoaderView(context: Context) : TextView(context) {
 
     fun setProgress(progress: Float?) {
         text = if (progress != null) "${(progress * 100).toInt()}%" else "…"
-    }
-}
-
-/** `line` track with a `text-primary` fill: the tile's 3 px progress bar, radius-data corners. */
-private class ProgressTrackView(context: Context) : View(context) {
-    var progress = 0f
-        private set
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val rect = RectF()
-
-    fun setProgress(value: Float) {
-        progress = value.coerceIn(0f, 1f)
-        invalidate()
-    }
-
-    override fun onDraw(canvas: Canvas) {
-        val radius = RokidHudTokens.RADIUS_DATA.toFloat()
-        rect.set(0f, 0f, width.toFloat(), height.toFloat())
-        paint.color = RokidHudTokens.LINE
-        canvas.drawRoundRect(rect, radius, radius, paint)
-        rect.right = width * progress
-        paint.color = RokidHudTokens.TEXT_PRIMARY
-        canvas.drawRoundRect(rect, radius, radius, paint)
-    }
-
-    companion object {
-        const val HEIGHT = 3
     }
 }

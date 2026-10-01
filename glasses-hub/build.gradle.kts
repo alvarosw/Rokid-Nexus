@@ -56,6 +56,7 @@ android {
 dependencies {
     implementation(project(":shared"))
     implementation(project(":bus-client"))
+    implementation(project(":hud-tiles"))
     implementation(project(":ink-engine"))
     implementation("com.google.android.flexbox:flexbox:3.0.0")
     implementation("com.airbnb.android:lottie:6.7.1")

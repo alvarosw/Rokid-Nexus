@@ -3,6 +3,7 @@ package com.anezium.rokidbus.glasses
 import com.anezium.rokidbus.shared.BusEnvelope
 import com.anezium.rokidbus.shared.BusPaths
 import com.anezium.rokidbus.shared.tile.WidgetTileContract
+import com.anezium.rokidbus.shared.tile.TileContent
 import com.anezium.rokidbus.shared.tile.TileSnapshot
 import org.json.JSONObject
 import org.junit.After
@@ -50,7 +51,7 @@ class TileControllerTest {
     fun `once started, a valid publish is cached`() {
         TileController.start(context)
         assertTrue(TileController.handleTileEnvelope(context, envelopeFor("transit")))
-        assertEquals("12", TileCache.get(context, "transit")?.snapshot?.title)
+        assertEquals("12", (TileCache.get(context, "transit")?.snapshot?.content as? TileContent.Generic)?.title)
     }
 
     @Test
@@ -78,6 +79,6 @@ class TileControllerTest {
         TileController.handleTileEnvelope(context, envelopeFor("transit"))
         TileController.stop()
         assertFalse(TileController.isActive)
-        assertEquals("12", TileCache.get(context, "transit")?.snapshot?.title)
+        assertEquals("12", (TileCache.get(context, "transit")?.snapshot?.content as? TileContent.Generic)?.title)
     }
 }

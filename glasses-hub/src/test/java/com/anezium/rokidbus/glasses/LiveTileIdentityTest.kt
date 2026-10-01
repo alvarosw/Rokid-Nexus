@@ -10,6 +10,8 @@ import com.anezium.rokidbus.glasses.hud.HomeLayer
 import com.anezium.rokidbus.glasses.hud.GridHome
 import com.anezium.rokidbus.glasses.hud.HudIconView
 import com.anezium.rokidbus.glasses.hud.layoutOnCanvas
+import com.anezium.rokidbus.hudtiles.TileOp
+import com.anezium.rokidbus.hudtiles.TilePart
 import com.anezium.rokidbus.glasses.hud.placementsOf
 import com.anezium.rokidbus.shared.tile.TileSize
 import com.anezium.rokidbus.shared.tile.TileSnapshot
@@ -21,6 +23,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.Config
 
 /**
@@ -28,6 +31,7 @@ import org.robolectric.annotation.Config
  * full-intensity frame (focus) and one critical (docs/ui-rewrite/00-architecture.md, U5).
  */
 @RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w320dp-h427dp-hdpi")
 class LiveTileIdentityTest {
     private val context = RuntimeEnvironment.getApplication()
@@ -68,14 +72,14 @@ class LiveTileIdentityTest {
             val view = tile(size)
             view.layOut(size)
             assertEquals("$size", "TRANSIT", view.nameForTest)
-            val column = view.getChildAt(0) as android.view.ViewGroup
-            val header = column.getChildAt(0)
-            val content = column.getChildAt(1)
-            assertEquals("$size header at the left of the inner area", 0, header.left)
-            assertEquals(0, header.top)
-            assertTrue("$size header inside the tile", header.bottom <= view.height - 2 * 8)
-            assertTrue("$size value below the header", content.top >= header.bottom)
-            assertTrue("$size header keeps its 16 px icon", (header as android.view.ViewGroup).getChildAt(0).layoutParams.width == 16)
+            val layout = view.layoutForTest
+            val icon = layout.header.filterIsInstance<TileOp.Icon>().single()
+            val name = layout.texts(TilePart.NAME).single()
+            assertEquals("$size header at the left of the inner area", 8f, icon.left)
+            assertEquals(8f, icon.top)
+            assertTrue("$size header inside the tile", name.bottom <= view.height - 8)
+            assertTrue("$size value below the header", layout.body.filterIsInstance<TileOp.Text>().all { it.top >= name.bottom })
+            assertEquals("$size header keeps its 16 px icon", 16f, icon.size)
         }
     }
 

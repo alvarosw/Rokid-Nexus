@@ -48,7 +48,9 @@ internal class HomeLayer(
         if (!TileController.isActive) {
             null
         } else {
-            TileCache.get(context, id)?.let { HomeTile(it.snapshot, TileCache.isStale(it, SystemClock.elapsedRealtime())) }
+            TileCache.get(context, id)?.let {
+                HomeTile(it.snapshot, TileCache.isStale(it, SystemClock.elapsedRealtime()), it.receivedAtElapsedRealtime)
+            }
         }
     },
     internal val motion: HudMotionDriver = HudMotionDriver.forContext(context),
