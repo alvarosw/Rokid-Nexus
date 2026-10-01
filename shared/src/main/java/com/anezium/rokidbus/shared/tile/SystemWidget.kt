@@ -12,6 +12,8 @@ package com.anezium.rokidbus.shared.tile
 data class SystemWidget(
     val id: String,
     val displayName: String,
+    /** One short line for the editor's widget list. */
+    val description: String,
     /** A built-in icon key (`NexusPluginIcons`), drawn in the tile header like a plugin's. */
     val iconKey: String,
     val supportedSizes: List<TileSize>,
@@ -28,6 +30,7 @@ object SystemWidgets {
     val CLOCK = SystemWidget(
         id = "sys:clock",
         displayName = "Clock",
+        description = "Local time and date",
         iconKey = "clock",
         supportedSizes = listOf(TileSize.SMALL, TileSize.WIDE, TileSize.BANNER, TileSize.LARGE),
         defaultSize = TileSize.SMALL,
@@ -36,6 +39,7 @@ object SystemWidgets {
     val STATUS = SystemWidget(
         id = "sys:status",
         displayName = "Status",
+        description = "Glasses and phone battery, phone link",
         iconKey = "battery",
         supportedSizes = listOf(TileSize.SMALL, TileSize.WIDE, TileSize.BANNER),
         defaultSize = TileSize.SMALL,

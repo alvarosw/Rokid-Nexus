@@ -152,6 +152,7 @@ class TileLayoutEditorState(
     /** Resizes the selected tile; on no room, leaves the layout alone and sets [message]. */
     fun resize(size: TileSize): Boolean {
         val id = selectedId ?: return false
+        if (size !in tileById.getValue(id).sizes) return false
         val placed = TileGridLayout.resize(layout, id, size)
         if (placed == null) {
             message = "No room for ${sizeLabel(size)} — shrink another tile first."
@@ -160,6 +161,48 @@ class TileLayoutEditorState(
         layout = placed
         message = ""
         return true
+    }
+
+    /** The system widgets not on the grid, in catalog order: what "+ ADD WIDGET" offers. */
+    fun unplacedWidgets(): List<EditorTile> = tiles.filter { it.widget != null && it.id !in layout }
+
+    /**
+     * Places the widget [id] at its default size in the first free cell, row-major, and selects it.
+     * On no room, leaves the layout alone and sets [message].
+     */
+    fun addWidget(id: String): Boolean {
+        val tile = tileById[id] ?: return false
+        val widget = tile.widget ?: return false
+        if (id in layout) return false
+        val size = widget.defaultSize
+        val spot = firstFree(size)
+        if (spot == null) {
+            message = "No room for ${tile.name} at ${sizeLabel(size)} — shrink or remove a tile first."
+            return false
+        }
+        layout = LinkedHashMap(layout).apply { put(id, spot) }
+        selectedId = id
+        message = ""
+        return true
+    }
+
+    /** Takes the widget [id] off the grid; plugins and the camera cannot be removed. */
+    fun removeWidget(id: String): Boolean {
+        if (tileById[id]?.widget == null || id !in layout) return false
+        layout = layout - id
+        if (selectedId == id) selectedId = firstInReadingOrder(layout)
+        message = ""
+        return true
+    }
+
+    private fun firstFree(size: TileSize): GridRect? {
+        for (row in 0..TileGridLayout.MAX_ROWS - size.rows) {
+            for (col in 0..TileGridLayout.COLUMNS - size.cols) {
+                val rect = GridRect(col, row, size.cols, size.rows)
+                if (TileGridLayout.fits(rect, layout.values)) return rect
+            }
+        }
+        return null
     }
 
     fun reset() {

@@ -27,12 +27,16 @@ import android.widget.TextView
 import com.anezium.rokidbus.client.ui.NexusPluginIcons
 import com.anezium.rokidbus.client.ui.NexusUi
 import com.anezium.rokidbus.client.ui.PluginCustomIcon
+import com.anezium.rokidbus.hudtiles.SystemWidgetContent
 import com.anezium.rokidbus.shared.plugin.PluginCapability
 import com.anezium.rokidbus.shared.tile.GridRect
+import com.anezium.rokidbus.shared.tile.SystemWidget
 import com.anezium.rokidbus.shared.tile.SystemWidgets
 import com.anezium.rokidbus.shared.tile.TileGridLayout
 import com.anezium.rokidbus.shared.tile.TileSize
 import com.anezium.rokidbus.shared.tile.TileSnapshot
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * The free-placement tile-layout editor: a preview of the glasses' home grid the wearer drags
@@ -45,6 +49,8 @@ open class TileLayoutSettingsActivity : Activity() {
     private lateinit var canvasView: TileLayoutCanvasView
     private lateinit var gridLabel: TextView
     private lateinit var cardHost: LinearLayout
+    private lateinit var addHost: LinearLayout
+    private var addOpen = false
     private lateinit var saveButton: Button
     private val entryById = HashMap<String, PluginCatalogEntry?>()
     private val handler = Handler(Looper.getMainLooper())
@@ -120,9 +126,33 @@ open class TileLayoutSettingsActivity : Activity() {
         )
     }
 
+    /**
+     * What a system widget shows in the editor: the current time for the clock, sample readings
+     * for status. Null draws the header alone.
+     */
+    internal open fun widgetSample(widget: SystemWidget): SystemWidgetContent? = when (widget) {
+        SystemWidgets.CLOCK -> SystemWidgetContent.Clock(
+            epochMs = System.currentTimeMillis(),
+            timeZone = TimeZone.getDefault(),
+            locale = Locale.getDefault(),
+            use24Hour = android.text.format.DateFormat.is24HourFormat(this),
+        )
+        SystemWidgets.STATUS -> SystemWidgetContent.Status(
+            glasses = SystemWidgetContent.Battery(level = 82, charging = false),
+            phone = SystemWidgetContent.Battery(level = 64, charging = true),
+            phoneLinked = true,
+        )
+        else -> null
+    }
+
     /** The live tile first, then the plugin's declared sample, else the header alone. */
-    private fun visualFor(tile: EditorTile): TileVisual =
-        TileVisual(glyphFor(tile.id), TileSnapshotCache.get(tile.id) ?: tilePreviewSample(tile.id))
+    private fun visualFor(tile: EditorTile): TileVisual {
+        val widget = tile.widget ?: return TileVisual(
+            glyphFor(tile.id),
+            TileSnapshotCache.get(tile.id) ?: tilePreviewSample(tile.id),
+        )
+        return TileVisual(glyphFor(tile.id), null) { widgetSample(widget) }
+    }
 
     private fun buildUi() {
         window.statusBarColor = NexusUi.BG
@@ -146,6 +176,7 @@ open class TileLayoutSettingsActivity : Activity() {
         }
         gridLabel = mono("", 9.5f, 0.22f, NexusUi.GREEN_DIM)
         cardHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        addHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
         val preview = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -191,6 +222,7 @@ open class TileLayoutSettingsActivity : Activity() {
             setPadding(dp(20), dp(16), dp(20), dp(20))
             addView(intro(), NexusUi.block())
             addView(preview, NexusUi.block().apply { topMargin = dp(14) })
+            addView(addHost, NexusUi.block().apply { topMargin = dp(14) })
             addView(cardHost, NexusUi.block().apply { topMargin = dp(14) })
         }
         val scroll = ScrollView(this).apply {
@@ -242,8 +274,116 @@ open class TileLayoutSettingsActivity : Activity() {
         gridLabel.text = "4 cols · ${state.gridRows()} rows".uppercase()
         handler.removeCallbacks(restoreSaveLabel)
         saveButton.text = SAVE_LABEL
+        renderAddPanel()
         renderCard()
     }
+
+    /** "+ ADD WIDGET" and, while open, the system widgets not on the grid yet. */
+    private fun renderAddPanel() {
+        addHost.removeAllViews()
+        addHost.addView(
+            footerButton(if (addOpen) "− CLOSE WIDGETS" else "+ ADD WIDGET", filled = false).apply {
+                contentDescription = if (addOpen) "Close the widget list" else "Add a system widget"
+                setOnClickListener {
+                    addOpen = !addOpen
+                    onEditorChanged()
+                }
+            },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)),
+        )
+        if (!addOpen) return
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            contentDescription = "System widgets"
+            background = NexusUi.bordered(this@TileLayoutSettingsActivity, NexusUi.PANEL, NexusUi.LINE2, 15)
+            setPadding(dp(15), dp(14), dp(15), dp(14))
+            addView(mono("SYSTEM WIDGETS", 9.5f, 0.22f, NexusUi.INK3), NexusUi.block())
+        }
+        val available = state.unplacedWidgets()
+        if (available.isEmpty()) {
+            panel.addView(
+                mono("Every system widget is on the grid.", 10.5f, 0f, NexusUi.INK3, upper = false),
+                NexusUi.block().apply { topMargin = dp(12) },
+            )
+        }
+        available.forEach { tile -> panel.addView(widgetRow(tile), NexusUi.block().apply { topMargin = dp(12) }) }
+        if (state.message.isNotEmpty()) {
+            panel.addView(messageLine(), NexusUi.block().apply { topMargin = dp(12) })
+        }
+        addHost.addView(panel, NexusUi.block().apply { topMargin = dp(10) })
+    }
+
+    private fun widgetRow(tile: EditorTile): LinearLayout =
+        LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(glyphBox(tile), LinearLayout.LayoutParams(dp(30), dp(30)))
+            addView(
+                LinearLayout(this@TileLayoutSettingsActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(title(tile.name))
+                    addView(
+                        mono(tile.widget?.description.orEmpty(), 10.5f, 0f, NexusUi.INK3, upper = false),
+                        NexusUi.block().apply { topMargin = dp(4) },
+                    )
+                },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginStart = dp(12)
+                    marginEnd = dp(12)
+                },
+            )
+            addView(
+                footerButton("ADD", filled = false).apply {
+                    contentDescription = "Add ${tile.name} widget"
+                    setOnClickListener { addWidget(tile) }
+                },
+                LinearLayout.LayoutParams(dp(64), dp(40)),
+            )
+        }
+
+    private fun addWidget(tile: EditorTile) {
+        if (state.addWidget(tile.id)) {
+            addOpen = false
+            canvasView.setVisual(tile.id, visualFor(tile))
+        }
+        canvasView.stateChanged()
+        onEditorChanged()
+    }
+
+    private fun removeWidget(tile: EditorTile) {
+        state.removeWidget(tile.id)
+        canvasView.stateChanged()
+        onEditorChanged()
+    }
+
+    private fun glyphBox(tile: EditorTile): FrameLayout =
+        FrameLayout(this).apply {
+            background = NexusUi.rounded(this@TileLayoutSettingsActivity, NexusUi.alpha(NexusUi.GREEN, 0x12), 8)
+            addView(
+                ImageView(this@TileLayoutSettingsActivity).apply {
+                    setImageDrawable(
+                        glyphFor(tile.id).mutate().apply { colorFilter = PorterDuffColorFilter(NexusUi.GREEN, PorterDuff.Mode.SRC_IN) },
+                    )
+                },
+                FrameLayout.LayoutParams(dp(15), dp(15), Gravity.CENTER),
+            )
+        }
+
+    private fun title(value: String): TextView =
+        TextView(this).apply {
+            text = value
+            textSize = 15f
+            typeface = Typeface.SANS_SERIF
+            setTextColor(NexusUi.INK)
+            includeFontPadding = false
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+
+    private fun messageLine(): TextView =
+        mono(state.message, 10.5f, 0f, NexusUi.AMBER, upper = false).apply {
+            setLineSpacing(0f, 1.2f)
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
 
     private fun renderCard() {
         val id = state.selectedId
@@ -252,7 +392,7 @@ open class TileLayoutSettingsActivity : Activity() {
             previewTileId = id
             previewSize = rect?.let { TileLayoutEditorState.sizeOf(it) }
         }
-        val signature = "$id|$rect|${state.message}|$previewSize"
+        val signature = "$id|$rect|${state.message}|$previewSize|$addOpen"
         if (signature == cardSignature) return
         cardSignature = signature
         cardHost.removeAllViews()
@@ -283,34 +423,11 @@ open class TileLayoutSettingsActivity : Activity() {
             addView(
                 LinearLayout(this@TileLayoutSettingsActivity).apply {
                     gravity = Gravity.CENTER_VERTICAL
-                    addView(
-                        FrameLayout(this@TileLayoutSettingsActivity).apply {
-                            background = NexusUi.rounded(this@TileLayoutSettingsActivity, NexusUi.alpha(NexusUi.GREEN, 0x12), 8)
-                            addView(
-                                ImageView(this@TileLayoutSettingsActivity).apply {
-                                    setImageDrawable(
-                                        glyphFor(tile.id).mutate().apply { colorFilter = PorterDuffColorFilter(NexusUi.GREEN, PorterDuff.Mode.SRC_IN) },
-                                    )
-                                },
-                                FrameLayout.LayoutParams(dp(15), dp(15), Gravity.CENTER),
-                            )
-                        },
-                        LinearLayout.LayoutParams(dp(30), dp(30)),
-                    )
+                    addView(glyphBox(tile), LinearLayout.LayoutParams(dp(30), dp(30)))
                     addView(
                         LinearLayout(this@TileLayoutSettingsActivity).apply {
                             orientation = LinearLayout.VERTICAL
-                            addView(
-                                TextView(this@TileLayoutSettingsActivity).apply {
-                                    text = tile.name
-                                    textSize = 15f
-                                    typeface = Typeface.SANS_SERIF
-                                    setTextColor(NexusUi.INK)
-                                    includeFontPadding = false
-                                    maxLines = 1
-                                    ellipsize = android.text.TextUtils.TruncateAt.END
-                                },
-                            )
+                            addView(title(tile.name))
                             addView(
                                 mono(
                                     "${TileLayoutEditorState.sizeLabel(rect)} · col ${rect.col + 1} · row ${rect.row + 1}",
@@ -325,7 +442,7 @@ open class TileLayoutSettingsActivity : Activity() {
                         },
                     )
                     addView(
-                        mono(if (tile.live) "LIVE" else "APP", 9.5f, 0.12f, NexusUi.GREEN).apply {
+                        mono(kindLabel(tile), 9.5f, 0.12f, NexusUi.GREEN).apply {
                             background = NexusUi.bordered(
                                 this@TileLayoutSettingsActivity, Color.TRANSPARENT, NexusUi.alpha(NexusUi.GREEN, 0x61), 10,
                             )
@@ -347,14 +464,9 @@ open class TileLayoutSettingsActivity : Activity() {
                 NexusUi.block().apply { topMargin = dp(14) },
             )
             addView(sizeGrid(tile, rect), NexusUi.block().apply { topMargin = dp(10) })
-            if (state.message.isNotEmpty()) {
-                addView(
-                    mono(state.message, 10.5f, 0f, NexusUi.AMBER, upper = false).apply {
-                        setLineSpacing(0f, 1.2f)
-                        accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
-                    },
-                    NexusUi.block().apply { topMargin = dp(10) },
-                )
+            // While the widget list is open, it shows the message (an add with no room) itself.
+            if (state.message.isNotEmpty() && !addOpen) {
+                addView(messageLine(), NexusUi.block().apply { topMargin = dp(10) })
             }
             val size = previewSize ?: TileLayoutEditorState.sizeOf(rect)
             addView(
@@ -363,17 +475,40 @@ open class TileLayoutSettingsActivity : Activity() {
             )
             addView(
                 TileSizePreviewView(this@TileLayoutSettingsActivity).apply {
-                    // The live tile first, then the plugin's declared sample, else the header alone.
-                    bind(
-                        tile.name,
-                        glyphFor(tile.id),
-                        TileSnapshotCache.get(tile.id) ?: tilePreviewSample(tile.id),
-                        size,
-                    )
+                    val visual = visualFor(tile)
+                    bind(tile.name, visual.glyph, visual.snapshot, size, visual.widget?.invoke())
                 },
                 NexusUi.block().apply { topMargin = dp(10) },
             )
+            if (tile.widget != null) {
+                addView(
+                    footerButton("REMOVE", filled = false).apply {
+                        contentDescription = "Remove ${tile.name} widget"
+                        setTextColor(NexusUi.INK2)
+                        background = StateListDrawable().apply {
+                            addState(
+                                intArrayOf(android.R.attr.state_pressed),
+                                NexusUi.bordered(
+                                    this@TileLayoutSettingsActivity, NexusUi.alpha(NexusUi.INK2, 0x14), NexusUi.alpha(NexusUi.INK2, 0x60), 13,
+                                ),
+                            )
+                            addState(
+                                intArrayOf(),
+                                NexusUi.bordered(this@TileLayoutSettingsActivity, Color.TRANSPARENT, NexusUi.alpha(NexusUi.INK2, 0x38), 13),
+                            )
+                        }
+                        setOnClickListener { removeWidget(tile) }
+                    },
+                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply { topMargin = dp(14) },
+                )
+            }
         }
+    }
+
+    private fun kindLabel(tile: EditorTile): String = when {
+        tile.widget != null -> "SYSTEM"
+        tile.live -> "LIVE"
+        else -> "APP"
     }
 
     private fun sizeGrid(tile: EditorTile, rect: GridRect): LinearLayout =

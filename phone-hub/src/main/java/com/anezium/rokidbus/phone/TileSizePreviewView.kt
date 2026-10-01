@@ -8,6 +8,7 @@ import android.graphics.drawable.Drawable
 import android.view.View
 import com.anezium.rokidbus.client.ui.NexusUi
 import com.anezium.rokidbus.client.ui.RokidHudTokens
+import com.anezium.rokidbus.hudtiles.SystemWidgetContent
 import com.anezium.rokidbus.hudtiles.TileRenderer
 import com.anezium.rokidbus.shared.tile.TileSize
 import com.anezium.rokidbus.shared.tile.TileSnapshot
@@ -34,14 +35,16 @@ internal class TileSizePreviewView(context: Context) : View(context) {
     private var name = ""
     private var glyph: Drawable? = null
     private var snapshot: TileSnapshot? = null
+    private var widget: SystemWidgetContent? = null
     var size: TileSize = TileSize.SMALL
         private set
 
-    /** A null [snapshot] draws the header only. */
-    fun bind(name: String, glyph: Drawable?, snapshot: TileSnapshot?, size: TileSize) {
+    /** A null [snapshot] draws the header only; a non-null [widget] draws that system widget instead. */
+    fun bind(name: String, glyph: Drawable?, snapshot: TileSnapshot?, size: TileSize, widget: SystemWidgetContent? = null) {
         this.name = name
         this.glyph = glyph
         this.snapshot = snapshot
+        this.widget = widget
         this.size = size
         contentDescription = "$name at ${size.cols} by ${size.rows}"
         requestLayout()
@@ -65,9 +68,11 @@ internal class TileSizePreviewView(context: Context) : View(context) {
         canvas.translate(framePad, framePad)
         canvas.scale(scale, scale)
         tile.set(0f, 0f, TileRenderer.widthOf(size).toFloat(), TileRenderer.heightOf(size).toFloat())
-        painter.draw(canvas, tile, name, glyph, snapshot, size, selected = false)
+        painter.draw(canvas, tile, name, glyph, snapshot, size, selected = false, widget = widget)
         canvas.restore()
     }
 
     internal val snapshotForTest: TileSnapshot? get() = snapshot
+
+    internal val widgetForTest: SystemWidgetContent? get() = widget
 }

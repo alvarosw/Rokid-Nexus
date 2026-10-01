@@ -224,6 +224,78 @@ class TileLayoutEditorStateTest {
         assertEquals(listOf(TileLayoutEntry("a", TileSize.SMALL, 0, 0)), state.toEntries())
     }
 
+    private fun widgetEditor(layout: Map<String, GridRect>) =
+        TileLayoutEditorState(layout.keys.filterNot { it.startsWith("sys:") }.map(::tile) + widgetTiles, layout, layout)
+
+    @Test
+    fun `adding a widget places it at its default size in the first free cell and selects it`() {
+        val state = widgetEditor(three)
+        assertEquals(listOf("sys:clock", "sys:status"), state.unplacedWidgets().map { it.id })
+        assertTrue(state.addWidget("sys:status"))
+        assertEquals(GridRect(3, 0, 1, 1), state.layout["sys:status"])
+        assertEquals("sys:status", state.selectedId)
+        assertEquals(listOf("sys:clock"), state.unplacedWidgets().map { it.id })
+        // Placed once only, and a plugin is no widget.
+        assertFalse(state.addWidget("sys:status"))
+        assertFalse(state.addWidget("a"))
+    }
+
+    @Test
+    fun `adding a widget to a full grid reports no room and changes nothing`() {
+        val full = LinkedHashMap<String, GridRect>()
+        for (row in 0 until TileGridLayout.MAX_ROWS) for (col in 0 until 4) full["t$row$col"] = GridRect(col, row, 1, 1)
+        val state = widgetEditor(full)
+        state.select("t11")
+        assertFalse(state.addWidget("sys:clock"))
+        assertEquals("No room for Clock at 1×1 — shrink or remove a tile first.", state.message)
+        assertEquals(full, state.layout)
+        assertEquals("t11", state.selectedId)
+    }
+
+    @Test
+    fun `removing a widget frees its cell and moves the selection, and plugins cannot be removed`() {
+        val state = widgetEditor(three + ("sys:clock" to GridRect(3, 0, 1, 1)))
+        state.select("sys:clock")
+        assertFalse(state.removeWidget("a"))
+        assertTrue(state.removeWidget("sys:clock"))
+        assertEquals(three, state.layout)
+        assertEquals("a", state.selectedId)
+        assertEquals(listOf("sys:clock", "sys:status"), state.unplacedWidgets().map { it.id })
+        assertFalse(state.removeWidget("sys:clock"))
+    }
+
+    @Test
+    fun `a widget resizes only to the sizes it supports`() {
+        val state = widgetEditor(linkedMapOf("sys:status" to GridRect(0, 0, 1, 1)))
+        state.select("sys:status")
+        assertFalse(state.resize(TileSize.LARGE))
+        assertEquals(GridRect(0, 0, 1, 1), state.layout["sys:status"])
+        assertTrue(state.resize(TileSize.BANNER))
+        assertEquals(GridRect(0, 0, 3, 1), state.layout["sys:status"])
+    }
+
+    @Test
+    fun `widgets drag and auto-pack like tiles, and reset drops them`() {
+        val state = TileLayoutEditorState(
+            listOf(tile("a")) + widgetTiles,
+            linkedMapOf("a" to GridRect(0, 0, 1, 1), "sys:clock" to GridRect(2, 3, 2, 1)),
+            linkedMapOf("a" to GridRect(0, 0, 1, 1)),
+        )
+        state.dragStart("sys:clock", 2 * pitch + 10, 3 * pitch + 10)
+        state.dragMove(2 * pitch + 10, pitch + 10, travelDp = 100f)
+        state.dragEnd()
+        assertEquals(GridRect(2, 1, 2, 1), state.layout["sys:clock"])
+        state.autoPack()
+        assertEquals(GridRect(1, 0, 2, 1), state.layout["sys:clock"])
+        assertEquals(
+            listOf(TileLayoutEntry("a", TileSize.SMALL, 0, 0), TileLayoutEntry("sys:clock", TileSize.WIDE, 1, 0)),
+            state.toEntries(),
+        )
+        state.reset()
+        assertEquals(setOf("a"), state.layout.keys)
+        assertEquals(listOf("sys:clock", "sys:status"), state.unplacedWidgets().map { it.id })
+    }
+
     @Test
     fun `visible rows prefer the glasses report, else the inset formula`() {
         assertEquals(5, TileLayoutEditorState.visibleRows(glassesReported = 5, topInsetDp = 40, autoPosition = false))
