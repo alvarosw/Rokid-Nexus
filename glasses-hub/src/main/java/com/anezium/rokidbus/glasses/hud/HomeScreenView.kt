@@ -98,10 +98,13 @@ internal abstract class HomeScreenView(
         applied = model
         animateMoves = animate
         val empty = model.entries.isEmpty()
-        if (empty) {
+        if (empty && model.widgets.isNotEmpty()) {
+            // Widgets fill the body on their own and are never counted: nothing to wait for or count.
+            header.setCounter("")
+            emptyView.hide()
+        } else if (empty) {
             header.setCounter("WAITING FOR PHONE")
-            // Widgets fill the body on their own; the empty line would sit on top of them.
-            if (model.widgets.isEmpty()) emptyView.show(HudStatusView.Kind.OFF, EMPTY_TEXT) else emptyView.hide()
+            emptyView.show(HudStatusView.Kind.OFF, EMPTY_TEXT)
         } else {
             val index = model.selectedIndex.coerceAtLeast(0)
             header.setCounter("${index + 1}/${model.entries.size}")
@@ -218,6 +221,8 @@ internal abstract class HomeScreenView(
 
     internal fun failureTextForTest(): String? =
         statusView.takeIf { it.kind == HudStatusView.Kind.WARN }?.message
+
+    internal fun counterTextForTest(): String = header.counterForTest
 
     internal fun emptyTextForTest(): String? =
         emptyView.takeIf { it.kind == HudStatusView.Kind.OFF }?.message

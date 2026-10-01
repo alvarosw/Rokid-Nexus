@@ -141,10 +141,17 @@ class SystemWidgetGridTest {
         assertNotNull(grid.widgetViewForTest("sys:clock"))
         assertNotNull(grid.widgetViewForTest("sys:status"))
         assertNull(grid.emptyTextForTest())
+        assertEquals("", grid.counterTextForTest())
 
         // A selection move with nothing to select changes nothing.
         layer.select(null)
         assertEquals(0, grid.offsetRowForTest)
+
+        // Nothing at all on the grid still waits for the phone.
+        stored = emptyList()
+        showGrid(0, null)
+        assertEquals("WAITING FOR PHONE", grid.counterTextForTest())
+        assertEquals(HomeScreenView.EMPTY_TEXT, grid.emptyTextForTest())
     }
 
     @Test
