@@ -84,11 +84,11 @@ class HomeMotionTest {
         layer.settleMotion()
         assertEquals(-list.offsetForTest.toFloat(), list.stripForTest().translationY, 0f)
         val row = list.rowsForTest().getValue("plugin19")
-        assertTrue(row.background is GradientDrawable)
+        assertTrue(row.background is LayerDrawable)
     }
 
     @Test
-    fun the_focus_ring_cross_fades_between_the_two_rows_and_ends_as_plain_chrome() {
+    fun the_focus_ring_cross_fades_between_the_two_rows_and_ends_as_the_resting_and_the_scanline_frame() {
         showList(4, 0)
         layer.select("plugin1")
         val old = list.rowsForTest().getValue("plugin0")
@@ -98,7 +98,7 @@ class HomeMotionTest {
         clock.advance(80)
         assertTrue("mid-fade is a blend of the two frames", new.background is LayerDrawable && old.background is LayerDrawable)
         clock.advance(200)
-        assertTrue(new.background is GradientDrawable && old.background is GradientDrawable)
+        assertTrue(new.background is LayerDrawable && old.background is GradientDrawable)
     }
 
     @Test
@@ -121,7 +121,7 @@ class HomeMotionTest {
         showList(20, 0)
         layer.select("plugin19")
         assertEquals(-list.offsetForTest.toFloat(), list.stripForTest().translationY, 0f)
-        assertTrue(list.rowsForTest().getValue("plugin19").background is GradientDrawable)
+        assertTrue(list.rowsForTest().getValue("plugin19").background is LayerDrawable)
         assertFalse(clock.hasPendingFrame)
     }
 }

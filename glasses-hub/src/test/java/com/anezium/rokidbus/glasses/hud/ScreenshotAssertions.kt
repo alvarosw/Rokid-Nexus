@@ -12,6 +12,9 @@ import org.junit.Assert.assertTrue
  */
 internal const val SURFACE_SELECTED_GREEN = 31
 
+/** `surface-subtle` (green-06, alpha 0x0F) over black: 255 x 15/255 = 15, the focus scanline colour. */
+internal const val SURFACE_SUBTLE_GREEN = 15
+
 /** Pixels must be brighter than a focus fill by this margin to count as a bright area. */
 private const val BRIGHT_MARGIN = 8
 

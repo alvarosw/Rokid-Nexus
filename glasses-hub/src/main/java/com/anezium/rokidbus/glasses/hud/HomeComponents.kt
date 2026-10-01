@@ -86,19 +86,62 @@ internal object HomeChrome {
     ): Drawable {
         if (amount <= 0f) return outline(android.graphics.Color.TRANSPARENT, restStroke, restWidth, restDashed)
         if (amount >= 1f) {
-            return outline(RokidHudTokens.SURFACE_SELECTED, RokidHudTokens.FOCUS, RokidHudTokens.BORDER_STRONG, focusDashed)
+            return focusedFrame(1f, focusDashed)
         }
         return LayerDrawable(
             arrayOf(
                 outline(android.graphics.Color.TRANSPARENT, RokidHudTokens.scaleAlpha(restStroke, 1f - amount), restWidth, restDashed),
-                outline(
-                    RokidHudTokens.scaleAlpha(RokidHudTokens.SURFACE_SELECTED, amount),
-                    RokidHudTokens.scaleAlpha(RokidHudTokens.FOCUS, amount),
-                    RokidHudTokens.BORDER_STRONG,
-                    focusDashed,
-                ),
+                focusedFrame(amount, focusDashed),
             ),
         )
+    }
+
+    /**
+     * The focused frame: a `focus` border over a scanline fill. A flat low-alpha fill dithers into
+     * random speckle on the panel at minimum brightness, so the fill is 1 px `surface-subtle`
+     * lines every [SCANLINE_PERIOD_PX] px, the lowest intensity the design system has.
+     */
+    private fun focusedFrame(amount: Float, dashed: Boolean): Drawable = LayerDrawable(
+        arrayOf(
+            ScanlineFill(
+                RokidHudTokens.scaleAlpha(RokidHudTokens.SURFACE_SUBTLE, amount),
+                RokidHudTokens.RADIUS_CONTROL.toFloat(),
+            ),
+            outline(
+                android.graphics.Color.TRANSPARENT,
+                RokidHudTokens.scaleAlpha(RokidHudTokens.FOCUS, amount),
+                RokidHudTokens.BORDER_STRONG,
+                dashed,
+            ),
+        ),
+    )
+
+    private class ScanlineFill(color: Int, private val radius: Float) : Drawable() {
+        private val paint = Paint().apply {
+            this.color = color
+            style = Paint.Style.FILL
+        }
+        private val clip = Path()
+
+        override fun draw(canvas: Canvas) {
+            val b = bounds
+            if (b.isEmpty) return
+            clip.rewind()
+            clip.addRoundRect(RectF(b), radius, radius, Path.Direction.CW)
+            val save = canvas.save()
+            canvas.clipPath(clip)
+            var y = b.top
+            while (y < b.bottom) {
+                canvas.drawRect(b.left.toFloat(), y.toFloat(), b.right.toFloat(), (y + 1).toFloat(), paint)
+                y += SCANLINE_PERIOD_PX
+            }
+            canvas.restoreToCount(save)
+        }
+
+        override fun setAlpha(alpha: Int) = Unit
+        override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) = Unit
+        @Deprecated("Deprecated in Java")
+        override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
     }
 
     /** [rest] text or icon intensity moved [amount] of the way to `focus`. */
@@ -106,6 +149,7 @@ internal object HomeChrome {
         if (amount <= 0f) rest else if (amount >= 1f) RokidHudTokens.FOCUS else ArgbEvaluator().evaluate(amount, rest, RokidHudTokens.FOCUS) as Int
 
     private const val DASH_PX = 3f
+    private const val SCANLINE_PERIOD_PX = 4
 }
 
 /**

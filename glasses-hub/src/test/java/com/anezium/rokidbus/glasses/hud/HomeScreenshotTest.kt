@@ -282,12 +282,15 @@ class HomeScreenshotTest {
         }
 
     @Test
-    fun grid_jumbo_focused_fills_with_surface_selected() {
+    fun grid_jumbo_focused_fills_with_surface_subtle_scanlines() {
         capture("grid-20-jumbo-focused", stored = freeLayout, live = freeLive) {
             it.show(HomeMode.GRID, withIcons(5), "plugin4")
         }
-        // Inside the focused JUMBO, away from its text: the dim focus fill, which the bloom guard ignores.
-        assertEquals(SURFACE_SELECTED_GREEN, greenAt(File("build/outputs/roborazzi/grid-20-jumbo-focused.png"), 300, 450))
+        // Inside the focused JUMBO, away from its text: the scanline fill is `surface-subtle` lines
+        // with unlit rows between them, one of every four rows.
+        val file = File("build/outputs/roborazzi/grid-20-jumbo-focused.png")
+        val greens = (450..453).map { greenAt(file, 300, it) }.sorted()
+        assertEquals(listOf(0, 0, 0, SURFACE_SUBTLE_GREEN), greens)
     }
 
     @Test
