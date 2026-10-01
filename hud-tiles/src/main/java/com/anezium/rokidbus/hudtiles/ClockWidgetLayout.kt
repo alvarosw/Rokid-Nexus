@@ -46,12 +46,12 @@ internal object ClockWidgetLayout {
         return input.nowElapsed + (MINUTE_MS - Math.floorMod(local, MINUTE_MS))
     }
 
-    /** The date's skeleton per size: a one-row tile has one date line, the weekday folded in. */
+    /** The date's skeleton per size: one line on a one-row tile, with the weekday once it is two wide. */
     private fun dateSkeleton(size: TileSize): String = when {
         size.rows >= 2 -> if (size.cols >= 2) "MMMMdy" else "MMMd"
         size.cols >= 3 -> "EEEEMMMMd"
         size.cols == 2 -> "EEEMMMd"
-        else -> "EEEd"
+        else -> "MMMd"
     }
 
     /** The time and its 12-hour marker on one baseline; returns the row's height. */

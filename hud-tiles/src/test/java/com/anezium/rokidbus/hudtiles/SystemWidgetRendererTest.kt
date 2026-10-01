@@ -81,8 +81,7 @@ class SystemWidgetRendererTest {
 
     @Test
     fun `the date grows with the tile and a two-row tile gives the weekday its own line`() {
-        val small = texts(layout(clock(), TileSize.SMALL), TilePart.SUBTITLE).single()
-        assertTrue(small, small.contains("Thu") && small.contains("1") && !small.contains("Oct"))
+        assertEquals("Oct 1", texts(layout(clock(), TileSize.SMALL), TilePart.SUBTITLE).single())
         assertEquals("Thu, Oct 1", texts(layout(clock(), TileSize.WIDE), TilePart.SUBTITLE).single())
         assertEquals("Thursday, October 1", texts(layout(clock(), TileSize.BANNER), TilePart.SUBTITLE).single())
         val large = layout(clock(), TileSize.LARGE)
