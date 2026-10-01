@@ -1,4 +1,4 @@
-> Superseded for the glasses UI by docs/ui-rewrite/ — kept for history; the tile data pipeline (03) remains current.
+> Superseded by docs/live-tiles/00-plan.md (2026-10-01) — kept for history.
 
 # Delivery 5+ — Plugin adoption batches
 

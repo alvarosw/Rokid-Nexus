@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Relay — closed-state tiles</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#000}
+.hud{font-family:sans-serif;color:rgba(64,255,94,0.72);background:#000;-webkit-font-smoothing:antialiased}
+.t{box-sizing:border-box;border:1px solid rgba(64,255,94,0.24);border-radius:6px;padding:8px;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.t.f{border:2px solid #40FF5E;padding:7px;background:rgba(64,255,94,0.12)}
+.t.f .q,.t.f .hd .ic,.t.f .lb{color:rgba(64,255,94,0.72)}
+.t.f .ini{border-color:rgba(64,255,94,0.72)}
+.w1{width:106px}.w2{width:220px}.w3{width:334px}.h1{height:106px}.h2{height:220px}.h3{height:334px}
+.hd{display:flex;align-items:center;gap:4px;height:16px;flex:none;min-width:0;color:rgba(64,255,94,0.48)}
+.hd .r{margin-left:auto;display:flex;align-items:center;gap:4px;min-width:0}
+.lb{font:500 11px/14px sans-serif;letter-spacing:.06em;text-transform:uppercase;color:rgba(64,255,94,0.48);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb.p{color:rgba(64,255,94,0.72)}
+.ic{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter}
+.ic *{vector-effect:non-scaling-stroke}
+.hh{font:600 16px/22px sans-serif}
+.b{font:400 14px/20px sans-serif}
+.s{font:400 12px/16px sans-serif}
+.w5{font-weight:500}
+.d{font:500 13px/18px monospace}
+.m{font:400 11px/14px monospace;white-space:nowrap}
+.p{color:rgba(64,255,94,0.72)}.q{color:rgba(64,255,94,0.48)}
+.k1,.k2,.k3,.k4,.k6{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden}
+.k1{-webkit-line-clamp:1}.k2{-webkit-line-clamp:2}.k3{-webkit-line-clamp:3}.k4{-webkit-line-clamp:4}.k6{-webkit-line-clamp:6}
+.el{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.row{display:flex;min-width:0}.col{display:flex;flex-direction:column;min-width:0}.fx{flex:1 1 auto}
+.bl{align-items:baseline}.ct{align-items:center}.sb{justify-content:space-between}
+.au{margin-top:auto}
+.trk{position:relative;height:3px;border-radius:2px;background:rgba(64,255,94,0.24);flex:none}
+.trk i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:rgba(64,255,94,0.72)}
+.sep{height:1px;background:rgba(64,255,94,0.24);flex:none}
+.art{flex:none;box-sizing:border-box;border:1px solid rgba(64,255,94,0.24);border-radius:2px;background-image:radial-gradient(circle at 38% 42%,rgba(64,255,94,0.24) 0 34%,transparent 35%),radial-gradient(rgba(64,255,94,0.48) 0.7px,transparent 1px);background-size:100% 100%,3px 3px}
+.ini{flex:none;box-sizing:border-box;width:24px;height:24px;border:1px solid rgba(64,255,94,0.48);border-radius:4px;display:flex;align-items:center;justify-content:center;font:500 11px/14px monospace;color:rgba(64,255,94,0.72)}
+.ini.o{border-color:rgba(64,255,94,0.24);color:rgba(64,255,94,0.48)}
+.cap{font:400 11px/14px monospace;color:rgba(64,255,94,0.48);letter-spacing:.02em}
+</style>
+</helmet>
+<div class="hud" style="width:1210px;height:586px;box-sizing:border-box;padding:48px;display:flex;flex-direction:column;gap:32px"><div class="row bl" style="gap:16px"><span style="font:600 22px/28px sans-serif;color:rgba(64,255,94,0.72)">Relay</span><span class="lb">Closed state · live</span></div><div class="row" style="gap:40px;align-items:flex-start"><div class="col" style="gap:40px"><div class="row" style="gap:40px;align-items:flex-start"><div class="col" style="gap:8px"><span class="cap">1x1 · 106 × 106</span><div class="t w1 h1"><div class="hd"><svg class="ic" viewBox="0 0 16 16"><path d="M2.5 3.5H13.5V10.5H7L4.5 13V10.5H2.5Z"/><path d="M5.5 7H10M8.5 5.5L10 7L8.5 8.5"/></svg><span class="lb">Relay</span><div class="r"><span class="d p" style="line-height:14px">3</span></div></div><div class="s w5 p el" style="margin-top:4px">Ana Ribeiro</div><div class="s q k2" style="margin-top:2px">Leaving now, ten minutes away. Want me to grab bread on the way?</div><span class="m q au">1 min</span></div></div><div class="col" style="gap:8px"><span class="cap">2x1 · 220 × 106</span><div class="t w2 h1"><div class="hd"><svg class="ic" viewBox="0 0 16 16"><path d="M2.5 3.5H13.5V10.5H7L4.5 13V10.5H2.5Z"/><path d="M5.5 7H10M8.5 5.5L10 7L8.5 8.5"/></svg><span class="lb">Relay</span><div class="r"><span class="lb p">3 new</span></div></div><div class="row sb bl" style="gap:8px;margin-top:4px"><span class="b w5 p el">Ana Ribeiro</span><span class="m q">1 min</span></div><div class="s p k2" style="margin-top:2px">Leaving now, ten minutes away. Want me to grab bread on the way?</div></div></div><div class="col" style="gap:8px"><span class="cap">3x1 · 334 × 106</span><div class="t w3 h1"><div class="hd"><svg class="ic" viewBox="0 0 16 16"><path d="M2.5 3.5H13.5V10.5H7L4.5 13V10.5H2.5Z"/><path d="M5.5 7H10M8.5 5.5L10 7L8.5 8.5"/></svg><span class="lb">Relay</span><div class="r"><span class="lb p">3 new</span></div></div><div class="row sb bl" style="gap:8px;margin-top:4px"><span class="b w5 p el">Ana Ribeiro</span><span class="m q">WhatsApp · 1 min</span></div><div class="s p k2" style="margin-top:2px">Leaving now, ten minutes away. Want me to grab bread on the way?</div></div></div></div><div class="row" style="gap:40px;align-items:flex-start"><div class="col" style="gap:8px"><span class="cap">1x2 · 106 × 220</span><div class="t w1 h2"><div class="hd"><svg class="ic" viewBox="0 0 16 16"><path d="M2.5 3.5H13.5V10.5H7L4.5 13V10.5H2.5Z"/><path d="M5.5 7H10M8.5 5.5L10 7L8.5 8.5"/></svg><span class="lb">Relay</span><div class="r"><span class="d p" style="line-height:14px">3</span></div></div><div style="height:6px"></div><div class="row sb bl" style="gap:4px"><span class="s w5 p el">Ana Ribeiro</span><span class="m q">1m</span></div><span class="s q k2">Leaving now, ten minutes away. Want me to grab bread on the way?</span><div class="sep" style="margin:6px 0"></div><div class="row sb bl" style="gap:4px"><span class="s w5 p el">Family</span><span class="m q">6m</span></div><span class="s q k2">Dad: dinner moved to 8, bring the speaker</span><div class="sep" style="margin:6px 0"></div><div class="row sb bl" style="gap:4px"><span class="s w5 p el">Tomás Prado</span><span class="m q">18m</span></div><span class="s q k2">Did the files come through?</span></div></div><div class="col" style="gap:8px"><span class="cap">2x2 · 220 × 220</span><div class="t w2 h2"><div class="hd"><svg class="ic" viewBox="0 0 16 16"><path d="M2.5 3.5H13.5V10.5H7L4.5 13V10.5H2.5Z"/><path d="M5.5 7H10M8.5 5.5L10 7L8.5 8.5"/></svg><span class="lb">Relay</span><div class="r"><span class="lb p">3 new</span></div></div><div style="height:8px"></div><div class="row" style="gap:8px"><span class="ini">AR</span><div class="col fx"><div class="row sb bl" style="gap:8px"><span class="s w5 p el">Ana Ribeiro</span><span class="m q">1 min</span></div><span class="s p k2">Leaving now, ten minutes away. Want me to grab bread on the way?</span></div></div><div class="sep" style="margin:6px 0 6px 32px"></div><div class="row" style="gap:8px"><span class="ini">FA</span><div class="col fx"><div class="row sb bl" style="gap:8px"><span class="s w5 p el">Family</span><span class="m q">6 min</span></div><span class="s q k1">Dad: dinner moved to 8, bring the speaker</span></div></div><div class="sep" style="margin:6px 0 6px 32px"></div><div class="row" style="gap:8px"><span class="ini">TP</span><div class="col fx"><div class="row sb bl" style="gap:8px"><span class="s w5 p el">Tomás Prado</span><span class="m q">18 min</span></div><span class="s q k1">Did the files come through?</span></div></div></div></div><div class="col" style="gap:8px"><span class="cap">3x2 · 334 × 220</span><div class="t w3 h2"><div class="hd"><svg class="ic" viewBox="0 0 16 16"><path d="M2.5 3.5H13.5V10.5H7L4.5 13V10.5H2.5Z"/><path d="M5.5 7H10M8.5 5.5L10 7L8.5 8.5"/></svg><span class="lb">Relay</span><div class="r"><span class="lb p">3 new</span></div></div><div style="height:8px"></div><div class="row" style="gap:8px"><span class="ini">AR</span><div class="col fx"><div class="row sb bl" style="gap:8px"><span class="s w5 p el">Ana Ribeiro</span><span class="m q">WhatsApp · 1 min</span></div><span class="s p k2">Leaving now, ten minutes away. Want me to grab bread on the way?</span></div></div><div class="sep" style="margin:6px 0 6px 32px"></div><div class="row" style="gap:8px"><span class="ini">FA</span><div class="col fx"><div class="row sb bl" style="gap:8px"><span class="s w5 p el">Family</span><span class="m q">WhatsApp · 6 min</span></div><span class="s q k1">Dad: dinner moved to 8, bring the speaker</span></div></div><div class="sep" style="margin:6px 0 6px 32px"></div><div class="row" style="gap:8px"><span class="ini">TP</span><div class="col fx"><div class="row sb bl" style="gap:8px"><span class="s w5 p el">Tomás Prado</span><span class="m q">Telegram · 18 min</span></div><span class="s q k1">Did the files come through?</span></div></div></div></div></div></div><div class="col" style="gap:8px"><span class="cap">3x3 · 334 × 334</span><div class="t w3 h3"><div class="hd"><svg class="ic" viewBox="0 0 16 16"><path d="M2.5 3.5H13.5V10.5H7L4.5 13V10.5H2.5Z"/><path d="M5.5 7H10M8.5 5.5L10 7L8.5 8.5"/></svg><span class="lb">Relay</span><div class="r"><span class="lb p">3 new</span></div></div><div style="height:10px"></div><div class="row" style="gap:8px"><span class="ini">AR</span><div class="col fx"><div class="row sb bl" style="gap:8px"><span class="b w5 p el">Ana Ribeiro</span><span class="m q">WhatsApp · 1 min</span></div><span class="s p k3">Leaving now, ten minutes away. Want me to grab bread on the way?</span></div></div><div class="sep" style="margin:6px 0 6px 32px"></div><div class="row" style="gap:8px"><span class="ini">FA</span><div class="col fx"><div class="row sb bl" style="gap:8px"><span class="s w5 p el">Family</span><span class="m q">WhatsApp · 6 min</span></div><span class="s q k2">Dad: dinner moved to 8, bring the speaker</span></div></div><div class="sep" style="margin:6px 0 6px 32px"></div><div class="row" style="gap:8px"><span class="ini">TP</span><div class="col fx"><div class="row sb bl" style="gap:8px"><span class="s w5 p el">Tomás Prado</span><span class="m q">Telegram · 18 min</span></div><span class="s q k1">Did the files come through?</span></div></div><div class="sep" style="margin:6px 0 6px 32px"></div><div class="row" style="gap:8px"><span class="ini o">JM</span><div class="col fx"><div class="row sb bl" style="gap:8px"><span class="s w5 q el">Júlia Mendes</span><span class="m q">Signal · 42 min</span></div><span class="s q k1">ok, see you there</span></div></div></div></div></div></div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1210,"height":586}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
