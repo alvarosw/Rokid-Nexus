@@ -15,8 +15,8 @@ class TileContentRulesTest {
         badge: String = "",
         rows: List<String> = emptyList(),
         progress: Float? = null,
-    ) = TileSnapshot(
-        pluginId = "p", contentKey = "k", title = title, unit = unit, subtitle = subtitle,
+    ) = TileContent.Generic(
+        title = title, unit = unit, subtitle = subtitle,
         badge = badge, rows = rows, progress = progress,
     )
 

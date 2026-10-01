@@ -12,7 +12,7 @@ package com.anezium.rokidbus.shared.tile
  * | subtitle | when present and (width >= 2 or height >= 2); one line at height 1, else two      |
  * | badge    | when present, at every size                                                       |
  * | rows     | height 1: none; height 2: up to [ROWS_AT_TWO_HIGH]; 3+: up to [WidgetTileContract.MAX_ROWS] |
- * | progress | when the snapshot carries one                                                     |
+ * | progress | when the content carries one                                                      |
  */
 object TileContentRules {
     const val NAME_LINES = 1
@@ -20,7 +20,7 @@ object TileContentRules {
 
     enum class TitleStyle { NONE, TEXT, DATA_VALUE }
 
-    data class TileContent(
+    data class ShownContent(
         val nameLines: Int,
         val titleStyle: TitleStyle,
         val titleMaxLines: Int,
@@ -45,11 +45,11 @@ object TileContentRules {
     /** Whether [title] renders as a numeric data value rather than text. */
     fun isDataValue(title: String): Boolean = title.toDoubleOrNull() != null
 
-    /** With a null [snapshot] only the header remains. */
-    fun contentFor(size: TileSize, snapshot: TileSnapshot?): TileContent {
+    /** With null [content] only the header remains. */
+    fun contentFor(size: TileSize, content: TileContent.Generic?): ShownContent {
         val oneRow = size.rows == 1
-        if (snapshot == null) {
-            return TileContent(
+        if (content == null) {
+            return ShownContent(
                 nameLines = NAME_LINES,
                 titleStyle = TitleStyle.NONE,
                 titleMaxLines = if (oneRow) 1 else 2,
@@ -61,21 +61,21 @@ object TileContentRules {
                 progress = null,
             )
         }
-        val numeric = isDataValue(snapshot.title)
-        return TileContent(
+        val numeric = isDataValue(content.title)
+        return ShownContent(
             nameLines = NAME_LINES,
             titleStyle = when {
                 numeric -> TitleStyle.DATA_VALUE
-                snapshot.title.isNotEmpty() -> TitleStyle.TEXT
+                content.title.isNotEmpty() -> TitleStyle.TEXT
                 else -> TitleStyle.NONE
             },
             titleMaxLines = if (oneRow) 1 else 2,
-            showUnit = numeric && snapshot.unit.isNotEmpty(),
-            subtitleVisible = (size.cols >= 2 || size.rows >= 2) && snapshot.subtitle.isNotEmpty(),
+            showUnit = numeric && content.unit.isNotEmpty(),
+            subtitleVisible = (size.cols >= 2 || size.rows >= 2) && content.subtitle.isNotEmpty(),
             subtitleMaxLines = if (oneRow) 1 else 2,
-            badgeVisible = snapshot.badge.isNotEmpty(),
-            rowCount = minOf(snapshot.rows.size, rowCap(size)),
-            progress = snapshot.progress?.coerceIn(0f, 1f),
+            badgeVisible = content.badge.isNotEmpty(),
+            rowCount = minOf(content.rows.size, rowCap(size)),
+            progress = content.progress?.coerceIn(0f, 1f),
         )
     }
 }
