@@ -1,6 +1,7 @@
 package com.anezium.rokidbus.glasses
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
 import android.os.SystemClock
@@ -70,6 +71,10 @@ internal class LiveTileView(
     private var snapshot: TileSnapshot? = null
     private var stale = false
     private var receivedAtElapsed = 0L
+    private var artwork: Bitmap? = null
+
+    /** The plugin's own glyphs by name, for a list item's glyph leading. */
+    var glyphs: (String) -> Drawable? = { null }
     private var alertShown = false
     private var onScreen = false
     private var input: TileRenderInput? = null
@@ -129,10 +134,12 @@ internal class LiveTileView(
         relayout()
     }
 
-    fun bind(snapshot: TileSnapshot, stale: Boolean, receivedAtElapsed: Long = clock()) {
+    /** [artwork] is the decoded art of a music snapshot's `artworkKey`, when the hub holds it. */
+    fun bind(snapshot: TileSnapshot, stale: Boolean, receivedAtElapsed: Long = clock(), artwork: Bitmap? = null) {
         bound = true
         loader.visibility = INVISIBLE
         this.snapshot = snapshot
+        this.artwork = artwork
         this.stale = stale
         this.receivedAtElapsed = receivedAtElapsed
         tone = snapshot.tone
@@ -231,6 +238,8 @@ internal class LiveTileView(
             focusAmount = focusAmount,
             // The alert icon sits at the top-right of the eyebrow row: the name gives way to it.
             headerEndInset = if (alertShown) RokidHudTokens.ICON_SM + RokidHudTokens.SPACE_1 else 0,
+            artwork = artwork,
+            glyph = glyphs,
         )
         input = next
         tileLayout = TileRenderer.layout(next, size)
@@ -241,7 +250,7 @@ internal class LiveTileView(
     private fun scheduleNextChange() {
         removeCallbacks(redraw)
         if (!isAttachedToWindow || !onScreen) return
-        val at = input?.let(TileRenderer::nextChangeAtElapsed) ?: return
+        val at = input?.let { TileRenderer.nextChangeAtElapsed(it, size) } ?: return
         postDelayed(redraw, (at - clock()).coerceAtLeast(0L))
     }
 

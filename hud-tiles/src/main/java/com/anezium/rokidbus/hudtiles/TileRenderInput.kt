@@ -1,5 +1,6 @@
 package com.anezium.rokidbus.hudtiles
 
+import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import com.anezium.rokidbus.shared.tile.TileContent
 import com.anezium.rokidbus.shared.tile.TileTone
@@ -24,4 +25,11 @@ data class TileRenderInput(
     val focusAmount: Float = 0f,
     /** Pixels the header leaves free at its right end, for a host's alert mark. */
     val headerEndInset: Int = 0,
+    /**
+     * The decoded artwork of a [TileContent.Music]'s `artworkKey`, when the host holds it; without
+     * it the music tile takes its text-only layout.
+     */
+    val artwork: Bitmap? = null,
+    /** The plugin's own glyph by name, for a list item's `Glyph` leading; null omits the leading. */
+    val glyph: (String) -> Drawable? = { null },
 )

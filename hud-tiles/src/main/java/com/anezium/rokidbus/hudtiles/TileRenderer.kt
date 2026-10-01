@@ -30,13 +30,14 @@ object TileRenderer {
     /**
      * The `elapsedRealtime` at which [input]'s drawing next changes on its own (a music position
      * second, the next timed line, the next age minute), or null when it never does. A host
-     * schedules one redraw for it, and only while the tile is on screen.
+     * schedules one redraw for it, and only while the tile is on screen. [size] matters because
+     * only some sizes show a moving time.
      */
-    fun nextChangeAtElapsed(input: TileRenderInput): Long? = when (val content = input.content) {
+    fun nextChangeAtElapsed(input: TileRenderInput, size: TileSize): Long? = when (val content = input.content) {
         null, is TileContent.Generic -> null
         is TileContent.Music -> MusicTileLayout.nextChangeAtElapsed(input, content)
-        is TileContent.Lines -> LinesTileLayout.nextChangeAtElapsed(input, content)
-        is TileContent.ListContent -> ListTileLayout.nextChangeAtElapsed(input, content)
+        is TileContent.Lines -> LinesTileLayout.nextChangeAtElapsed(input, content, size)
+        is TileContent.ListContent -> ListTileLayout.nextChangeAtElapsed(input, content, size)
     }
 
     private fun extent(cells: Int) = cells * HudGridMetrics.UNIT + (cells - 1) * HudGridMetrics.GAP
