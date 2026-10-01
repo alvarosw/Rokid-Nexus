@@ -1,0 +1,29 @@
+{
+  "contentKey": "preview",
+  "template": "lines",
+  "content": {
+    "lines": [
+      { "text": "the kettle sang the only song we knew", "startMs": 74000 },
+      { "text": "we left the porch light on for no one", "startMs": 81000 },
+      { "text": "salt on the window, salt on the sleeve", "startMs": 88000 },
+      { "text": "and the radio kept the weather to itself", "startMs": 95000 },
+      { "text": "I counted cars until the counting stopped", "startMs": 101000 },
+      { "text": "you said the river doesn’t owe us anything", "startMs": 108000 },
+      { "text": "so we waited, and the waiting was enough", "startMs": 115000 }
+    ],
+    "current": 3,
+    "title": "Low Tide Static",
+    "subtitle": "Marta Velez · Salt Rooms",
+    "source": "LrcLib",
+    "positionMs": 96000,
+    "durationMs": 236000,
+    "playing": false
+  },
+  "title": "and the radio kept the weather to itself",
+  "subtitle": "Low Tide Static · Marta Velez · Salt Rooms",
+  "badge": "",
+  "progress": 0.41,
+  "unit": "",
+  "tone": "ok",
+  "rows": ["I counted cars until the counting stopped", "you said the river doesn’t owe us anything", "so we waited, and the waiting was enough"]
+}
