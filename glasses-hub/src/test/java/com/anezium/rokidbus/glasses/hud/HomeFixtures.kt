@@ -6,12 +6,18 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.view.View
 import com.anezium.rokidbus.glasses.GlassesHub
+import com.anezium.rokidbus.glasses.SystemWidgetSource
+import com.anezium.rokidbus.hudtiles.SystemWidgetContent
+import com.anezium.rokidbus.shared.tile.SystemWidget
+import com.anezium.rokidbus.shared.tile.SystemWidgets
 import com.anezium.rokidbus.shared.tile.TileGridLayout
 import com.anezium.rokidbus.shared.tile.TileLayoutEntry
 import com.anezium.rokidbus.shared.tile.TilePlacement
 import com.anezium.rokidbus.shared.tile.TileSize
 import com.anezium.rokidbus.shared.tile.TileSnapshot
 import com.anezium.rokidbus.shared.tile.TileTone
+import java.util.Locale
+import java.util.TimeZone
 
 internal val NAMES = listOf(
     "Lyrics", "Now Playing", "Navigation", "Transit", "Relay", "Agents", "Lens", "Tasker",
@@ -51,9 +57,46 @@ internal fun placementsOf(vararg pairs: Pair<String, TileSize>): (List<GlassesHu
     return { list -> TileGridLayout.resolve(list.map { it.id to map[it.id] }, emptyList()) }
 }
 
-/** Placement seam for a home layer driven by a stored layout, as the phone would sync it. */
+/**
+ * Placement seam for a home layer driven by a stored layout, as the phone would sync it; the system
+ * widgets it places come along, as from the hub.
+ */
 internal fun placementsOf(stored: List<TileLayoutEntry>): (List<GlassesHub.LauncherEntry>) -> List<TilePlacement> =
-    { list -> TileGridLayout.resolve(list.map { it.id to null }, stored) }
+    { list -> TileGridLayout.resolveWithWidgets(list.map { it.id to null }, stored) }
+
+/** Fixed widget data: Thursday 2026-10-01 14:32:10 UTC, glasses 82 % charging, phone 64 %, link up. */
+internal class FakeWidgetSource(
+    var epochMs: Long = 1_790_865_130_000L,
+    var status: SystemWidgetContent.Status = SystemWidgetContent.Status(
+        glasses = SystemWidgetContent.Battery(82, charging = true),
+        phone = SystemWidgetContent.Battery(64, charging = false),
+        phoneLinked = true,
+    ),
+) : SystemWidgetSource {
+    var reads = 0
+    var observers = 0
+    private val listeners = ArrayList<() -> Unit>()
+
+    override fun content(widget: SystemWidget): SystemWidgetContent? {
+        reads++
+        return when (widget.id) {
+            SystemWidgets.CLOCK.id -> SystemWidgetContent.Clock(epochMs, TimeZone.getTimeZone("UTC"), Locale.US, use24Hour = true)
+            SystemWidgets.STATUS.id -> status
+            else -> null
+        }
+    }
+
+    override fun observe(widget: SystemWidget, onChange: () -> Unit): () -> Unit {
+        observers++
+        listeners += onChange
+        return {
+            observers--
+            listeners -= onChange
+        }
+    }
+
+    fun changed() = listeners.toList().forEach { it() }
+}
 
 /** Lays a home layer out on the 480x640 screen, as the host window does. */
 internal fun HomeLayer.layoutOnCanvas(): HomeLayer {

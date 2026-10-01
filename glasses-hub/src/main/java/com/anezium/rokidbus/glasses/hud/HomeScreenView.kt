@@ -100,7 +100,8 @@ internal abstract class HomeScreenView(
         val empty = model.entries.isEmpty()
         if (empty) {
             header.setCounter("WAITING FOR PHONE")
-            emptyView.show(HudStatusView.Kind.OFF, EMPTY_TEXT)
+            // Widgets fill the body on their own; the empty line would sit on top of them.
+            if (model.widgets.isEmpty()) emptyView.show(HudStatusView.Kind.OFF, EMPTY_TEXT) else emptyView.hide()
         } else {
             val index = model.selectedIndex.coerceAtLeast(0)
             header.setCounter("${index + 1}/${model.entries.size}")

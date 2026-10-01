@@ -10,6 +10,9 @@ import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.glasses.FallbackTileView
 import com.anezium.rokidbus.glasses.GlassesHub
 import com.anezium.rokidbus.glasses.LiveTileView
+import com.anezium.rokidbus.glasses.SystemWidgetSource
+import com.anezium.rokidbus.glasses.SystemWidgetView
+import com.anezium.rokidbus.shared.tile.SystemWidgets
 import com.anezium.rokidbus.shared.tile.TileGridLayout
 import com.anezium.rokidbus.shared.tile.TilePlacement
 import com.anezium.rokidbus.shared.tile.TileSize
@@ -21,11 +24,16 @@ import com.anezium.rokidbus.shared.tile.TileTone
  * changes focus on two views, an entry-list change adds and removes tiles, and a tile-data change
  * swaps only that tile's content. The body shows as many whole grid rows as fit (5 on the 480x640 screen) and scrolls by whole rows so the
  * selected tile is always fully visible (a tall tile spans up to three rows).
+ *
+ * System widgets are placed and drawn like tiles but are not entries: the ring never stops on them.
+ * Instead the ring's ends scroll toward the content's ends, so a widget below the last entry or above
+ * the first one still comes into view.
  */
 internal class GridHome(
     context: Context,
     private val iconLoader: (Context, GlassesHub.LauncherEntry) -> Drawable,
     motion: HudMotionDriver,
+    private val widgetSource: SystemWidgetSource,
 ) : HomeScreenView(context, motion) {
     private class Tile(
         var entry: GlassesHub.LauncherEntry,
@@ -36,8 +44,13 @@ internal class GridHome(
         val item: HomeItemView get() = view as HomeItemView
     }
 
+    private class Widget(val size: TileSize, val view: SystemWidgetView)
+
     private val tiles = LinkedHashMap<String, Tile>()
+    private val widgets = LinkedHashMap<String, Widget>()
     private var placements: List<TilePlacement> = emptyList()
+    private var firstEntryId: String? = null
+    private var lastEntryId: String? = null
     private var totalRows = 0
     private var offsetRow = 0
 
@@ -45,7 +58,8 @@ internal class GridHome(
     internal val visibleRowsForTest: Int get() = visibleRows
 
     override fun bindBody(prev: HomeViewModel?, model: HomeViewModel) {
-        val entriesChanged = prev == null || prev.entries != model.entries || prev.placements != model.placements
+        val entriesChanged = prev == null || prev.entries != model.entries || prev.placements != model.placements ||
+            prev.widgets != model.widgets
         if (entriesChanged) {
             relayout(model)
         } else if (prev.tileData != model.tileData) {
@@ -114,18 +128,40 @@ internal class GridHome(
                     tile.live = data
                 }
             }
-            tile.view.layoutParams = FrameLayout.LayoutParams(
-                width(placement.size.cols),
-                height(placement.size.rows),
-            ).apply {
-                leftMargin = placement.col * PITCH
-                topMargin = placement.row * PITCH
-            }
+            tile.view.layoutParams = cellParams(placement)
         }
-        totalRows = placements.maxOfOrNull { it.row + it.size.rows } ?: 0
+        relayoutWidgets(model.widgets)
+        firstEntryId = entries.firstOrNull()?.id
+        lastEntryId = entries.lastOrNull()?.id
+        totalRows = (placements + model.widgets).maxOfOrNull { it.row + it.size.rows } ?: 0
         val contentHeight = if (totalRows == 0) 0 else totalRows * PITCH - RokidHudTokens.SPACE_2
         strip.layoutParams = strip.layoutParams.apply { height = contentHeight }
         fitToContent(contentHeight)
+    }
+
+    private fun relayoutWidgets(placed: List<TilePlacement>) {
+        val keep = placed.mapTo(HashSet()) { it.pluginId }
+        widgets.keys.filterNot { it in keep }.forEach { id -> strip.removeView(widgets.remove(id)?.view) }
+        placed.forEach { placement ->
+            val widget = SystemWidgets.byId(placement.pluginId) ?: return@forEach
+            var drawn = widgets[widget.id]
+            if (drawn == null || drawn.size != placement.size) {
+                drawn?.let { strip.removeView(it.view) }
+                val icon = iconLoader(context, GlassesHub.LauncherEntry(widget.id, widget.displayName, widget.iconKey))
+                drawn = Widget(placement.size, SystemWidgetView(context, widget, placement.size, icon, widgetSource))
+                widgets[widget.id] = drawn
+                strip.addView(drawn.view)
+            }
+            drawn.view.layoutParams = cellParams(placement)
+        }
+    }
+
+    private fun cellParams(placement: TilePlacement) = FrameLayout.LayoutParams(
+        width(placement.size.cols),
+        height(placement.size.rows),
+    ).apply {
+        leftMargin = placement.col * PITCH
+        topMargin = placement.row * PITCH
     }
 
     private fun createTile(entry: GlassesHub.LauncherEntry, size: TileSize, data: HomeTile?): Tile {
@@ -174,6 +210,12 @@ internal class GridHome(
             if (placement.row < offsetRow) offsetRow = placement.row
             val bottom = placement.row + placement.size.rows
             if (bottom > offsetRow + visibleRows) offsetRow = bottom - visibleRows
+            // As far toward the content's end (or start) as keeps the selection whole in view.
+            if (selectedId == lastEntryId) {
+                offsetRow = maxOf(offsetRow, placement.row)
+            } else if (selectedId == firstEntryId) {
+                offsetRow = minOf(offsetRow, bottom - visibleRows)
+            }
         }
         offsetRow = offsetRow.coerceIn(0, (totalRows - visibleRows).coerceAtLeast(0))
         scrollTo(offsetRow * PITCH)
@@ -196,6 +238,8 @@ internal class GridHome(
     internal fun isTileFocusedForTest(id: String): Boolean = tiles[id]?.item?.homeFocused == true
 
     internal fun tileIdsForTest(): List<String> = tiles.keys.toList()
+
+    internal fun widgetViewForTest(id: String): SystemWidgetView? = widgets[id]?.view
 
     private fun width(cols: Int) = cols * UNIT + (cols - 1) * RokidHudTokens.SPACE_2
 

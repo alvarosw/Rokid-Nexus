@@ -224,6 +224,53 @@ class GlassesHubLauncherTest {
     }
 
     @Test
+    fun system_widgets_are_placed_but_never_launcher_entries_so_the_ring_skips_them() {
+        GlassesHubTestSupport.launcherList("a", "b", "c")
+        val layout = listOf(
+            TileLayoutEntry("a", TileSize.SMALL, col = 0, row = 0),
+            TileLayoutEntry("sys:clock", TileSize.WIDE, col = 1, row = 0),
+            TileLayoutEntry("b", TileSize.SMALL, col = 3, row = 0),
+            TileLayoutEntry("sys:status", TileSize.SMALL, col = 0, row = 1),
+            TileLayoutEntry("sys:radar", TileSize.SMALL, col = 1, row = 1),
+            TileLayoutEntry("c", TileSize.SMALL, col = 2, row = 1),
+        )
+        GlassesHubTestSupport.receive(BusPaths.TILE_LAYOUT_CONFIG, TileLayoutContract.configToJson(layout))
+
+        val ids = seen.last().map { it.id }
+        assertEquals(listOf("a", "b", "c"), ids)
+        assertEquals(
+            setOf("a", "b", "c", "sys:clock", "sys:status"),
+            GlassesHub.launcherPlacements().map { it.pluginId }.toSet(),
+        )
+
+        // The machine only ever sees entries: Next walks a, b, c and wraps, never onto a widget.
+        val h = com.anezium.rokidbus.glasses.hud.Harness(entries = ids)
+        h.open()
+        val visited = (0 until 4).map { h.home().selectedId.also { h.next() } }
+        assertEquals(listOf("a", "b", "c", "a"), visited)
+
+        // The grid draws the widgets the hub resolved, apart from the entries.
+        val layer = HomeLayer(
+            context,
+            iconLoader = { _, _ -> android.graphics.drawable.ColorDrawable(0) },
+            tileSource = { null },
+            motion = HudMotionDriver.instant(),
+        )
+        layer.show(HomeMode.GRID, seen.last(), "a")
+        assertEquals(listOf("a", "b", "c"), layer.currentModel.placements.map { it.pluginId })
+        assertEquals(listOf("sys:clock", "sys:status"), layer.currentModel.widgets.map { it.pluginId })
+    }
+
+    @Test
+    fun a_layout_of_widgets_only_leaves_the_launcher_empty() {
+        GlassesHubTestSupport.launcherList()
+        val layout = listOf(TileLayoutEntry("sys:clock", TileSize.LARGE, col = 0, row = 0))
+        GlassesHubTestSupport.receive(BusPaths.TILE_LAYOUT_CONFIG, TileLayoutContract.configToJson(layout))
+        assertTrue(seen.last().isEmpty())
+        assertEquals(listOf("sys:clock"), GlassesHub.launcherPlacements().map { it.pluginId })
+    }
+
+    @Test
     fun item49_an_invalid_tile_layout_notifies_nobody() {
         GlassesHubTestSupport.launcherList("a", "b")
         val before = seen.size

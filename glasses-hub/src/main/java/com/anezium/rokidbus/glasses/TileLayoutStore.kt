@@ -52,10 +52,11 @@ internal object TileLayoutStore {
      * Where each of [entries] sits on the grid: the stored positions are authoritative, and anything
      * the layout does not place (a newly installed plugin, the camera entry before the phone ever
      * saw it) fills the first free cells in [entries]' own order. With no stored layout that is the
-     * plain row-major auto-pack, every tile [TileSize.SMALL].
+     * plain row-major auto-pack, every tile [TileSize.SMALL]. The system widgets the layout places
+     * follow the entries' placements; they are not launcher entries.
      */
     fun placements(context: Context, entries: List<GlassesHub.LauncherEntry>): List<TilePlacement> =
-        TileGridLayout.resolve(entries.map { it.id to null }, getEntries(context))
+        TileGridLayout.resolveWithWidgets(entries.map { it.id to null }, getEntries(context))
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

@@ -35,6 +35,11 @@ internal data class HomeViewModel(
     val tileData: Map<String, HomeTile> = emptyMap(),
     /** Where the grid puts each entry; empty in list mode. */
     val placements: List<TilePlacement> = emptyList(),
+    /**
+     * The system widgets the grid draws beside the entries; empty in list mode. They are not
+     * entries: never selected, opened or counted.
+     */
+    val widgets: List<TilePlacement> = emptyList(),
     /** A notice band owns the ring and draws the one focus frame; the selection rests. */
     val noticeOwnsRing: Boolean = false,
 ) {

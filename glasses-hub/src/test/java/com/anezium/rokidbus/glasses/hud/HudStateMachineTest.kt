@@ -936,4 +936,18 @@ class HudStateMachineTest {
         assertTrue(t2 != t1)
         assertTrue(h.send(HudEvent.DeadlineElapsed(t1)).isEmpty())
     }
+
+    // ---- system widgets ----------------------------------------------------------------------
+
+    @Test
+    fun a_system_widget_move_refreshes_an_open_home_and_keeps_the_selection() {
+        val h = Harness()
+        val ids = listOf("a", "b", "c")
+        h.send(HudEvent.LauncherEntriesChanged(ids, mapOf("sys:clock" to "widget|0,0,1x1")))
+        h.open()
+        h.next()
+        val fx = h.send(HudEvent.LauncherEntriesChanged(ids, mapOf("sys:clock" to "widget|0,2,1x1")))
+        assertEquals(listOf(RefreshHomeEntries(ids, "b")), fx)
+        assertEquals("b", h.home().selectedId)
+    }
 }

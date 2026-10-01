@@ -100,6 +100,7 @@ object GlassesHub {
     private val started = AtomicBoolean(false)
     private val registrations = CopyOnWriteArrayList<Registration>()
     private val launcherListeners = CopyOnWriteArrayList<(List<LauncherEntry>) -> Unit>()
+    private val phoneLinkListeners = CopyOnWriteArrayList<() -> Unit>()
     private val pluginGlyphCache = PluginGlyphCache()
     @Volatile private var wifiOwnership: GlassesWifiOwnership? = null
     // A lambda, not a method reference: the :camera process also loads this object, and a
@@ -144,7 +145,10 @@ object GlassesHub {
     private var manualSetupScreenLock: PowerManager.WakeLock? = null
     @Volatile private var launcherEntries: List<LauncherEntry> = emptyList()
 
-    /** The placements [allLauncherEntries] resolved last, so the grid draws exactly what ordered the list. */
+    /**
+     * The placements [allLauncherEntries] resolved last, so the grid draws exactly what ordered the
+     * list. It also holds the system widgets' placements, which order nothing: they are not entries.
+     */
     @Volatile private var launcherPlacements: List<TilePlacement> = emptyList()
 
     internal fun launcherPlacements(): List<TilePlacement> = launcherPlacements
@@ -1318,7 +1322,17 @@ object GlassesHub {
         return state
     }
 
+    /** Whether the glasses-phone link is up on either transport. */
+    internal fun isPhoneLinked(): Boolean = phoneConnected
+
+    /** [listener] runs on every link-state change, on the thread that saw it, until the returned stop. */
+    internal fun observePhoneLink(listener: () -> Unit): () -> Unit {
+        phoneLinkListeners += listener
+        return { phoneLinkListeners.remove(listener) }
+    }
+
     private fun notifyLinkState() {
+        phoneLinkListeners.forEach { listener -> runCatching { listener() } }
         val state = linkState()
         // CXR is enough for control JSON, but every photo session needs the SPP data plane. Using
         // the aggregate CXR-or-SPP state loses the rising edge when SPP returns while CXR stayed up.
