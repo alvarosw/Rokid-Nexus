@@ -135,7 +135,7 @@ open class TileLayoutSettingsActivity : Activity() {
             bind(
                 state,
                 state.tiles.associate { tile ->
-                    tile.id to TileVisual(glyphFor(tile.id), TileSnapshotCache.get(tile.id))
+                    tile.id to TileVisual(glyphFor(tile.id), TileSnapshotCache.get(tile.id) ?: tilePreviewSample(tile.id))
                 },
                 visibleRows,
             )
