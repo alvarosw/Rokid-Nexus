@@ -1,0 +1,21 @@
+{
+  "contentKey": "preview",
+  "template": "music",
+  "content": {
+    "title": "Low Tide Static",
+    "artist": "Marta Velez",
+    "album": "Salt Rooms",
+    "source": "Spotify",
+    "playing": true,
+    "positionMs": 102000,
+    "durationMs": 236000,
+    "artworkKey": ""
+  },
+  "title": "Low Tide Static",
+  "subtitle": "Marta Velez · Salt Rooms",
+  "badge": "",
+  "progress": 0.43,
+  "unit": "",
+  "tone": "ok",
+  "rows": []
+}

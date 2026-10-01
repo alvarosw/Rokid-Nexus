@@ -49,6 +49,7 @@ import com.anezium.rokidbus.shared.NoticeSurfaceContract
 import com.anezium.rokidbus.shared.plugin.NexusInputEvent
 import com.anezium.rokidbus.shared.plugin.PluginCapability
 import com.anezium.rokidbus.shared.plugin.PluginOpenTypes
+import com.anezium.rokidbus.shared.tile.TileContent
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -282,7 +283,13 @@ class HelloPluginService : NexusPluginService() {
     private fun publishDemoTile() {
         val prefs = getSharedPreferences(TILE_PREFS, MODE_PRIVATE)
         val index = prefs.getInt(KEY_NEXT_TILE, 0).mod(DemoTiles.all.size)
-        val result = nexusWidgetTileSession("demo")?.publish(DemoTiles.all[index])
+        val tile = DemoTiles.all[index]
+        val session = nexusWidgetTileSession("demo")
+        val result = if (tile.content is TileContent.Music) {
+            session?.publish(tile, DemoCover.png())
+        } else {
+            session?.publish(tile)
+        }
         if (result == NexusSdkResult.SENT) prefs.edit().putInt(KEY_NEXT_TILE, index + 1).apply()
     }
 

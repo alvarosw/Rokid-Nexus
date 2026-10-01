@@ -1,12 +1,22 @@
 package com.anezium.rokidbus.phone
 
 import android.content.ComponentName
+import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageInfo
+import android.content.pm.ResolveInfo
+import android.content.pm.ServiceInfo
+import android.content.pm.Signature
+import android.os.Bundle
 import com.anezium.rokidbus.shared.BusConstants
+import com.anezium.rokidbus.shared.tile.TileSize
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 
 // Robolectric for real ComponentName equality; the JUnit android.jar stubs throw on it.
 @RunWith(RobolectricTestRunner::class)
@@ -137,5 +147,53 @@ class PhonePluginDiscoveryTest {
             ),
         )
         assertEquals(listOf("alpha", "zulu"), results.map { it.displayName.lowercase() })
+    }
+
+    @Test
+    fun `installed plugin's declared tile sizes reach the descriptor and the editor`() {
+        val context = RuntimeEnvironment.getApplication()
+        val packageName = "dev.example.tiles"
+        val applicationInfo = ApplicationInfo().apply {
+            this.packageName = packageName
+            uid = 10042
+        }
+        val serviceInfo = ServiceInfo().apply {
+            this.packageName = packageName
+            name = "$packageName.PluginService"
+            exported = true
+            this.applicationInfo = applicationInfo
+            metaData = Bundle().apply {
+                putString(BusConstants.META_PLUGIN_ID, "tiles")
+                putString(BusConstants.META_PLUGIN_DISPLAY_NAME, "Tiles")
+                putInt(BusConstants.META_PLUGIN_API_VERSION, BusConstants.API_VERSION)
+                putString(BusConstants.META_PLUGIN_CAPABILITIES, "surfaces,widget_tile")
+                putString(BusConstants.META_PLUGIN_RECEIVE_PREFIXES, "/system/plugin,/plugin/tiles")
+                putString(BusConstants.META_PLUGIN_TILE_SIZES, "1x1,2x2")
+            }
+        }
+        val shadowPackageManager = shadowOf(context.packageManager)
+        @Suppress("DEPRECATION")
+        shadowPackageManager.installPackage(
+            PackageInfo().apply {
+                this.packageName = packageName
+                this.applicationInfo = applicationInfo
+                services = arrayOf(serviceInfo)
+                signatures = arrayOf(Signature(byteArrayOf(1, 2, 3)))
+            },
+        )
+        shadowPackageManager.addResolveInfoForIntent(
+            Intent(BusConstants.ACTION_PLUGIN),
+            ResolveInfo().apply { this.serviceInfo = serviceInfo },
+        )
+
+        val candidate = PhonePluginDiscovery(context.packageManager).discover()
+            .single { it.packageName == packageName }
+
+        val descriptor = (candidate as PhonePluginCandidate.Valid).principal.descriptor
+        assertEquals(setOf(TileSize.SMALL, TileSize.LARGE), descriptor.supportedTileSizes)
+        assertEquals(
+            listOf(TileSize.SMALL, TileSize.LARGE),
+            TileSizeOptions.forPlugin(descriptor.supportedTileSizes),
+        )
     }
 }

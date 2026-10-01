@@ -1,14 +1,28 @@
 package com.anezium.rokidbus.hudtiles
 
+import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import com.anezium.rokidbus.client.ui.RokidHudTokens
 
 /** What a run of tile text is, so hosts and tests can find it without matching strings. */
-enum class TilePart { NAME, SUMMARY, TITLE, VALUE, UNIT, SUBTITLE, BADGE, ROW }
+enum class TilePart {
+    NAME, SUMMARY, TITLE, VALUE, UNIT, SUBTITLE, BADGE, ROW,
+
+    /** Music. */
+    ARTIST, ALBUM, SOURCE_CAPTION, SOURCE, TIME, ELAPSED, DURATION,
+
+    /** Lines: the current line, the lines around it, the track under them. */
+    CURRENT_LINE, CONTEXT_LINE, TRACK_TITLE, TRACK_META,
+
+    /** List. */
+    SECTION_TITLE, SECTION_DETAIL, ITEM_TITLE, ITEM_META, PARAGRAPH, MARKER, MORE, FOOTER,
+}
 
 /** One positioned drawing step of a tile, in glasses pixels from the tile's top-left corner. */
 sealed interface TileOp {
@@ -84,14 +98,62 @@ sealed interface TileOp {
         }
     }
 
-    /** Where a track's artwork goes; drawn as its empty frame until artwork is resolved. */
-    data class ArtworkSlot(val left: Float, val top: Float, val size: Float, val borderColor: Int) : TileOp {
+    /** A track's artwork, scaled to cover the [size] square and cropped to it, as decoded. */
+    data class Artwork(val bitmap: Bitmap, val left: Float, val top: Float, val size: Float) : TileOp {
+        override fun draw(canvas: Canvas) {
+            if (bitmap.isRecycled) return
+            val edge = minOf(bitmap.width, bitmap.height)
+            val x = (bitmap.width - edge) / 2
+            val y = (bitmap.height - edge) / 2
+            canvas.drawBitmap(
+                bitmap,
+                Rect(x, y, x + edge, y + edge),
+                RectF(left, top, left + size, top + size),
+                TilePaints.bitmap,
+            )
+        }
+    }
+
+    /** The play triangle or the pause bars, 1 px stroke, in a [size] square. */
+    data class PlayState(val playing: Boolean, val left: Float, val top: Float, val size: Float, val color: Int) : TileOp {
+        override fun draw(canvas: Canvas) {
+            val stroke = TilePaints.stroke
+            stroke.strokeWidth = RokidHudTokens.BORDER_DEFAULT.toFloat()
+            stroke.color = color
+            val unit = size / 16f
+            val path = Path()
+            if (playing) {
+                path.moveTo(left + 5.5f * unit, top + 3.5f * unit)
+                path.lineTo(left + 12f * unit, top + 8f * unit)
+                path.lineTo(left + 5.5f * unit, top + 12.5f * unit)
+                path.close()
+            } else {
+                path.moveTo(left + 5.5f * unit, top + 3.5f * unit)
+                path.lineTo(left + 5.5f * unit, top + 12.5f * unit)
+                path.moveTo(left + 10.5f * unit, top + 3.5f * unit)
+                path.lineTo(left + 10.5f * unit, top + 12.5f * unit)
+            }
+            canvas.drawPath(path, stroke)
+        }
+    }
+
+    /** A list item's leading glyph: the plugin's own glyph tinted [color] in a 1 px rounded box. */
+    data class GlyphBox(
+        val drawable: Drawable,
+        val left: Float,
+        val top: Float,
+        val size: Float,
+        val color: Int,
+        val borderColor: Int,
+    ) : TileOp {
         override fun draw(canvas: Canvas) {
             val stroke = TilePaints.stroke
             stroke.strokeWidth = RokidHudTokens.BORDER_DEFAULT.toFloat()
             stroke.color = borderColor
-            val radius = RokidHudTokens.RADIUS_DATA.toFloat()
+            val radius = RokidHudTokens.RADIUS_CONTROL.toFloat()
             canvas.drawRoundRect(left + 0.5f, top + 0.5f, left + size - 0.5f, top + size - 0.5f, radius, radius, stroke)
+            val icon = RokidHudTokens.ICON_SM.toFloat()
+            Icon(drawable, left + (size - icon) / 2f, top + (size - icon) / 2f, icon, color).draw(canvas)
         }
     }
 

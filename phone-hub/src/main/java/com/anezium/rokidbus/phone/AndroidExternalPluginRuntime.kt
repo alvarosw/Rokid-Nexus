@@ -17,7 +17,7 @@ class AndroidExternalPluginRuntime(
         { _, _, _, _, _ -> false },
     private val hideCallback: (String) -> Unit,
     private val disconnectedCallback: (PhonePluginPrincipal) -> Unit,
-) : ExternalPluginRuntime, CameraCompanionRuntime {
+) : ExternalPluginRuntime, CameraCompanionRuntime, TileLeaseRuntime {
     private val connections = ConcurrentHashMap<PluginGrantKey, ServiceConnection>()
 
     override fun bind(principal: PhonePluginPrincipal): Boolean {
@@ -47,8 +47,8 @@ class AndroidExternalPluginRuntime(
             context.bindService(
                 Intent(BusConstants.ACTION_PLUGIN).setComponent(principal.serviceComponent),
                 connection,
-                // BIND_IMPORTANT: this bind only exists while the plugin is open on the HUD,
-                // and OEM app freezers (Samsung Freecess) freeze plainly-bound background
+                // BIND_IMPORTANT: this bind only exists while the plugin is open on the HUD or
+                // holds a tile lease, and OEM app freezers (Samsung Freecess) freeze plainly-bound background
                 // processes mid-display unless the hub's foreground importance propagates.
                 Context.BIND_AUTO_CREATE or Context.BIND_IMPORTANT,
             )

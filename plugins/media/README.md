@@ -27,5 +27,21 @@ HUD surface, and forwards only play/pause/previous/next transport commands.
 - Without that capability, artwork keeps the original center-cropped,
   contrast-normalized, Floyd-Steinberg-dithered 96 x 96 `mono1` payload.
 
+## Grid tile
+
+With the optional `widget_tile` grant, Media Deck publishes a `Music` tile for the
+glasses grid in every size from `1x1` to `3x3`: title, artist, album, source app,
+the playback position anchor with the duration, and the cover (the same 256 px JPEG
+as the image surface, sent once per `artworkKey`, which changes with the track and
+the image). It publishes on a track change, play/pause, a seek of more than 1.25 s,
+or a cover that arrives late, never per second; the glasses advance the position
+themselves. With no active media session the tile reads "Nothing playing", and
+without notification access it asks for it.
+
+The media session is watched for the tile only between `onNexusTileActive(true)` and
+`onNexusTileActive(false)`, the hub's tile lease. Outside the lease and an open
+surface the plugin is dormant. The open surface is unchanged and independent of the
+tile.
+
 Media titles and artwork are user data. They may be rendered on the requested HUD but
 must not be included in production logs.

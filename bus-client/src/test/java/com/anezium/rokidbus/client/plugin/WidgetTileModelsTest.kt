@@ -15,12 +15,16 @@ class WidgetTileModelsTest {
     private class FakeTransport : NexusPluginTransport {
         lateinit var listener: NexusPluginTransport.Listener
         val sends = mutableListOf<Pair<String, JSONObject>>()
+        val binaries = mutableListOf<Pair<JSONObject, ByteArray>>()
         override fun connect(listener: NexusPluginTransport.Listener) { this.listener = listener }
         override fun send(path: String, id: String, payload: JSONObject): Boolean {
             sends += path to JSONObject(payload.toString())
             return true
         }
-        override fun sendBinary(path: String, id: String, payload: JSONObject, data: ByteArray): Boolean = false
+        override fun sendBinary(path: String, id: String, payload: JSONObject, data: ByteArray): Boolean {
+            binaries += JSONObject(payload.toString()) to data
+            return path == BusPaths.TILE_PUBLISH
+        }
         override fun capabilities(): Int = 0
         override fun approvedCapabilities(): String? = null
         override fun close() = Unit
@@ -113,5 +117,52 @@ class WidgetTileModelsTest {
         assertThrows(IllegalArgumentException::class.java) {
             TileSnapshot(pluginId = "hello", contentKey = "x", title = "x", rows = List(5) { "row" })
         }
+    }
+
+    private fun cover(width: Int = 64, height: Int = 64): ByteArray = ByteArray(128).also { bytes ->
+        byteArrayOf(
+            0xff.toByte(), 0xd8.toByte(), 0xff.toByte(), 0xc0.toByte(),
+            0x00, 0x11, 0x08,
+            (height ushr 8).toByte(), height.toByte(),
+            (width ushr 8).toByte(), width.toByte(),
+            0x03, 0x01, 0x11, 0x00, 0x02, 0x11, 0x00, 0x03, 0x11, 0x00,
+            0xff.toByte(), 0xd9.toByte(),
+        ).copyInto(bytes)
+    }
+
+    private fun track(key: String) = TileSnapshot(
+        pluginId = "hello",
+        contentKey = "track",
+        content = TileContent.Music(title = "Harbour Lights", playing = true, artworkKey = key),
+    )
+
+    @Test
+    fun `artwork bytes cross once per artworkKey`() {
+        val (client, transport) = client("widget_tile")
+        val session = client.widgetTileSession("main")
+        assertEquals(NexusSdkResult.SENT, session.publish(track("a"), cover()))
+        val (payload, bytes) = transport.binaries.single()
+        assertEquals("music", payload.getString("template"))
+        assertEquals("image/jpeg", payload.getJSONObject("artwork").getString("mimeType"))
+        assertEquals(128, bytes.size)
+        assertEquals(NexusSdkResult.SENT, session.publish(track("a"), cover()))
+        assertEquals(1, transport.binaries.size)
+        assertEquals(1, transport.sends.size)
+        assertEquals(false, transport.sends.single().second.has("artwork"))
+        assertEquals(NexusSdkResult.SENT, session.publish(track("b"), cover()))
+        assertEquals(2, transport.binaries.size)
+    }
+
+    @Test
+    fun `artwork is refused without a music artworkKey or with bytes over the limits`() {
+        val (client, transport) = client("widget_tile")
+        val session = client.widgetTileSession("main")
+        assertEquals(NexusSdkResult.INVALID_PAYLOAD, session.publish(snapshot(), cover()))
+        assertEquals(NexusSdkResult.INVALID_PAYLOAD, session.publish(track(""), cover()))
+        assertEquals(NexusSdkResult.INVALID_PAYLOAD, session.publish(track("a"), cover(width = 512)))
+        assertEquals(NexusSdkResult.INVALID_PAYLOAD, session.publish(track("a"), ByteArray(16)))
+        assertEquals(0, transport.binaries.size + transport.sends.size)
+        val (denied, _) = client("")
+        assertEquals(NexusSdkResult.CAPABILITY_NOT_GRANTED, denied.widgetTileSession("main").publish(track("a"), cover()))
     }
 }

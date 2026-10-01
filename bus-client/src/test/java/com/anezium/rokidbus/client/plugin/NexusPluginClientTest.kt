@@ -65,6 +65,8 @@ class NexusPluginClientTest {
         override fun onLinkState(state: Int) { events += "link:$state" }
         override fun onGlassesAiButton(active: Boolean) { events += "ai:$active" }
         override fun onRegistrationState(result: Int) { events += "registration:$result" }
+        override fun onTileActive(active: Boolean) { events += "tile:$active" }
+        override fun onTileRefresh() { events += "tile-refresh" }
         override fun onMessage(path: String, id: String, payload: JSONObject) { events += "message:$path" }
     }
 
@@ -277,6 +279,71 @@ class NexusPluginClientTest {
         transport.listener.onMessage(BusPaths.PLUGIN_OPEN, "open-2", payload())
         assertEquals(
             listOf("registration:0", "open", "close", "registration:0", "open"),
+            callbacks.events,
+        )
+        client.close()
+    }
+
+    @Test
+    fun `tile lease changes reach the plugin once per change`() {
+        val (client, transport, callbacks) = fixture()
+        transport.listener.onRegistrationState(PluginRegistrationResult.APPROVED)
+        transport.listener.onMessage(BusPaths.PLUGIN_TILE_ACTIVE, "t1", payload().put("active", true))
+        transport.listener.onMessage(BusPaths.PLUGIN_TILE_ACTIVE, "t2", payload().put("active", true))
+        transport.listener.onMessage(BusPaths.PLUGIN_TILE_REFRESH, "r1", payload())
+        transport.listener.onMessage(BusPaths.PLUGIN_TILE_REFRESH, "r1", payload())
+        transport.listener.onMessage(BusPaths.PLUGIN_TILE_ACTIVE, "t3", payload().put("active", false))
+        transport.listener.onMessage(BusPaths.PLUGIN_TILE_REFRESH, "r2", payload())
+        assertEquals(
+            listOf("registration:0", "tile:true", "tile-refresh", "tile:false"),
+            callbacks.events,
+        )
+        client.close()
+    }
+
+    @Test
+    fun `tile lease events are ignored before approval and for another plugin`() {
+        val (client, transport, callbacks) = fixture()
+        transport.listener.onRegistrationState(PluginRegistrationResult.PENDING_USER_APPROVAL)
+        transport.listener.onMessage(BusPaths.PLUGIN_TILE_ACTIVE, "t1", payload().put("active", true))
+        transport.listener.onRegistrationState(PluginRegistrationResult.APPROVED)
+        transport.listener.onMessage(
+            BusPaths.PLUGIN_TILE_ACTIVE,
+            "t2",
+            JSONObject().put("pluginId", "other").put("active", true),
+        )
+        assertEquals(listOf("registration:1", "registration:0"), callbacks.events)
+        client.close()
+    }
+
+    @Test
+    fun `losing registration or closing ends an active tile lease`() {
+        val (client, transport, callbacks) = fixture()
+        transport.listener.onRegistrationState(PluginRegistrationResult.APPROVED)
+        transport.listener.onMessage(BusPaths.PLUGIN_TILE_ACTIVE, "t1", payload().put("active", true))
+        transport.listener.onRegistrationState(PluginRegistrationResult.DENIED)
+        transport.listener.onRegistrationState(PluginRegistrationResult.APPROVED)
+        transport.listener.onMessage(BusPaths.PLUGIN_TILE_ACTIVE, "t2", payload().put("active", true))
+        client.close()
+        assertEquals(
+            listOf(
+                "registration:0", "tile:true", "registration:2", "tile:false",
+                "registration:0", "tile:true", "tile:false",
+            ),
+            callbacks.events,
+        )
+    }
+
+    @Test
+    fun `re-registration ends a stale tile lease so the hub can grant it again`() {
+        val (client, transport, callbacks) = fixture()
+        val registration = payload().put("result", PluginRegistrationResult.APPROVED).put("capabilities", "widget_tile")
+        transport.listener.onMessage(BusPaths.PLUGIN_REGISTRATION, "reg-1", JSONObject(registration.toString()))
+        transport.listener.onMessage(BusPaths.PLUGIN_TILE_ACTIVE, "t1", payload().put("active", true))
+        transport.listener.onMessage(BusPaths.PLUGIN_REGISTRATION, "reg-2", JSONObject(registration.toString()))
+        transport.listener.onMessage(BusPaths.PLUGIN_TILE_ACTIVE, "t2", payload().put("active", true))
+        assertEquals(
+            listOf("registration:0", "tile:true", "tile:false", "registration:0", "tile:true"),
             callbacks.events,
         )
         client.close()

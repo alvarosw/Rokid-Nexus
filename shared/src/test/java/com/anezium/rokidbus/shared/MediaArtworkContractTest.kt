@@ -51,6 +51,19 @@ class MediaArtworkContractTest {
         assertTrue(result is ImageSurfaceValidationResult.Invalid)
     }
 
+    @Test
+    fun `describes jpeg artwork bytes and refuses what is not an accepted image`() {
+        val bytes = jpeg(width = 64, height = 48)
+        val artwork = MediaArtworkContract.describe(bytes)!!
+        assertEquals(ImageSurfaceContract.MIME_JPEG, artwork.getString("mimeType"))
+        assertEquals(64, artwork.getInt("pixelWidth"))
+        assertEquals(48, artwork.getInt("pixelHeight"))
+        assertEquals(ImageSurfaceContract.sha256(bytes), artwork.getString("sha256"))
+        assertTrue(MediaArtworkContract.validateArtwork("k", artwork, bytes) is ImageSurfaceValidationResult.Valid)
+        assertEquals(null, MediaArtworkContract.describe(ByteArray(16)))
+        assertEquals(null, MediaArtworkContract.describe(jpeg(width = 300, height = 300)))
+    }
+
     private fun payload(
         bytes: ByteArray,
         width: Int = MediaArtworkContract.MAX_EDGE_PIXELS,

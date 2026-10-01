@@ -67,6 +67,22 @@ hub-produced transcript text and does not require the plugin to request raw
 (§3.3); it is likewise independent of `microphone`, since the plugin supplies
 text and never touches audio.
 
+A capability that the plugin can do without goes in `OPTIONAL_CAPABILITIES`
+instead. A hub that knows the key merges it into the requested set, so the
+wearer approves it like any other capability; an unknown value in it is
+ignored, unlike in `CAPABILITIES`, where it rejects the whole descriptor with
+`UNKNOWN_CAPABILITY`. The reason is compatibility: a hub that predates a
+capability, such as an upstream hub without `widget_tile`, would reject the
+plugin if it were listed in `CAPABILITIES`, but it ignores unknown meta-data
+keys, so the same APK still loads there without the optional feature.
+
+```xml
+<meta-data android:name="com.anezium.rokidbus.plugin.OPTIONAL_CAPABILITIES" android:value="widget_tile" />
+```
+
+Check the result at run time rather than assuming the optional capability is
+present: without the grant, `publish` returns `CAPABILITY_NOT_GRANTED`.
+
 Descriptor capabilities authorize Nexus hub resources and routes. They do not
 replace Android permissions for a phone-local platform API. A headless plugin
 may use such an API under permissions declared in its own manifest and granted
@@ -107,8 +123,9 @@ class HelloPluginService : NexusPluginService() {
 
 The hub can cold-start this service after the app process was stopped. Do not use
 an Activity initializer or static factory. `onNexusOpen`, `onNexusClose`, input,
-link-state, and registration callbacks are serialized on the application main
-thread. Override `onNexusOpen(openType)` instead of `onNexusOpen()` when it
+link-state, registration, and tile lease (`onNexusTileActive`,
+`onNexusTileRefresh`; see [Widget tiles](#widget-tiles)) callbacks are
+serialized on the application main thread. Override `onNexusOpen(openType)` instead of `onNexusOpen()` when it
 matters *why* the plugin was opened: `PluginOpenTypes.OPEN` is a deliberate
 pick (the glasses launcher, or *Open* on the phone), `PluginOpenTypes.AI_ASSIST`
 is the assist button handing over, and `PluginOpenTypes.RESUME` returns a plugin
@@ -1234,13 +1251,36 @@ working page and data-patch flow are in
 
 ### Widget tiles
 
-Requires the `widget_tile` capability. Adding it to an already-approved plugin
-resets its grant to Pending like any other capability change (§4). Publishing your
-tile is deliberately *not* tied to a surface session — you may have no surface open
-at all — and is only ever a side effect of a wake you already have for another
-reason: see the fourth Background policy exception in
-[PLUGINS.md](PLUGINS.md#background-policy). This delivery grants no plugin new
-background time.
+Requires the `widget_tile` capability; declare it in `OPTIONAL_CAPABILITIES`
+(§2) so the same APK still loads on a hub without tiles. Adding it to an
+already-approved plugin resets its grant to Pending like any other capability
+change (§4). Publishing your tile is deliberately *not* tied to a surface
+session — you may have no surface open at all. When you may run to keep it
+current is decided by the hub's *tile lease*, the fourth Background policy
+exception in [PLUGINS.md](PLUGINS.md#background-policy):
+
+```kotlin
+override fun onNexusTileActive(active: Boolean) {
+    // true: grid mode is on, the glasses are linked, the tile is placed, and
+    // widget_tile is granted. Watch your own event sources and publish.
+    // false: stop watching and return to dormant.
+    if (active) runtime.startTileUpdates() else runtime.stopTileUpdates()
+}
+
+override fun onNexusTileRefresh() {
+    // Poll-based plugins: fetch once, publish, and go dormant again.
+    runtime.fetchOnceAndPublishTile()
+}
+```
+
+The hub binds your service for as long as the lease lasts, as it does for an
+open plugin, and calls `onNexusTileActive(true)` once you have registered.
+`onNexusTileActive` is called only on a change, and `false` also arrives when
+your registration is lost or the client closes. `onNexusTileRefresh` arrives only
+while the lease is active: when it begins, when the glasses home comes back into
+view, and on a hub timer, never more than once per 15 minutes. Never schedule a
+refresh of your own. Both callbacks have no-op defaults, so a plugin that only
+publishes from an open surface needs neither.
 
 ```kotlin
 val result = nexusWidgetTileSession("main")?.publish(
@@ -1296,10 +1336,42 @@ nexusWidgetTileSession("main")?.publish(
 ```
 
 `positionMs` and `ageMs` are measured at the moment you publish; the glasses
-add the time since they received it, so neither device's clock matters. A hub
-that has no layout for a template yet draws its down-level generic tile, and
-the payload always carries those generic fields too, so an older glasses hub
-still shows something.
+add the time since they received it, so neither device's clock matters: a
+playing position, the current timed line and an item's "1 min" move on their
+own between publishes, so publish per track, seek or new item, never per
+second. A hub that has no layout for a template draws its down-level generic
+tile, and the payload always carries those generic fields too, so an older
+glasses hub still shows something.
+
+What each size shows is the hub's choice and may change; as a guide: a `Music`
+tile shows its cover from `2x1` up with the times and the track at the foot; a
+`Lines` tile keeps the current line in the middle with up to three lines on
+either side at `3x3`; a `ListContent` tile fills items while each fits whole
+(its title, and a first paragraph line), counts the rest plus your `overflow`
+as "+N more", and drops paragraphs, then details, then section headers when
+space runs out — an item title never drops. A trailing media marker such as
+`[photo]` at the end of a `paragraph` gets its own line where there is room.
+
+A music tile shows its cover when you publish it with the image bytes:
+
+```kotlin
+session.publish(
+    TileSnapshot(
+        pluginId = "media",
+        contentKey = "now-playing",
+        content = TileContent.Music(title = "Low Tide Static", playing = true, artworkKey = "album-123"),
+    ),
+    coverJpegOrPng, // <= 64 KiB, <= 256 px a side, as Media Deck's surface artwork
+)
+```
+
+The bytes cross the bus only when `artworkKey` differs from the last key that
+session sent: publish every update with the bytes and the session sends them
+once. Use a key that changes with the image (an album id, a hash). The hubs
+keep the cover with the tile (the glasses persist it) and the phone resends it
+after a reconnect. A snapshot without a cover, or whose cover is not there
+yet, takes the text-only music layout. Bytes over the limits, or a snapshot
+that is not `Music` with a non-empty `artworkKey`, return `INVALID_PAYLOAD`.
 
 `TileSnapshot` is bounded the same way `SurfaceModels` is (see
 [`WidgetTileContract`](../shared/src/main/java/com/anezium/rokidbus/shared/tile/WidgetTileContract.kt)):
@@ -1333,9 +1405,10 @@ something you lay out yourself. A hub that predates the 3-wide shapes rejects th
 whole `TILE_SIZES` value as malformed, so a plugin declaring `3x1`, `3x2` or `3x3`
 needs a hub that includes them. A tile is not foreground-exclusive:
 unlike an ordinary surface, publishing never returns `SURFACE_BUSY`, since every
-plugin owns its own tile slot. The hub may instead drop a publish silently past its
-rate ceiling — there is no error callback for that, matching the "give up quietly"
-handling of `SURFACE_BUSY` elsewhere. A plugin that never calls `publish()` keeps
+plugin owns its own tile slot. Past its rate ceiling the phone hub holds a publish
+instead of sending it, and a newer publish replaces the held one, so only your
+latest snapshot is guaranteed to arrive — there is no error callback for that,
+matching the "give up quietly" handling of `SURFACE_BUSY` elsewhere. A plugin that never calls `publish()` keeps
 rendering through the generic fallback tile (icon + name) with zero code required.
 
 ### 3.1 Microphone (audio lease)

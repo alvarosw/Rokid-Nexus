@@ -12,8 +12,25 @@ android {
         applicationId = "com.anezium.rokidbus.phone"
         minSdk = 30
         targetSdk = 36
-        versionCode = 10500
-        versionName = "1.5.0"
+        versionCode = 10600
+        versionName = "1.6.0"
+        buildConfigField(
+            "String",
+            "FORK_REGISTRY_URL",
+            "\"https://raw.githubusercontent.com/alvarosw/Rokid-Nexus/main/dist/nexus-plugins.v1.json\"",
+        )
+        buildConfigField(
+            "String",
+            "UPSTREAM_REGISTRY_URL",
+            "\"https://raw.githubusercontent.com/Anezium/RokidBrew-Registry/main/dist/nexus-plugins.v1.json\"",
+        )
+        // App updates come only from the fork: an upstream build carries another signer and
+        // cannot be installed over this one.
+        buildConfigField(
+            "String",
+            "APP_RELEASES_URL",
+            "\"https://api.github.com/repos/alvarosw/Rokid-Nexus/releases?per_page=100\"",
+        )
     }
 
     buildTypes {
@@ -24,6 +41,10 @@ android {
                 "proguard-rules.pro",
             )
         }
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     compileOptions {

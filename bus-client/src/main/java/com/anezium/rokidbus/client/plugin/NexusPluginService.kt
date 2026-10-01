@@ -185,6 +185,8 @@ abstract class NexusPluginService : Service(), NexusPluginCallbacks {
             stopNexusSessionForeground()
         }
     }
+    final override fun onTileActive(active: Boolean) = onNexusTileActive(active)
+    final override fun onTileRefresh() = onNexusTileRefresh()
     final override fun onAssistantTakeover(enabled: Boolean) = onNexusAssistantTakeover(enabled)
     final override fun onAssistantTakeoverError(code: String) = onNexusAssistantTakeoverError(code)
     final override fun onMessage(path: String, id: String, payload: JSONObject) =
@@ -249,6 +251,15 @@ abstract class NexusPluginService : Service(), NexusPluginCallbacks {
     protected open fun onNexusAssistantTakeover(enabled: Boolean) = Unit
     protected open fun onNexusAssistantTakeoverError(code: String) = Unit
     protected open fun onNexusRegistrationState(result: Int) = Unit
+
+    /**
+     * This plugin's grid tile lease began or ended; see [NexusPluginCallbacks.onTileActive].
+     * Start observing the sources the tile shows when `true`, stop when `false`.
+     */
+    protected open fun onNexusTileActive(active: Boolean) = Unit
+
+    /** Fetch once and publish the tile; see [NexusPluginCallbacks.onTileRefresh]. */
+    protected open fun onNexusTileRefresh() = Unit
     protected open fun onNexusMessage(path: String, id: String, payload: JSONObject) = Unit
     protected open fun onNexusBinaryMessage(
         path: String,
@@ -362,6 +373,7 @@ abstract class NexusPluginService : Service(), NexusPluginCallbacks {
             BusConstants.META_PLUGIN_DISPLAY_NAME,
             BusConstants.META_PLUGIN_API_VERSION,
             BusConstants.META_PLUGIN_CAPABILITIES,
+            BusConstants.META_PLUGIN_OPTIONAL_CAPABILITIES,
             BusConstants.META_PLUGIN_RECEIVE_PREFIXES,
             BusConstants.META_PLUGIN_SETTINGS_ACTIVITY,
             BusConstants.META_PLUGIN_LAUNCHABLE,

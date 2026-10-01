@@ -22,7 +22,7 @@ class StoreVersionHistoryActivity : Activity() {
             finish()
             return
         }
-        val plugin = RegistryClient.create(applicationContext)
+        val plugin = StoreRegistry.create(applicationContext)
             .cachedSnapshot()
             ?.feed
             ?.plugins

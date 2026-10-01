@@ -11,12 +11,14 @@ import android.os.SystemClock
 import android.widget.FrameLayout
 import com.anezium.rokidbus.glasses.GlassesHub
 import com.anezium.rokidbus.glasses.HudTopInset
+import com.anezium.rokidbus.glasses.TileArtworkCache
 import com.anezium.rokidbus.glasses.TileCache
 import com.anezium.rokidbus.glasses.TileController
 import com.anezium.rokidbus.glasses.TileLayoutStore
 import com.anezium.rokidbus.glasses.DeviceWidgetSource
 import com.anezium.rokidbus.glasses.SystemWidgetSource
 import com.anezium.rokidbus.shared.tile.SystemWidgets
+import com.anezium.rokidbus.shared.tile.TileContent
 import com.anezium.rokidbus.shared.tile.TileGridLayout
 import com.anezium.rokidbus.shared.tile.TilePlacement
 
@@ -57,7 +59,10 @@ internal class HomeLayer(
             null
         } else {
             TileCache.get(context, id)?.let {
-                HomeTile(it.snapshot, TileCache.isStale(it, SystemClock.elapsedRealtime()), it.receivedAtElapsedRealtime)
+                val artwork = (it.snapshot.content as? TileContent.Music)?.let { music ->
+                    TileArtworkCache.bitmap(context, id, music.artworkKey)
+                }
+                HomeTile(it.snapshot, TileCache.isStale(it, SystemClock.elapsedRealtime()), it.receivedAtElapsedRealtime, artwork)
             }
         }
     },

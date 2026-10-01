@@ -13,6 +13,24 @@ list views, media shows as inline markers: `[photo]`, `[N photos]`, or
 `[video M:SS]` with the clip duration — video playback itself is not a HUD
 surface.
 
+## Grid tile
+
+With the optional `widget_tile` grant, Feeds publishes a list tile for the
+glasses grid in every size from `1x1` to `3x3`: up to six posts from the first
+page of one timeline, each with the author, `@handle`, the post text with its
+media marker at the end, and its age, under a summary such as
+`Bluesky · 8 new` (posts not seen at the previous refresh). Further posts count
+as "+N more".
+
+The tile is refresh-driven. While the hub's tile lease holds, Feeds fetches
+once when the lease starts and once per `onNexusTileRefresh()` (the hub sends
+those when the glasses home comes back into view, and at most every 15
+minutes), publishes, and stays idle; it schedules no refresh of its own and
+stops at `onNexusTileActive(false)`. The tile reads the default source set in
+the settings when that is Bluesky, X (account) or X (official API); X (WebView)
+needs its overlay window, which only an open surface may run, so a tile with
+that default reads Bluesky instead.
+
 ## X (WebView)
 
 `X (WebView)` is an experimental alternative to `X (account)`. Both reuse the

@@ -9,6 +9,9 @@ import com.anezium.rokidbus.shared.tile.TileTone
  * can be seen on the glasses grid and in the phone's size preview.
  */
 internal object DemoTiles {
+    /** The music tile's cover, [DemoCover], sent with it once per key. */
+    const val COVER_KEY = "demo-cover-1"
+
     val all: List<TileSnapshot> = listOf(
         TileSnapshot(
             pluginId = "hello",
@@ -30,6 +33,7 @@ internal object DemoTiles {
                 playing = true,
                 positionMs = 102_000,
                 durationMs = 236_000,
+                artworkKey = COVER_KEY,
             ),
             tone = TileTone.OK,
         ),

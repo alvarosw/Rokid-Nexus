@@ -87,6 +87,20 @@ interface NexusPluginCallbacks {
     fun onRegistrationState(result: Int)
 
     /**
+     * The phone hub granted (`true`) or ended (`false`) this plugin's grid tile lease: grid mode
+     * is on, the glasses are linked, the tile is placed, and `widget_tile` is granted. While
+     * active the plugin may watch its own event sources and publish its tile; when it ends it
+     * returns to dormant. Delivered only on a change.
+     */
+    fun onTileActive(active: Boolean) = Unit
+
+    /**
+     * The hub asks a plugin holding an active tile lease to fetch once and publish its tile. The
+     * hub owns the cadence; a plugin never schedules its own refresh.
+     */
+    fun onTileRefresh() = Unit
+
+    /**
      * The hub answered this plugin's assist-button request: `true` when the button hands over
      * to the approved assistant plugin, `false` when it stays with Rokid's own. Needs the
      * `assistant` grant; see [NexusPluginClient.requestAssistantTakeover].

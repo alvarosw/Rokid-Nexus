@@ -55,6 +55,7 @@ object PluginDescriptorParser {
         BusConstants.META_PLUGIN_TILE_PREVIEW,
         BusConstants.META_PLUGIN_API_VERSION,
         BusConstants.META_PLUGIN_CAPABILITIES,
+        BusConstants.META_PLUGIN_OPTIONAL_CAPABILITIES,
         BusConstants.META_PLUGIN_RECEIVE_PREFIXES,
         BusConstants.META_PLUGIN_SETTINGS_ACTIVITY,
         BusConstants.META_PLUGIN_LAUNCHABLE,
@@ -97,10 +98,14 @@ object PluginDescriptorParser {
         val capabilityResult = PluginCapability.parseList(
             values[BusConstants.META_PLUGIN_CAPABILITIES].orEmpty(),
         )
-        val capabilities = when (capabilityResult) {
+        val requiredCapabilities = when (capabilityResult) {
             is CapabilityParseResult.Valid -> capabilityResult.capabilities
             is CapabilityParseResult.Invalid -> return PluginDescriptorParseResult.Invalid(capabilityResult.reason)
         }
+        val optionalCapabilities = splitMetadataList(
+            values[BusConstants.META_PLUGIN_OPTIONAL_CAPABILITIES].orEmpty(),
+        ).mapNotNull(PluginCapability::fromWireValue)
+        val capabilities = requiredCapabilities + optionalCapabilities
 
         val rawPrefixes = splitMetadataList(values[BusConstants.META_PLUGIN_RECEIVE_PREFIXES].orEmpty())
         if (rawPrefixes.isEmpty()) return PluginDescriptorParseResult.Invalid("MISSING_RECEIVE_PREFIXES")

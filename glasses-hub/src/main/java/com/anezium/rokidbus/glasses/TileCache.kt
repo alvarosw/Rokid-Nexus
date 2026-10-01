@@ -53,6 +53,20 @@ internal object TileCache {
         return CachedTile(snapshot, receivedAt)
     }
 
+    /**
+     * Drops every cached tile whose plugin is not in [pluginIds], the launcher list the phone just
+     * sent: an uninstalled, revoked or disabled plugin leaves that list, and its last tile must not
+     * linger on disk for a plugin that may never publish again.
+     */
+    fun retainOnly(context: Context, pluginIds: Set<String>) {
+        val prefs = prefs(context)
+        val stale = prefs.all.keys.filter { key ->
+            key.startsWith(KEY_PREFIX) && key.removePrefix(KEY_PREFIX) !in pluginIds
+        }
+        if (stale.isEmpty()) return
+        prefs.edit().apply { stale.forEach(::remove) }.apply()
+    }
+
     fun clear(context: Context) {
         prefs(context).edit().clear().apply()
     }
@@ -60,21 +74,19 @@ internal object TileCache {
     /**
      * A cached snapshot's `receivedAtElapsedRealtime` was measured against a clock that resets on
      * reboot. If the hub's own uptime is younger than that recorded timestamp, the process that
-     * wrote it is gone (a prior boot), so the entry is reported at [STALENESS_THRESHOLD_MS] — the
+     * wrote it is gone (a prior boot), so the entry is reported at its own `staleAfterMs` — the
      * "stale" boundary — rather than computing a negative or meaningless age.
      */
     fun ageMs(cached: CachedTile, nowElapsedRealtime: Long): Long =
         if (cached.receivedAtElapsedRealtime > nowElapsedRealtime) {
-            STALENESS_THRESHOLD_MS
+            cached.snapshot.staleAfterMs
         } else {
             nowElapsedRealtime - cached.receivedAtElapsedRealtime
         }
 
+    /** Stale once the snapshot is as old as the `staleAfterMs` its plugin published with it. */
     fun isStale(cached: CachedTile, nowElapsedRealtime: Long): Boolean =
-        ageMs(cached, nowElapsedRealtime) >= STALENESS_THRESHOLD_MS
-
-    /** Proposed default per the roadmap; not yet validated against a wearer's real sense of "stale". */
-    const val STALENESS_THRESHOLD_MS = 10 * 60 * 1000L
+        ageMs(cached, nowElapsedRealtime) >= cached.snapshot.staleAfterMs
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

@@ -13,4 +13,10 @@ class DemoTilesTest {
         )
         assertEquals(DemoTiles.all.size, DemoTiles.all.map { it.contentKey }.toSet().size)
     }
+
+    @Test
+    fun `the demo music tile names its cover`() {
+        val music = DemoTiles.all.single { it.content is TileContent.Music }.content as TileContent.Music
+        assertEquals(DemoTiles.COVER_KEY, music.artworkKey)
+    }
 }

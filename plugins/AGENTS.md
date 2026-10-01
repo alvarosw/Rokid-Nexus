@@ -21,7 +21,7 @@ Plugins are **normally dormant unless open**: the hub initiates everything. Your
 only between `PLUGIN_OPEN` and a final `PLUGIN_CLOSE`. Do not register yourself at boot, do
 not poll in the background, do not post notifications. The SDK holds a
 foreground-service session while you are open and drops it on close; the
-user-facing notification that names the live plugin belongs to the hub. Three
+user-facing notification that names the live plugin belongs to the hub. Four
 sanctioned exceptions:
 
 1. A capability that Android forces into its own foreground service *while your
@@ -44,6 +44,11 @@ sanctioned exceptions:
    retaining the active microphone session and its SDK foreground service.
    `onNexusBackground()` is not a final close; the lease ending is. The phone hub
    exposes Stop, and reopening resumes the plugin. See the lifecycle rules below.
+4. **The tile lease**: while the hub reports `onNexusTileActive(true)` (grid
+   mode on, glasses linked, tile placed, `widget_tile` granted), a plugin may
+   watch its own event sources and publish its tile; a poll-based plugin fetches
+   once per `onNexusTileRefresh()`. It schedules no wake or refresh of its own and
+   returns to dormant on `onNexusTileActive(false)`. See `docs/PLUGINS.md`.
 
 A phone plugin may also call an Android platform API directly under permissions
 declared in its own manifest. Those runtime permissions are separate from Nexus
@@ -102,7 +107,8 @@ Copy `plugins/sample` as the canonical template. The hard rules:
 | Plugin id | 3–64 chars, `[a-z][a-z0-9._-]{2,63}` (lowercase start), unique on the device |
 | Display name | ≤ 80 chars |
 | API version | exactly **3** |
-| Capabilities | subset of `surfaces`, `ink_surface`, `http_proxy`, `microphone`, `stt`, `tts`, `camera`, `mediasync`, `assistant`, `wireless_debugging`, `widget_tile` (`ink_surface` is the separate grant for compiled interactive Ink pages; `stt` grants hub-produced text without raw PCM; microphone needs no Android `RECORD_AUDIO` because PCM arrives over the hub; `tts` speaks text out of the glasses; `mediasync` moves the wearer's captures to the phone gallery; `wireless_debugging` can expose ADB on the current LAN and mint temporary pairing codes; `widget_tile` publishes this plugin's closed-state grid HUD tile, callable only from an existing legitimate wake, never a new one) |
+| Capabilities | subset of `surfaces`, `ink_surface`, `http_proxy`, `microphone`, `stt`, `tts`, `camera`, `mediasync`, `assistant`, `wireless_debugging`, `widget_tile` (`ink_surface` is the separate grant for compiled interactive Ink pages; `stt` grants hub-produced text without raw PCM; microphone needs no Android `RECORD_AUDIO` because PCM arrives over the hub; `tts` speaks text out of the glasses; `mediasync` moves the wearer's captures to the phone gallery; `wireless_debugging` can expose ADB on the current LAN and mint temporary pairing codes; `widget_tile` publishes this plugin's closed-state grid HUD tile while the hub's tile lease is active, never from a wake of its own) |
+| Optional capabilities | `OPTIONAL_CAPABILITIES`, same values, merged into the requested set; unknown values are ignored rather than rejected, so a hub that does not know a capability (or the key) still loads the plugin. Declare `widget_tile` here. |
 | Receive prefixes | non-empty, normalized, within your authorized namespace `/plugin/<id>/…` |
 | Signer | exactly one current signing certificate |
 | UID | not shared with another discovered plugin |
@@ -163,7 +169,7 @@ Paths a plugin can **send to** (gated by capability):
 | `/camera/freeze/result`, `/camera/overlay`, `/camera/link/offer` | `camera` | Camera platform sends (signer/grant-bound). `/camera/link/offer` is bidirectional so an approved camera plugin can advertise a reverse transport role. `/camera/session/state` and `/camera/freeze/image/chunk` remain **receive-only** (declare them in RECEIVE_PREFIXES); sending them is rejected |
 | `/mediasync/settings`, `/mediasync/now` | `mediasync` | Photo sync control: partial settings updates (`autoSyncOnCharge`, `deleteAfterSync`; an empty request is a refresh) and a manual "sync now". `/mediasync/status` is **receive-only** (declare it in RECEIVE_PREFIXES); every other `/mediasync/…` path is hub-to-hub and rejected if you send it |
 | `/debug/adb/request` → `/debug/adb/reply` | `wireless_debugging` | High-risk wireless ADB control. Actions are `status`, `enable`, `start_pairing`, `cancel_pairing`, and `disable`. Replies are owner-scoped direct replies and need no receive prefix. The phone hub stamps the authenticated plugin id; plugins must not add or trust one themselves. Pairing codes expire after two minutes and must not be persisted or logged; code-bearing windows use `FLAG_SECURE`, and only an explicit user action may copy a sensitive-marked command to the Android clipboard. |
-| `/tile/publish` | `widget_tile` | Publish this plugin's closed-state grid HUD tile (`TileSnapshot`). Use `nexusWidgetTileSession(id).publish(snapshot)`. Not foreground-exclusive — every plugin owns its own tile slot, so it never returns `SURFACE_BUSY` — and callable only from an existing legitimate wake (see the Background policy §4th exception in `docs/PLUGINS.md`). The hub stamps the authenticated plugin id server-side and may drop a publish silently past its rate ceiling; there is no error reply for that. |
+| `/tile/publish` | `widget_tile` | Publish this plugin's closed-state grid HUD tile (`TileSnapshot`). Use `nexusWidgetTileSession(id).publish(snapshot)`. Not foreground-exclusive — every plugin owns its own tile slot, so it never returns `SURFACE_BUSY` — and published while the hub's tile lease is active (`onNexusTileActive`/`onNexusTileRefresh`; see the Background policy's fourth exception in `docs/PLUGINS.md`). The hub stamps the authenticated plugin id server-side and paces publishes per plugin: past its ceiling only the latest snapshot is kept and sent when the budget refills; there is no error reply for that. |
 | `/plugin/<yourId>/…` | — | Your private namespace (must match your declared receive prefixes) |
 
 Wireless ADB requires both phone and glasses hubs 1.3.0 or newer and the

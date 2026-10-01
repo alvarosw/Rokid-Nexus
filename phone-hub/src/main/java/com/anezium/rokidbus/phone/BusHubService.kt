@@ -73,6 +73,7 @@ import com.anezium.rokidbus.shared.plugin.PathRules
 import com.anezium.rokidbus.shared.plugin.PluginCapability
 import com.anezium.rokidbus.shared.plugin.PluginOpenTypes
 import com.anezium.rokidbus.shared.plugin.PluginCapability.Companion.serialize
+import com.anezium.rokidbus.shared.tile.WidgetTileContract
 import com.anezium.rokidbus.shared.tile.SystemWidgets
 import com.anezium.rokidbus.ink.InkProblem
 import com.anezium.rokidbus.phone.speech.HubSecretStore
@@ -226,6 +227,9 @@ class BusHubService : Service() {
     private val activityExpiryTick: Runnable = Runnable { activityRouter.expireCanonical() }
     private val assistantExitHandler = Handler(Looper.getMainLooper())
     private val updateCheckHandler = Handler(Looper.getMainLooper())
+    private val tilePublishHandler = Handler(Looper.getMainLooper())
+    private val tilePublishCoalescer = TilePublishCoalescer<BusEnvelope>(nowMs = SystemClock::elapsedRealtime)
+    private val tilePublishFlush = Runnable { flushHeldTilePublishes() }
     @Volatile private var updateCheckLoopStopped = true
     private val updateCheckTick = object : Runnable {
         override fun run() {
@@ -341,12 +345,14 @@ class BusHubService : Service() {
     private lateinit var pluginGrantStore: PluginGrantStore
     private lateinit var assistantTakeoverStore: AssistantTakeoverStore
     private lateinit var pluginGrantReconciler: PluginGrantReconciler
-    private lateinit var registryClient: RegistryClient
+    private lateinit var registryClient: StoreRegistry
     private lateinit var developerModeStore: DeveloperModeStore
     private var developerModeJournalSubscription: DeveloperModeStore.Subscription? = null
     private lateinit var externalPluginController: ExternalPluginController
     private lateinit var cameraConsumerReadiness: CameraConsumerReadiness
     private lateinit var cameraCompanionController: CameraCompanionController
+    private lateinit var tileLeaseController: TileLeaseController
+    private val tileLeaseExecutor = SerialExecutor(executor)
     private lateinit var pluginGuardianCoordinator: PluginGuardianCoordinator
     private lateinit var mediaSyncCoordinator: MediaSyncCoordinator
     private lateinit var coreRemoteBridge: PhoneCoreRemoteBridge
@@ -560,6 +566,9 @@ class BusHubService : Service() {
                         }
                         if (::cameraCompanionController.isInitialized) {
                             cameraCompanionController.onRegistered(principal)
+                        }
+                        if (::tileLeaseController.isInitialized) {
+                            tileLeaseController.onRegistered(principal)
                         }
                         log("plugin registered package=$packageName plugin=$pluginId status=approved")
                         pluginRegistrationResult(pluginId, PluginRegistrationResult.APPROVED)
@@ -824,7 +833,7 @@ class BusHubService : Service() {
         pluginDiscovery = PhonePluginDiscovery(packageManager)
         pluginGrantStore = PluginGrantStore(applicationContext)
         assistantTakeoverStore = AssistantTakeoverStore(applicationContext)
-        registryClient = RegistryClient.create(applicationContext)
+        registryClient = StoreRegistry.create(applicationContext)
         pluginGrantReconciler = PluginGrantReconciler(
             discoverCandidates = pluginDiscovery::discover,
             reconcileGrants = pluginGrantStore::reconcile,
@@ -875,7 +884,12 @@ class BusHubService : Service() {
             scheduler = MainThreadExternalPluginScheduler(),
             logger = ::log,
             onRegisteredPrincipal = ::offerTransitLegacyMigration,
-            onForegroundChanged = { updateStatusNotification(linkState()) },
+            onForegroundChanged = {
+                updateStatusNotification(linkState())
+                // A plugin closing hands the glasses back to the home: the closest signal the
+                // phone has that the grid is visible again.
+                if (externalPluginController.activeId() == null) recomputeTileLeases(homeVisible = true)
+            },
             onBackgroundChanged = NexusPhoneState::setBackgroundAudioPluginId,
             journal = pluginBusJournal,
         )
@@ -890,6 +904,23 @@ class BusHubService : Service() {
                     cameraCompanionController.onBinderDied(principal.grantKey())
                 }
             },
+        )
+        tileLeaseController = TileLeaseController(
+            runtime = AndroidExternalPluginRuntime(
+                context = applicationContext,
+                isRegisteredCallback = ::isExternalPrincipalRegistered,
+                deliverCallback = ::deliverExternalLifecycle,
+                hideCallback = {},
+                disconnectedCallback = { principal ->
+                    if (::tileLeaseController.isInitialized) {
+                        tileLeaseController.onBinderDied(principal.grantKey())
+                    }
+                },
+            ),
+            scheduler = MainThreadExternalPluginScheduler(),
+            nowMs = SystemClock::elapsedRealtime,
+            logger = ::log,
+            journal = pluginBusJournal,
         )
         cameraCompanionController = CameraCompanionController(
             runtime = cameraRuntime,
@@ -1081,6 +1112,7 @@ class BusHubService : Service() {
     override fun onDestroy() {
         stopPeriodicUpdateChecks()
         pinHandler.removeCallbacks(pinExpiryTick)
+        tilePublishHandler.removeCallbacks(tilePublishFlush)
         inkResultHandler.removeCallbacksAndMessages(null)
         activityHandler.removeCallbacks(activityExpiryTick)
         activityRouter.clearAllForHubStop()
@@ -1116,6 +1148,7 @@ class BusHubService : Service() {
         developerModeJournalSubscription = null
         if (::pluginGuardianCoordinator.isInitialized) pluginGuardianCoordinator.close()
         if (::pluginRegistry.isInitialized) pluginRegistry.close()
+        if (::tileLeaseController.isInitialized) tileLeaseController.close()
         inkRouter.close()
         if (::cameraCompanionController.isInitialized) cameraCompanionController.close()
         if (::mediaSyncCoordinator.isInitialized) mediaSyncCoordinator.close()
@@ -1182,9 +1215,22 @@ class BusHubService : Service() {
         ) {
             // The hub stamps the authenticated plugin id server-side; a plugin's own claimed
             // `pluginId` in the payload is never trusted.
-            val stamped = JSONObject(envelope.payload.toString()).put("pluginId", sender.principal.descriptor.id)
-            TileSnapshotCache.record(sender.principal.descriptor.id, stamped)
-            envelope.copy(payload = stamped)
+            val pluginId = sender.principal.descriptor.id
+            val stamped = JSONObject(envelope.payload.toString()).put("pluginId", pluginId)
+            val cover = envelope.binary
+            if (cover != null) {
+                val key = WidgetTileContract.artworkKeyOf(stamped)
+                if (!isDecodableTileArtwork(stamped, cover)) {
+                    recordLocalRoute(envelope, senderUid, sender, PluginBusJournal.Verdict.REJECTED, ImageSurfaceContract.ERROR_INVALID_IMAGE)
+                    deliverError(sender.replyBinder, envelope.id, ImageSurfaceContract.ERROR_INVALID_IMAGE)
+                    return
+                }
+                TileArtworkCache.put(pluginId, TileArtworkCache.Artwork(key, stamped.getJSONObject(WidgetTileContract.ARTWORK_FIELD), cover))
+            }
+            // The cover is held here and attached to whichever publish crosses the link.
+            val plain = WidgetTileContract.withoutArtwork(stamped)
+            TileSnapshotCache.record(pluginId, plain)
+            envelope.copy(payload = plain, binary = null)
         } else {
             envelope
         }
@@ -1341,6 +1387,10 @@ class BusHubService : Service() {
             return
         }
         recordLocalRoute(authorizedEnvelope, senderUid, sender, PluginBusJournal.Verdict.OK)
+        if (authorizedEnvelope.path == BusPaths.TILE_PUBLISH && sender.principal != null) {
+            publishTile(sender.principal.descriptor.id, authorizedEnvelope, sender.replyBinder)
+            return
+        }
         if (handleHubPath(
                 authorizedEnvelope,
                 replyRemote = false,
@@ -1383,6 +1433,8 @@ class BusHubService : Service() {
             // Same reasoning again for the tile layout: an edit made while disconnected must
             // still land on reconnect.
             executor.execute { pushTileLayoutConfig() }
+            TileArtworkCache.forgetDelivered()
+            recomputeTileLeases(homeVisible = true)
             return
         }
         if (envelope.path == RemoteInputContract.SESSION_PATH ||
@@ -1662,7 +1714,9 @@ class BusHubService : Service() {
         BusPaths.NOTICE_INPUT, BusPaths.NOTICE_ACTION, BusPaths.NOTICE_CLOSED,
         BusPaths.ACTIVITY_ACTION, BusPaths.ACTIVITY_CLOSED,
         -> PluginBusJournal.Category.INPUT
-        BusPaths.PLUGIN_OPEN, BusPaths.PLUGIN_CLOSE -> PluginBusJournal.Category.LIFECYCLE
+        BusPaths.PLUGIN_OPEN, BusPaths.PLUGIN_CLOSE,
+        BusPaths.PLUGIN_TILE_ACTIVE, BusPaths.PLUGIN_TILE_REFRESH,
+        -> PluginBusJournal.Category.LIFECYCLE
         BusPaths.PLUGIN_REGISTRATION -> PluginBusJournal.Category.REGISTRATION
         BusPaths.LAUNCHER_LIST, BusPaths.LAUNCHER_OPEN -> PluginBusJournal.Category.LAUNCHER
         else -> if (hasBinary) PluginBusJournal.Category.BINARY else PluginBusJournal.Category.TRANSPORT
@@ -2375,6 +2429,9 @@ class BusHubService : Service() {
                 if (::cameraCompanionController.isInitialized) {
                     cameraCompanionController.onBinderDied(principal.grantKey())
                 }
+                if (::tileLeaseController.isInitialized) {
+                    tileLeaseController.onBinderDied(principal.grantKey())
+                }
             }
         }
     }
@@ -2394,7 +2451,26 @@ class BusHubService : Service() {
         revokePrincipal(key)
         cameraConsumerReadiness.recompute()
         refreshMediaSyncConsent()
+        if (key.pluginId !in tilePluginIds()) {
+            TileSnapshotCache.remove(key.pluginId)
+            TileArtworkCache.remove(key.pluginId)
+            tilePublishCoalescer.remove(key.pluginId)
+        }
         notifyLinkState()
+    }
+
+    /**
+     * The plugins whose tile the launcher can show: launchable, enabled, and holding the
+     * `widget_tile` grant. A cached tile outside this set belongs to a plugin that was
+     * uninstalled, revoked or dropped from the launcher list.
+     */
+    private fun tilePluginIds(): Set<String> {
+        if (!::pluginRegistry.isInitialized) return emptySet()
+        return pluginRegistry.catalog().launchableEntries.mapNotNullTo(mutableSetOf()) { entry ->
+            val principal = entry.principal ?: return@mapNotNullTo null
+            val grant = pluginGrantStore.stateFor(principal) as? PluginGrantState.Approved
+            entry.id?.takeIf { grant != null && PluginCapability.WIDGET_TILE in grant.capabilities }
+        }
     }
 
     private fun registerPluginPackageReceiver() {
@@ -2459,6 +2535,10 @@ class BusHubService : Service() {
                 cameraConsumerReadiness.isApprovedCameraConsumer(principal)
         }
         if (!cameraAvailable) cameraCompanionController.onPackageUnavailable(packageName)
+        val tilePluginIds = tilePluginIds()
+        TileSnapshotCache.retainOnly(tilePluginIds)
+        TileArtworkCache.retainOnly(tilePluginIds)
+        tilePublishCoalescer.retainOnly(tilePluginIds)
         notifyLinkState()
         if (::pluginRegistry.isInitialized && isCxrUp()) pluginRegistry.syncLauncherList()
     }
@@ -3305,6 +3385,56 @@ class BusHubService : Service() {
         val error = if (bytes.size > BusConstants.CXR_CONTROL_MAX_BYTES) "NO_DATA_PLANE" else "NO_LINK"
         recordRemoteTransport(envelope, PluginBusJournal.Verdict.REJECTED, error)
         return error
+    }
+
+    private fun publishTile(pluginId: String, envelope: BusEnvelope, replyBinder: IBinder?) {
+        when (val decision = tilePublishCoalescer.offer(pluginId, envelope)) {
+            is TilePublishCoalescer.Decision.Send -> {
+                val errorCode = sendTile(pluginId, decision.item)
+                if (errorCode != null) deliverError(replyBinder, envelope.id, errorCode)
+            }
+            is TilePublishCoalescer.Decision.Held -> scheduleTilePublishFlush()
+        }
+    }
+
+    private fun flushHeldTilePublishes() {
+        tilePublishCoalescer.drainDue().forEach { (pluginId, envelope) ->
+            val errorCode = sendTile(pluginId, envelope)
+            if (errorCode != null) log("tile publish flush failed plugin=$pluginId code=$errorCode")
+        }
+        scheduleTilePublishFlush()
+    }
+
+    /**
+     * Sends a paced tile snapshot, carrying its plugin's cover when the glasses lack that
+     * `artworkKey`. Without a data plane for the bytes the snapshot still goes, text-only; the cover
+     * rides a later publish.
+     */
+    private fun sendTile(pluginId: String, envelope: BusEnvelope): String? {
+        val withCover = TileArtworkCache.forDelivery(pluginId, envelope)
+        if (withCover !== envelope && sendRemote(withCover) == null) {
+            TileArtworkCache.markDelivered(pluginId, WidgetTileContract.artworkKeyOf(envelope.payload))
+            return null
+        }
+        return sendRemote(envelope)
+    }
+
+    /** The cover's description matches its bytes, and the bytes decode as described. */
+    private fun isDecodableTileArtwork(payload: JSONObject, bytes: ByteArray): Boolean {
+        val validation = WidgetTileContract.validateArtwork(payload, bytes)
+        if (validation !is ImageSurfaceValidationResult.Valid) return false
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+        return options.outWidth == validation.metadata.pixelWidth &&
+            options.outHeight == validation.metadata.pixelHeight &&
+            options.outMimeType == validation.metadata.mimeType
+    }
+
+    private fun scheduleTilePublishFlush() {
+        val flushAt = tilePublishCoalescer.nextFlushAtMs() ?: return
+        tilePublishHandler.removeCallbacks(tilePublishFlush)
+        val delay = (flushAt - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+        tilePublishHandler.postDelayed(tilePublishFlush, delay)
     }
 
     private fun sendBuiltInPluginEnvelope(envelope: BusEnvelope): String? {
@@ -4887,6 +5017,34 @@ class BusHubService : Service() {
             lastAnnouncedPhoneCapabilities = null
             phoneWeatherReporter?.onConditionsChanged("link_down")
         }
+        recomputeTileLeases()
+    }
+
+    /**
+     * Re-derives which plugins hold a tile lease from every input, on one serial lane so an older
+     * computation never lands after a newer one. [homeVisible] marks an edge where the glasses
+     * home has just become visible; the phone has no direct signal for it, so link-up, a mode or
+     * layout change, and the foreground plugin closing stand in.
+     */
+    private fun recomputeTileLeases(homeVisible: Boolean = false) {
+        if (!::tileLeaseController.isInitialized || !::pluginRegistry.isInitialized) return
+        tileLeaseExecutor.execute {
+            val catalog = runCatching { pluginRegistry.catalog() }.getOrNull() ?: return@execute
+            val transportBits = LinkStateBits.CXR_CONTROL_UP or LinkStateBits.SPP_DATA_UP
+            val leased = TileLeasePolicy.leasedPlugins(
+                gridMode = HudModeSettingsStore(applicationContext).isGridModeEnabled(),
+                linkUp = linkState() and transportBits != 0,
+                launchable = catalog.launchableEntries.mapNotNull { it.principal },
+                storedLayout = TileLayoutSettingsStore(applicationContext).getEntries(),
+                hasWidgetTile = { principal ->
+                    (pluginGrantStore.stateFor(principal) as? PluginGrantState.Approved)
+                        ?.capabilities
+                        ?.contains(PluginCapability.WIDGET_TILE) == true
+                },
+            )
+            tileLeaseController.update(leased)
+            if (homeVisible) tileLeaseController.onHomeVisible()
+        }
     }
 
     private fun advertisedCameraConsumerName(): String? {
@@ -5242,6 +5400,7 @@ class BusHubService : Service() {
         internal fun onHudModeSettingChanged() {
             activeInstance?.let { service ->
                 service.executor.execute { service.pushHudModeConfig() }
+                service.recomputeTileLeases(homeVisible = true)
             }
         }
 
@@ -5261,6 +5420,7 @@ class BusHubService : Service() {
         internal fun onTileLayoutSettingChanged() {
             activeInstance?.let { service ->
                 service.executor.execute { service.pushTileLayoutConfig() }
+                service.recomputeTileLeases(homeVisible = true)
                 // Placing or removing the weather widget starts or stops its fetches.
                 service.phoneWeatherReporter?.onConditionsChanged("layout")
             }
@@ -5290,7 +5450,7 @@ class BusHubService : Service() {
                     PluginCatalog.build(
                         builtIns = emptyList(),
                         candidates = PhonePluginDiscovery(appContext.packageManager).discover(),
-                        registryFeed = RegistryClient.create(appContext).cachedSnapshot()?.feed
+                        registryFeed = StoreRegistry.create(appContext).cachedSnapshot()?.feed
                             ?: RegistryFeed(RegistryClient.SUPPORTED_VERSION, emptyList()),
                         grantState = PluginGrantStore(appContext)::stateFor,
                     )

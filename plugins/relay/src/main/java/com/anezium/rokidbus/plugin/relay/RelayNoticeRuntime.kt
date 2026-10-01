@@ -1,7 +1,11 @@
 package com.anezium.rokidbus.plugin.relay
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.os.Handler
+import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
@@ -34,14 +38,35 @@ import com.anezium.rokidbus.shared.plugin.PluginCapability
 import org.json.JSONObject
 import java.util.ArrayDeque
 
-/** One bus connection per live notice/reply exchange; it closes when that band closes. */
+/**
+ * One live notice/reply exchange at a time. It holds the plugin service, and talks through the
+ * service's client, from the band's show until the band closes; see [RelayBusLink].
+ */
 internal class RelayNoticeRuntime(context: Context) : NexusPluginCallbacks {
     private val appContext = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
     private val essentialUpdates = ArrayDeque<NexusNoticeUpdate>()
     private val settings = RelaySettings(appContext)
 
-    private var client: NexusPluginClient? = null
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName, service: IBinder) = Unit
+        override fun onServiceDisconnected(name: ComponentName) = Unit
+    }
+    private val link = RelayBusLink(
+        bind = {
+            runCatching {
+                appContext.bindService(
+                    Intent(appContext, RelayPluginService::class.java),
+                    serviceConnection,
+                    Context.BIND_AUTO_CREATE,
+                )
+            }.getOrDefault(false)
+        },
+        unbind = { runCatching { appContext.unbindService(serviceConnection) } },
+        liveService = { NotificationControl.pluginService },
+    )
+    private val client: NexusPluginClient?
+        get() = link.current()?.busClient
     private var typingSurface: NexusSurfaceSession? = null
     private var pendingShow: ReplyRepository.PendingReply? = null
     private var pendingShowStartedAtMs = 0L
@@ -113,8 +138,11 @@ internal class RelayNoticeRuntime(context: Context) : NexusPluginCallbacks {
         val captureAgeMs = (System.currentTimeMillis() - reply.capturedAtMs).coerceAtLeast(0L)
         Log.i(TAG, "showRequested generation=$generation captureAgeMs=$captureAgeMs")
 
-        if (client == null) {
-            client = NexusPluginClient.create(appContext, PLUGIN_ID, this).also(NexusPluginClient::connect)
+        link.acquire()
+        if (!link.held) {
+            Log.w(TAG, "showAbandoned generation=$generation reason=bind")
+            closeClient()
+            return@onMain
         }
         tryShowPending()
         main.postDelayed({
@@ -131,9 +159,18 @@ internal class RelayNoticeRuntime(context: Context) : NexusPluginCallbacks {
         }, REPLAY_WINDOW_MS)
     }
 
-    fun shutdown() = onMain {
-        client?.hideNotice()
-        closeClient()
+    fun shutdown() = onMain { closeClient() }
+
+    /** The band's callbacks while it talks through [service]'s client, which forwards them here. */
+    fun callbacksFor(service: RelayPluginService): NexusPluginCallbacks? =
+        this.takeIf { link.current() === service }
+
+    fun onPluginServiceCreated(service: RelayPluginService) = onMain {
+        if (link.onServiceCreated(service)) tryShowPending()
+    }
+
+    fun onPluginServiceDestroyed(service: RelayPluginService) = onMain {
+        if (link.onServiceDestroyed(service)) closeClient()
     }
 
     override fun onOpen() = Unit
@@ -191,6 +228,8 @@ internal class RelayNoticeRuntime(context: Context) : NexusPluginCallbacks {
         // entirely: notice gone, card still up, keepalive still posting to it.
         val deferred = deferredShow
         deferredShow = null
+        // Already gone on the glasses; closeClient must not hide it a second time.
+        activeNotice = false
         closeClient()
         if (deferred != null) show(deferred)
     }
@@ -443,8 +482,13 @@ internal class RelayNoticeRuntime(context: Context) : NexusPluginCallbacks {
 
         val generation = speechGeneration
         if (currentClient.supportsEditableSurface) armTypeChip(generation)
-        val newSpeech = currentClient.speechSession(object : NexusSpeechCallbacks {
-            override fun onSpeechStarted(realtime: Boolean) = Unit
+        lateinit var newSpeech: NexusSpeechSession
+        newSpeech = currentClient.speechSession(object : NexusSpeechCallbacks {
+            override fun onSpeechStarted(realtime: Boolean) {
+                // Stopping a session that was still waiting for the hub's answer does nothing,
+                // and the client is shared with the inbox, which has one speech session to use.
+                if (generation != speechGeneration) newSpeech.stop()
+            }
 
             override fun onSpeechState(state: NexusSpeechState) = Unit
 
@@ -886,7 +930,13 @@ internal class RelayNoticeRuntime(context: Context) : NexusPluginCallbacks {
         if (essentialUpdates.isNotEmpty() || pendingPartial != null) scheduleUpdateDrain()
     }
 
+    /**
+     * Ends the exchange and lets go of the service. The service may well outlive this — the hub
+     * holds it for the inbox or the tile lease — so everything the band opened on its client is
+     * closed here explicitly rather than with the client.
+     */
     private fun closeClient() {
+        if (activeNotice) client?.hideNotice()
         cancelSendCountdown()
         showGeneration += 1
         invalidateSpeech()
@@ -903,8 +953,7 @@ internal class RelayNoticeRuntime(context: Context) : NexusPluginCallbacks {
         currentReply = null
         currentTranscript = null
         activeNotice = false
-        client?.close()
-        client = null
+        link.release()
     }
 
     private fun onMain(block: () -> Unit) {

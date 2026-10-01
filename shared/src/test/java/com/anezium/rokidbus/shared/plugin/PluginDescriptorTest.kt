@@ -242,4 +242,59 @@ class PluginDescriptorTest {
             PluginDescriptorParser.parse(entries),
         )
     }
+
+    @Test
+    fun `optional capabilities merge into the requested set`() {
+        val result = PluginDescriptorParser.parse(
+            validMetadata() + (BusConstants.META_PLUGIN_OPTIONAL_CAPABILITIES to "widget_tile"),
+        )
+        assertEquals(
+            setOf(PluginCapability.SURFACES, PluginCapability.HTTP_PROXY, PluginCapability.WIDGET_TILE),
+            (result as PluginDescriptorParseResult.Valid).descriptor.requestedCapabilities,
+        )
+    }
+
+    @Test
+    fun `unknown optional capabilities are ignored, not fatal`() {
+        val result = PluginDescriptorParser.parse(
+            validMetadata() + (BusConstants.META_PLUGIN_OPTIONAL_CAPABILITIES to "future_thing, widget_tile"),
+        )
+        assertEquals(
+            setOf(PluginCapability.SURFACES, PluginCapability.HTTP_PROXY, PluginCapability.WIDGET_TILE),
+            (result as PluginDescriptorParseResult.Valid).descriptor.requestedCapabilities,
+        )
+    }
+
+    @Test
+    fun `an unknown required capability is still fatal`() {
+        assertEquals(
+            PluginDescriptorParseResult.Invalid("UNKNOWN_CAPABILITY"),
+            PluginDescriptorParser.parse(
+                validMetadata() + (BusConstants.META_PLUGIN_CAPABILITIES to "surfaces,future_thing"),
+            ),
+        )
+    }
+
+    @Test
+    fun `an empty optional capability list adds nothing`() {
+        val metadata = validMetadata().apply {
+            put(BusConstants.META_PLUGIN_CAPABILITIES, "surfaces")
+            put(BusConstants.META_PLUGIN_RECEIVE_PREFIXES, "/system/plugin,/plugin/hello.plugin")
+            put(BusConstants.META_PLUGIN_OPTIONAL_CAPABILITIES, "")
+        }
+        assertEquals(
+            setOf(PluginCapability.SURFACES),
+            (PluginDescriptorParser.parse(metadata) as PluginDescriptorParseResult.Valid)
+                .descriptor.requestedCapabilities,
+        )
+    }
+
+    @Test
+    fun `an optional capability's receive prefix is allowed`() {
+        val metadata = validMetadata().apply {
+            put(BusConstants.META_PLUGIN_CAPABILITIES, "surfaces")
+            put(BusConstants.META_PLUGIN_OPTIONAL_CAPABILITIES, "http_proxy")
+        }
+        assertTrue(PluginDescriptorParser.parse(metadata) is PluginDescriptorParseResult.Valid)
+    }
 }

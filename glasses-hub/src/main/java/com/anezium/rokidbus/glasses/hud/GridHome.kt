@@ -124,7 +124,7 @@ internal class GridHome(
                     (tile.view as? LiveTileView)?.bindEntry(entry, iconLoader)
                 }
                 if (tile.live != data && data != null) {
-                    (tile.view as LiveTileView).bind(data.snapshot, data.stale, data.receivedAtElapsed)
+                    (tile.view as LiveTileView).bind(data.snapshot, data.stale, data.receivedAtElapsed, data.artwork)
                     tile.live = data
                 }
             }
@@ -168,7 +168,7 @@ internal class GridHome(
         val view: View = if (data != null) {
             LiveTileView(context, size, motion).apply {
                 bindEntry(entry, iconLoader)
-                bind(data.snapshot, data.stale, data.receivedAtElapsed)
+                bind(data.snapshot, data.stale, data.receivedAtElapsed, data.artwork)
             }
         } else {
             FallbackTileView(context, size, motion).apply { bind(entry, iconLoader) }
@@ -181,7 +181,7 @@ internal class GridHome(
         val tile = tiles[id] ?: return
         val data = model.tileData[id]
         if (data != null && tile.live != null) {
-            (tile.view as LiveTileView).bind(data.snapshot, data.stale, data.receivedAtElapsed)
+            (tile.view as LiveTileView).bind(data.snapshot, data.stale, data.receivedAtElapsed, data.artwork)
             tile.live = data
             return
         }

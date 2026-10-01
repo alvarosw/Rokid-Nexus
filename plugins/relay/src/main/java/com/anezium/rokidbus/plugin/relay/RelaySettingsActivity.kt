@@ -140,7 +140,10 @@ class RelaySettingsActivity : Activity() {
                 "Hide message text on the glasses",
                 "The band names the sender · tap Show to read",
                 settings.hideNoticeText(),
-            ) { enabled -> settings.setHideNoticeText(enabled) },
+            ) { enabled ->
+                settings.setHideNoticeText(enabled)
+                NotificationControl.notifyInboxChanged()
+            },
             NexusUi.block(),
         )
         content.addView(BusTheme.gap(this, 8))
@@ -149,7 +152,10 @@ class RelaySettingsActivity : Activity() {
                 "Hide previews in the inbox",
                 "The list names senders · open a conversation to read",
                 settings.hideInboxPreviews(),
-            ) { enabled -> settings.setHideInboxPreviews(enabled) },
+            ) { enabled ->
+                settings.setHideInboxPreviews(enabled)
+                NotificationControl.notifyInboxChanged()
+            },
             NexusUi.block(),
         )
         content.addView(BusTheme.gap(this, 8))

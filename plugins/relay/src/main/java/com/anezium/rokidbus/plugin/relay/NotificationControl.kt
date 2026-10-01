@@ -2,6 +2,7 @@ package com.anezium.rokidbus.plugin.relay
 
 import android.os.Handler
 import android.os.Looper
+import com.anezium.rokidbus.client.plugin.NexusPluginCallbacks
 
 internal object NotificationControl {
     private val main = Handler(Looper.getMainLooper())
@@ -40,23 +41,21 @@ internal object NotificationControl {
     }
 
     /**
-     * Whether the wearer is in the inbox, which decides who owns the bus.
+     * Whether the wearer is in the inbox, which stands the band down.
      *
-     * Relay has two things that talk to the hub — the band runtime, woken by a
-     * notification, and this plugin's own service, opened from the menu — and
-     * each was creating its own `NexusPluginClient` under the same plugin id.
-     * The hub keeps both, since it identifies a registration by callback binder
-     * rather than by id, but several paths downstream assume there is one:
-     * external lifecycle delivery resolves with `singleOrNull` and finds
-     * nothing, outbound sends pick whichever registration matched first, and
-     * speech replies follow the binder that was chosen rather than the one that
-     * asked. In practice that means opening the inbox while a band is live can
-     * fail outright, or dictation from a band can hang on "Listening…" because
-     * its transcript went to the other client.
+     * Relay used to have two things talking to the hub — the band runtime, woken
+     * by a notification, and this plugin's own service — each with its own
+     * `NexusPluginClient` under the same plugin id. Several hub paths assume
+     * one registration per plugin: lifecycle delivery (open, close, the tile
+     * lease and its refreshes) resolves with `singleOrNull` and finds nothing,
+     * and speech replies follow whichever binder was chosen. Now the band binds
+     * the service and talks through its client (see [RelayBusLink]), so there
+     * is only ever one registration, whoever holds the service.
      *
-     * So only one is ever connected. The inbox wins while it is open: the
-     * wearer is already looking at their messages, and a band over the top of
-     * the list would be announcing something they can see.
+     * The band still stands down while the inbox is open: the wearer is already
+     * looking at their messages, a band over the top of the list would be
+     * announcing something they can see, and the two would otherwise share the
+     * client's one speech session.
      */
     @Volatile
     var inboxOpen: Boolean = false
@@ -76,8 +75,27 @@ internal object NotificationControl {
         inboxOpen = false
     }
 
+    /** The plugin service instance that is alive, bound by the hub, the band, or both. */
+    @Volatile
+    var pluginService: RelayPluginService? = null
+        private set
+
+    fun serviceCreated(service: RelayPluginService) {
+        pluginService = service
+        liveInstance?.onPluginServiceCreated(service)
+    }
+
+    fun serviceDestroyed(service: RelayPluginService) {
+        if (pluginService === service) pluginService = null
+        liveInstance?.onPluginServiceDestroyed(service)
+    }
+
+    /** The band's callbacks, while the band is talking through [service]'s client. */
+    fun bandCallbacks(service: RelayPluginService): NexusPluginCallbacks? =
+        liveInstance?.bandCallbacks(service)
+
     /**
-     * A message arrived while the wearer is in the inbox, so its visible surface redraws.
+     * A message arrived, so the inbox's visible surface redraws and a leased tile republishes.
      *
      * This matters more than it looks: the band stands down while the inbox
      * holds the bus, so if the inbox did not refresh, a message arriving during
@@ -86,7 +104,18 @@ internal object NotificationControl {
      * the time this runs; the visible inbox surface only has to look again.
      */
     fun notifyCaptured(notificationId: String) {
-        main.post { inbox?.onCaptureChanged(notificationId) }
+        main.post {
+            inbox?.onCaptureChanged(notificationId)
+            pluginService?.onInboxChanged()
+        }
+    }
+
+    /**
+     * The tile may read differently without a capture: a reply was sent, the inbox was cleared,
+     * or a hide switch flipped.
+     */
+    fun notifyInboxChanged() {
+        main.post { pluginService?.onInboxChanged() }
     }
 
     fun refreshFromSettings() {

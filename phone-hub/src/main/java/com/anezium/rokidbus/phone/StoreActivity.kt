@@ -25,7 +25,7 @@ class StoreActivity : Activity() {
     private lateinit var list: LinearLayout
     private lateinit var chipRow: LinearLayout
     private lateinit var headerSub: TextView
-    private lateinit var registryClient: RegistryClient
+    private lateinit var registryClient: StoreRegistry
     private lateinit var iconLoader: StoreIconLoader
     private var registrySnapshot: RegistrySnapshot? = null
     private var registryLoading = true
@@ -37,7 +37,7 @@ class StoreActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        registryClient = RegistryClient.create(applicationContext)
+        registryClient = StoreRegistry.create(applicationContext)
         iconLoader = StoreIconLoader(applicationContext)
         buildUi()
         refreshRegistry()
@@ -140,7 +140,8 @@ class StoreActivity : Activity() {
         val installed = catalog.entries.count {
             it.state == StoreEntryState.INSTALLED ||
                 it.state == StoreEntryState.SIDELOADED ||
-                it.state == StoreEntryState.UPDATE_AVAILABLE
+                it.state == StoreEntryState.UPDATE_AVAILABLE ||
+                it.state == StoreEntryState.SIGNER_CHANGE
         }
         val updates = catalog.entries.count { it.state == StoreEntryState.UPDATE_AVAILABLE }
         headerSub.text = buildString {
@@ -295,6 +296,7 @@ class StoreActivity : Activity() {
             ).joinToString(" · ").ifBlank { StoreScreens.grantLabel(entry.localGrantState) }
             StoreEntryState.SIDELOADED -> "Local · ${StoreScreens.grantLabel(entry.localGrantState)}"
             StoreEntryState.REQUIRES_HOST -> listOfNotNull(author, "needs a Nexus update").joinToString(" · ")
+            StoreEntryState.SIGNER_CHANGE -> listOfNotNull(author, "reinstall to switch").joinToString(" · ")
         }
     }
 
@@ -302,6 +304,7 @@ class StoreActivity : Activity() {
         StoreEntryState.AVAILABLE -> "Get" to NexusUi.GREEN
         StoreEntryState.UPDATE_AVAILABLE -> "Update" to NexusUi.AMBER
         StoreEntryState.REQUIRES_HOST -> "Held" to NexusUi.INK4
+        StoreEntryState.SIGNER_CHANGE -> "Switch" to NexusUi.AMBER
         StoreEntryState.INSTALLED,
         StoreEntryState.SIDELOADED,
         -> if (entry.localGrantState in REVIEW_STATES) {

@@ -67,7 +67,7 @@ object PluginUpdateChecker {
         val appContext = context.applicationContext
         executor.execute {
             val updates = runCatching {
-                val snapshot = RegistryClient.create(appContext).cachedSnapshot()
+                val snapshot = StoreRegistry.create(appContext).cachedSnapshot()
                     ?: return@runCatching cachedUpdates(appContext)
                 val installedVersions = installedVersions(
                     appContext,
@@ -79,6 +79,10 @@ object PluginUpdateChecker {
                     feed = snapshot.feed,
                     localCatalog = BusHubService.pluginCatalog(appContext),
                     installedVersionCodes = installedVersions.mapValues { it.value.versionCode },
+                    installedSignerSha256 = StoreScreens.installedSignerSha256(
+                        appContext.packageManager,
+                        installedVersions.keys,
+                    ),
                     hostVersionCode = hostVersionCode,
                 )
                 catalog.availableUpdates(installedVersions).also { updates ->
@@ -125,7 +129,7 @@ object PluginUpdateChecker {
         executor.execute {
             val previousUpdates = cachedUpdates(context)
             runCatching {
-                val registryClient = RegistryClient.create(context)
+                val registryClient = StoreRegistry.create(context)
                 val previousRegistryFetch = registryClient.cachedSnapshot()?.lastFetchEpochMillis
                 registryClient.refresh { result ->
                     executor.execute {
@@ -166,6 +170,10 @@ object PluginUpdateChecker {
             feed = snapshot.feed,
             localCatalog = BusHubService.pluginCatalog(context),
             installedVersionCodes = installedVersions.mapValues { it.value.versionCode },
+            installedSignerSha256 = StoreScreens.installedSignerSha256(
+                context.packageManager,
+                installedVersions.keys,
+            ),
             hostVersionCode = hostVersionCode,
         )
         val updates = catalog.availableUpdates(installedVersions)

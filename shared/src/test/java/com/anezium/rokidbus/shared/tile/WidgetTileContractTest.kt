@@ -1,5 +1,7 @@
 package com.anezium.rokidbus.shared.tile
 
+import com.anezium.rokidbus.shared.ImageSurfaceValidationResult
+import com.anezium.rokidbus.shared.MediaArtworkContract
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -436,5 +438,49 @@ class WidgetTileContractTest {
         )
         val bytes = WidgetTileContract.toPayload(TileSnapshot("p", "k", content)).toString().toByteArray().size
         assertTrue("payload is $bytes bytes", bytes <= WidgetTileContract.MAX_PAYLOAD_BYTES)
+    }
+
+    private val music = TileSnapshot(
+        pluginId = "media",
+        contentKey = "track",
+        content = TileContent.Music(title = "Low Tide Static", playing = true, artworkKey = "cover-1"),
+    )
+
+    private fun jpeg(width: Int = 64, height: Int = 64): ByteArray = ByteArray(128).also { bytes ->
+        byteArrayOf(
+            0xff.toByte(), 0xd8.toByte(), 0xff.toByte(), 0xc0.toByte(),
+            0x00, 0x11, 0x08,
+            (height ushr 8).toByte(), height.toByte(),
+            (width ushr 8).toByte(), width.toByte(),
+            0x03, 0x01, 0x11, 0x00, 0x02, 0x11, 0x00, 0x03, 0x11, 0x00,
+            0xff.toByte(), 0xd9.toByte(),
+        ).copyInto(bytes)
+    }
+
+    @Test
+    fun `artwork rides with a music publish under its artworkKey`() {
+        val bytes = jpeg()
+        val payload = WidgetTileContract.withArtwork(WidgetTileContract.toPayload(music), MediaArtworkContract.describe(bytes)!!)
+        assertEquals("cover-1", WidgetTileContract.artworkKeyOf(payload))
+        assertTrue(WidgetTileContract.validateArtwork(payload, bytes) is ImageSurfaceValidationResult.Valid)
+        assertTrue(WidgetTileContract.validateArtwork(payload, jpeg(width = 32)) is ImageSurfaceValidationResult.Invalid)
+        assertTrue(WidgetTileContract.validateArtwork(WidgetTileContract.withoutArtwork(payload), bytes) is ImageSurfaceValidationResult.Invalid)
+        // The artwork description never changes what the snapshot decodes to.
+        assertEquals(music, WidgetTileContract.fromPayload(payload))
+    }
+
+    @Test
+    fun `artwork needs a music template with an artworkKey`() {
+        val bytes = jpeg()
+        val artwork = MediaArtworkContract.describe(bytes)!!
+        val noKey = WidgetTileContract.withArtwork(
+            WidgetTileContract.toPayload(music.copy(content = (music.content as TileContent.Music).copy(artworkKey = ""))),
+            artwork,
+        )
+        assertEquals("", WidgetTileContract.artworkKeyOf(noKey))
+        assertTrue(WidgetTileContract.validateArtwork(noKey, bytes) is ImageSurfaceValidationResult.Invalid)
+        val generic = WidgetTileContract.withArtwork(WidgetTileContract.toPayload(snapshot()), artwork)
+        assertEquals("", WidgetTileContract.artworkKeyOf(generic))
+        assertTrue(WidgetTileContract.validateArtwork(generic, bytes) is ImageSurfaceValidationResult.Invalid)
     }
 }

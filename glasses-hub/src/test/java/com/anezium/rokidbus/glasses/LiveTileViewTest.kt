@@ -82,7 +82,7 @@ class LiveTileViewTest {
     }
 
     @Test
-    fun `a templated snapshot draws its down-level generic tile`() {
+    fun `a templated snapshot draws its template's layout`() {
         val view = LiveTileView(context, TileSize.LARGE)
         view.bind(
             TileSnapshot(
@@ -93,7 +93,7 @@ class LiveTileViewTest {
             stale = false,
         )
         assertEquals(listOf("Harbour Lights"), view.layoutForTest.texts(TilePart.TITLE).map { it.text })
-        assertEquals(listOf("Nova Reyes"), view.layoutForTest.texts(TilePart.SUBTITLE).map { it.text })
+        assertEquals(listOf("Nova Reyes"), view.layoutForTest.texts(TilePart.ARTIST).map { it.text })
     }
 }
 

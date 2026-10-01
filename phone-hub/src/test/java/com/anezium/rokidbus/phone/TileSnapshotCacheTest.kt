@@ -43,4 +43,22 @@ class TileSnapshotCacheTest {
         assertNotNull(TileSnapshotCache.get("p1"))
         assertNotNull(TileSnapshotCache.get("p${TileSnapshotCache.MAX_ENTRIES}"))
     }
+
+    @Test
+    fun `remove forgets one plugin only`() {
+        TileSnapshotCache.record("a", payload("a"))
+        TileSnapshotCache.record("b", payload("b"))
+        TileSnapshotCache.remove("a")
+        assertNull(TileSnapshotCache.get("a"))
+        assertNotNull(TileSnapshotCache.get("b"))
+    }
+
+    @Test
+    fun `retainOnly drops every plugin outside the given set`() {
+        TileSnapshotCache.record("a", payload("a"))
+        TileSnapshotCache.record("b", payload("b"))
+        TileSnapshotCache.retainOnly(setOf("b"))
+        assertNull(TileSnapshotCache.get("a"))
+        assertNotNull(TileSnapshotCache.get("b"))
+    }
 }

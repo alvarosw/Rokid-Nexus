@@ -1,5 +1,17 @@
 # Changelog — Lyrics
 
+## 1.1.0
+
+- Live grid tile (optional `widget_tile` capability, all seven tile sizes):
+  synced lyrics as a window of timed lines that the glasses advance with the
+  playback position, unsynced lyrics from the top, and the track title when no
+  lyrics are found. Published per track, seek, play/pause, or when playback
+  nears the end of the published window, never per line.
+- The media session is followed for the tile only while the hub's tile lease
+  is active; closing the surface no longer stops it while the lease holds.
+- The layout editor previews the tile with sample lyrics until a real one is
+  published.
+
 ## 1.0.3
 
 - Refresh the lightweight playback anchor at each timed-lyrics line boundary

@@ -445,7 +445,7 @@ internal class FeedsRuntime(
         source = null
     }
 
-    private companion object {
+    companion object {
         const val NANOS_PER_MILLISECOND = 1_000_000L
 
         fun FeedMedia.hasDisplayableImageUrl(): Boolean {

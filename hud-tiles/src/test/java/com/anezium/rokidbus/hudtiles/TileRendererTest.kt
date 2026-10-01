@@ -6,7 +6,6 @@ import android.graphics.drawable.ColorDrawable
 import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.shared.tile.TileContent
 import com.anezium.rokidbus.shared.tile.TileSize
-import com.anezium.rokidbus.shared.tile.WidgetTileContract
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -207,36 +206,19 @@ class TileRendererTest {
     }
 
     @Test
-    fun `richer templates draw their down-level generic tile for now`() {
-        val templates = listOf(
-            TileContent.Music(title = "Harbour Lights", artist = "Nova Reyes", album = "Low Tide", playing = true, positionMs = 60_000, durationMs = 240_000),
-            TileContent.Lines(listOf(TileContent.Lines.Line("first"), TileContent.Lines.Line("second")), current = 0, title = "Song"),
-            TileContent.ListContent(
-                sections = listOf(TileContent.ListContent.Section(items = listOf(TileContent.ListContent.Item("Ana Ribeiro", paragraph = "Leaving now")))),
-                summary = "3 new",
-            ),
-        )
-        templates.forEach { content ->
-            TileSize.entries.forEach { size ->
-                val drawn = layout(size, content).ops.filterIsInstance<TileOp.Text>().map { it.part to it.text }
-                val expected = layout(size, WidgetTileContract.downLevel(content)).ops.filterIsInstance<TileOp.Text>().map { it.part to it.text }
-                assertEquals("$content at $size", expected, drawn)
-            }
-        }
-    }
-
-    @Test
     fun `nothing in a static tile changes on its own`() {
-        assertNull(TileRenderer.nextChangeAtElapsed(input(null)))
-        assertNull(TileRenderer.nextChangeAtElapsed(input(generic())))
-        assertNull(TileRenderer.nextChangeAtElapsed(input(TileContent.Music(title = "x", playing = true, positionMs = 0, durationMs = 1_000))))
+        TileSize.entries.forEach { size ->
+            assertNull(TileRenderer.nextChangeAtElapsed(input(null), size))
+            assertNull(TileRenderer.nextChangeAtElapsed(input(generic()), size))
+            assertNull(TileRenderer.nextChangeAtElapsed(input(TileContent.Music(title = "x", playing = false, positionMs = 0, durationMs = 1_000)), size))
+        }
     }
 
     @Test
     fun `the header summary shows at the right end, short at width 1`() {
         val wide = TileHeader.layout(input(null, "Relay"), 220, cols = 2, summary = "3 new", summaryShort = "3")
         val summary = wide.ops.filterIsInstance<TileOp.Text>().single { it.part == TilePart.SUMMARY }
-        assertEquals("3 new", summary.text)
+        assertEquals("3 NEW", summary.text)
         assertEquals(TileTextStyle.LABEL, summary.style)
         assertTrue(summary.left > 110f)
         val small = TileHeader.layout(input(null, "Relay"), 106, cols = 1, summary = "3 new", summaryShort = "3")

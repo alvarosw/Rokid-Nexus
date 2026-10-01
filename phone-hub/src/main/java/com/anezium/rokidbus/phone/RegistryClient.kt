@@ -36,7 +36,11 @@ data class RegistryPlugin(
     val releases: List<RegistryRelease>,
     val nexus: RegistryNexus,
     val artifact: RegistryArtifact,
+    val feed: RegistryFeedOrigin = RegistryFeedOrigin.UPSTREAM,
 )
+
+/** Which registry feed an entry won from; only fork entries may steer a signer switch. */
+enum class RegistryFeedOrigin { FORK, UPSTREAM }
 
 data class RegistryRelease(
     val version: String,
@@ -172,22 +176,21 @@ class RegistryClient(
         RegistrySnapshot(feed, source, etag, lastFetchEpochMillis)
 
     companion object {
-        const val FEED_URL =
-            "https://raw.githubusercontent.com/Anezium/RokidBrew-Registry/main/dist/nexus-plugins.v1.json"
         const val SUPPORTED_VERSION = 1
 
-        private val DEFAULT_IO_EXECUTOR = Executors.newSingleThreadExecutor { runnable ->
+        internal val DEFAULT_IO_EXECUTOR: Executor = Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable, "nexus-registry").apply { isDaemon = true }
         }
 
-        fun create(context: Context): RegistryClient {
-            val appContext = context.applicationContext
-            return RegistryClient(
-                transport = HttpsRegistryTransport(URL(FEED_URL)),
-                cache = FileRegistryCache(File(appContext.filesDir, "store-registry")),
-                callbackExecutor = Executor { runnable -> Handler(Looper.getMainLooper()).post(runnable) },
+        internal val MAIN_THREAD_EXECUTOR = Executor { runnable -> Handler(Looper.getMainLooper()).post(runnable) }
+
+        /** One feed with its own on-disk cache; the Store reads the merged [StoreRegistry]. */
+        internal fun create(context: Context, feedUrl: String, cacheDirectoryName: String): RegistryClient =
+            RegistryClient(
+                transport = HttpsRegistryTransport(URL(feedUrl)),
+                cache = FileRegistryCache(File(context.applicationContext.filesDir, cacheDirectoryName)),
+                callbackExecutor = MAIN_THREAD_EXECUTOR,
             )
-        }
 
         @Throws(RegistryParseException::class)
         fun parse(body: String): RegistryFeed {
