@@ -34,11 +34,17 @@ internal enum class MediaDeckMonitorStatus {
     UNAVAILABLE,
 }
 
+/** Starts and stops watching the active media session; [MediaSessionMonitor] is the real one. */
+internal interface MediaSessionWatcher {
+    fun start()
+    fun stop()
+}
+
 internal class MediaSessionMonitor(
     context: Context,
     private val onSnapshot: (MediaDeckSnapshot?) -> Unit,
     private val onStatus: (MediaDeckMonitorStatus) -> Unit,
-) {
+) : MediaSessionWatcher {
     private val appContext = context.applicationContext
     private val mediaSessionManager = appContext.getSystemService(MediaSessionManager::class.java)
     private val listenerComponent =
@@ -63,7 +69,7 @@ internal class MediaSessionMonitor(
 
     private val refreshAfterControl = Runnable { refreshOnMain() }
 
-    fun start() = runOnMain {
+    override fun start() = runOnMain {
         if (started) {
             refreshOnMain()
             return@runOnMain
@@ -74,7 +80,7 @@ internal class MediaSessionMonitor(
         refreshOnMain()
     }
 
-    fun stop() = runOnMain {
+    override fun stop() = runOnMain {
         if (!started) return@runOnMain
         started = false
         mainHandler.removeCallbacks(refreshAfterControl)

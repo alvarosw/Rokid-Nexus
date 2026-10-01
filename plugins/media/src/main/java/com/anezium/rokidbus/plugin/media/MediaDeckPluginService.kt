@@ -1,18 +1,27 @@
 package com.anezium.rokidbus.plugin.media
 
+import android.os.SystemClock
 import com.anezium.rokidbus.client.PluginRegistrationResult
 import com.anezium.rokidbus.client.plugin.NexusCard
 import com.anezium.rokidbus.client.plugin.NexusMedia
 import com.anezium.rokidbus.client.plugin.NexusMediaAnchor
 import com.anezium.rokidbus.client.plugin.NexusPluginService
 import com.anezium.rokidbus.client.plugin.NexusSurfaceSession
+import com.anezium.rokidbus.client.plugin.WidgetTileSession
+import com.anezium.rokidbus.media.ImageArtworkEncoder
 import com.anezium.rokidbus.media.MediaDeckRuntime
 import com.anezium.rokidbus.media.MediaDeckRuntimeHost
+import com.anezium.rokidbus.media.MediaDeckTileHost
+import com.anezium.rokidbus.media.MediaDeckTileRuntime
+import com.anezium.rokidbus.media.session.MediaSessionMonitor
 import com.anezium.rokidbus.shared.plugin.NexusInputEvent
+import com.anezium.rokidbus.shared.tile.TileSnapshot
 
 class MediaDeckPluginService : NexusPluginService() {
     private var surface: NexusSurfaceSession? = null
     private var runtime: MediaDeckRuntime? = null
+    private var tileRuntime: MediaDeckTileRuntime? = null
+    private var tileSession: WidgetTileSession? = null
 
     private val runtimeHost = object : MediaDeckRuntimeHost {
         override fun supportsImage(): Boolean = nexusClient?.supportsImageSurface == true
@@ -44,6 +53,17 @@ class MediaDeckPluginService : NexusPluginService() {
         }
     }
 
+    private val tileHost = object : MediaDeckTileHost {
+        override fun publish(snapshot: TileSnapshot, artworkBytes: ByteArray?) {
+            val session = tileSession ?: return
+            if (artworkBytes == null) session.publish(snapshot) else session.publish(snapshot, artworkBytes)
+        }
+
+        override fun post(action: () -> Unit) {
+            mainExecutor.execute(action)
+        }
+    }
+
     override fun onNexusOpen() {
         surfaceSession()
         ensureRuntime().open()
@@ -66,7 +86,21 @@ class MediaDeckPluginService : NexusPluginService() {
         runtime?.imageCapabilityChanged()
     }
 
+    override fun onNexusTileActive(active: Boolean) {
+        if (active) {
+            // A fresh session per lease, so the cover is sent again to a hub that may have lost it.
+            tileSession = nexusWidgetTileSession(TILE_ID)
+            ensureTileRuntime().start()
+        } else {
+            tileRuntime?.stop()
+            tileSession = null
+        }
+    }
+
     override fun onDestroy() {
+        tileRuntime?.stop()
+        tileRuntime = null
+        tileSession = null
         runtime?.close()
         runtime = null
         surface = null
@@ -81,7 +115,17 @@ class MediaDeckPluginService : NexusPluginService() {
         host = runtimeHost,
     ).also { runtime = it }
 
+    private fun ensureTileRuntime(): MediaDeckTileRuntime = tileRuntime ?: MediaDeckTileRuntime(
+        host = tileHost,
+        encodeArtwork = { snapshot ->
+            ImageArtworkEncoder.encode(applicationContext, snapshot.artwork, snapshot.artworkUri)
+        },
+        clock = SystemClock::elapsedRealtime,
+        watcherFactory = { onSnapshot, onStatus -> MediaSessionMonitor(applicationContext, onSnapshot, onStatus) },
+    ).also { tileRuntime = it }
+
     private companion object {
         const val SURFACE_ID = "media"
+        const val TILE_ID = "media"
     }
 }
