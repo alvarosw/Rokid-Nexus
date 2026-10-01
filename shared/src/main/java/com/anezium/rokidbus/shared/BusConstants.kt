@@ -194,6 +194,13 @@ object BusPaths {
 
     /** Phone hub to glasses hub only; see [PhoneBatteryContract] for why it is not a plugin path. */
     const val PHONE_BATTERY = "/phone/battery"
+
+    /**
+     * Phone hub to glasses hub only: the weather the system widget draws. Hub-owned like
+     * [PHONE_BATTERY], and hub-only in [com.anezium.rokidbus.shared.plugin.PathRules]: no plugin
+     * may send it or subscribe to it. See [WeatherContract].
+     */
+    const val PHONE_WEATHER = "/phone/weather"
     const val PLUGIN_OPEN = "/system/plugin/open"
     const val PLUGIN_CLOSE = "/system/plugin/close"
     const val PLUGIN_INPUT = "/system/plugin/input"

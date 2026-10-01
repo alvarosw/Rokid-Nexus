@@ -165,4 +165,14 @@ class PluginRoutePolicyTest {
             assertEquals("hello:ink-main", result.getString("surfaceId"))
         }
     }
+
+    @Test
+    fun `no plugin, however granted, can send the hub-to-hub weather`() {
+        val denied = PluginRouteDecision.Denied("SYSTEM_ROUTE_DENIED")
+        assertEquals(denied, PluginRoutePolicy.authorize(plugin(*PluginCapability.entries.toTypedArray()), "/phone/weather"))
+        assertEquals(denied, PluginRoutePolicy.authorize(plugin(), "/phone/weather"))
+        assertEquals(denied, PluginRoutePolicy.authorize(plugin(), " /phone/weather "))
+        assertEquals(denied, PluginRoutePolicy.authorize(PluginRouteCaller.DebugLegacy, "/phone/weather"))
+        assertEquals(PluginRouteDecision.Allowed, PluginRoutePolicy.authorize(PluginRouteCaller.Internal, "/phone/weather"))
+    }
 }
