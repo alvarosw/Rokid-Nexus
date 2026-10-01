@@ -29,6 +29,7 @@ import com.anezium.rokidbus.client.ui.NexusUi
 import com.anezium.rokidbus.client.ui.PluginCustomIcon
 import com.anezium.rokidbus.shared.plugin.PluginCapability
 import com.anezium.rokidbus.shared.tile.GridRect
+import com.anezium.rokidbus.shared.tile.SystemWidgets
 import com.anezium.rokidbus.shared.tile.TileGridLayout
 import com.anezium.rokidbus.shared.tile.TileSize
 import com.anezium.rokidbus.shared.tile.TileSnapshot
@@ -77,14 +78,11 @@ open class TileLayoutSettingsActivity : Activity() {
                 )
                 entryById[id] = entry
             }
+            SystemWidgets.all.forEach { widget ->
+                add(EditorTile(widget.id, widget.displayName, widget.supportedSizes.toSet(), live = false, widget = widget))
+            }
         }
-        // The glasses resolve over the camera entry and then the launcher order, with no declared sizes.
-        val entries = tiles.map { it.id to null }
-        val initial = TileLayoutEditorState.layoutOf(
-            TileGridLayout.resolve(entries, TileLayoutSettingsStore(this).getEntries()),
-        )
-        val default = TileLayoutEditorState.layoutOf(TileGridLayout.resolve(entries, emptyList()))
-        state = TileLayoutEditorState(tiles, initial, default)
+        state = TileLayoutEditorState.load(tiles, TileLayoutSettingsStore(this).getEntries())
         buildUi()
         onEditorChanged()
     }
@@ -111,13 +109,20 @@ open class TileLayoutSettingsActivity : Activity() {
         val entry = entryById[tileId]
         return NexusPluginIcons.resolve(
             context = this,
-            iconKey = if (tileId == CAMERA_TILE_ID) CAMERA_ICON_KEY else entry?.iconKey,
+            iconKey = when (tileId) {
+                CAMERA_TILE_ID -> CAMERA_ICON_KEY
+                else -> SystemWidgets.byId(tileId)?.iconKey ?: entry?.iconKey
+            },
             customIcon = entry?.iconDrawableResId?.let { resId ->
                 entry.principal?.packageName?.let { PluginCustomIcon(it, resId) }
             },
             pluginId = tileId,
         )
     }
+
+    /** The live tile first, then the plugin's declared sample, else the header alone. */
+    private fun visualFor(tile: EditorTile): TileVisual =
+        TileVisual(glyphFor(tile.id), TileSnapshotCache.get(tile.id) ?: tilePreviewSample(tile.id))
 
     private fun buildUi() {
         window.statusBarColor = NexusUi.BG
@@ -134,9 +139,7 @@ open class TileLayoutSettingsActivity : Activity() {
         canvasView = TileLayoutCanvasView(this).apply {
             bind(
                 state,
-                state.tiles.associate { tile ->
-                    tile.id to TileVisual(glyphFor(tile.id), TileSnapshotCache.get(tile.id) ?: tilePreviewSample(tile.id))
-                },
+                state.tiles.filter { it.id in state.layout }.associate { tile -> tile.id to visualFor(tile) },
                 visibleRows,
             )
             onChanged = ::onEditorChanged

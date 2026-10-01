@@ -84,6 +84,7 @@ internal class TileLayoutCanvasView(context: Context) : View(context) {
         override fun getVisibleVirtualViews(ids: MutableList<Int>) {
             val current = state ?: return
             current.tiles.indices
+                .filter { current.tiles[it].id in current.layout }
                 .sortedWith(compareBy({ current.layout[current.tiles[it].id]?.row }, { current.layout[current.tiles[it].id]?.col }))
                 .forEach { ids += it }
         }
@@ -148,6 +149,12 @@ internal class TileLayoutCanvasView(context: Context) : View(context) {
         requestLayout()
         invalidate()
         access.invalidateRoot()
+    }
+
+    /** Adds or replaces what [id] shows, for a tile placed after [bind] (an added widget). */
+    fun setVisual(id: String, visual: TileVisual) {
+        visuals = visuals + (id to visual)
+        invalidate()
     }
 
     /** The state changed outside a gesture (reset, auto-pack, resize): animate to it. */

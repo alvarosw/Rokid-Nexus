@@ -2,6 +2,7 @@ package com.anezium.rokidbus.phone
 
 import com.anezium.rokidbus.client.ui.HudGridMetrics
 import com.anezium.rokidbus.shared.tile.GridRect
+import com.anezium.rokidbus.shared.tile.SystemWidgets
 import com.anezium.rokidbus.shared.tile.TileGridLayout
 import com.anezium.rokidbus.shared.tile.TileLayoutEntry
 import com.anezium.rokidbus.shared.tile.TileSize
@@ -184,6 +185,43 @@ class TileLayoutEditorStateTest {
             ),
             entries,
         )
+    }
+
+    private val widgetTiles = SystemWidgets.all.map {
+        EditorTile(it.id, it.displayName, it.supportedSizes.toSet(), live = false, widget = it)
+    }
+
+    @Test
+    fun `loading keeps the stored widgets and saving writes them back in reading order`() {
+        val stored = listOf(
+            TileLayoutEntry("sys:clock", TileSize.WIDE, 0, 0),
+            TileLayoutEntry("a", TileSize.SMALL, 2, 0),
+            TileLayoutEntry("sys:status", TileSize.BANNER, 0, 1),
+            TileLayoutEntry("sys:radar", TileSize.SMALL, 3, 1),
+        )
+        val state = TileLayoutEditorState.load(listOf(tile("a"), tile("b")) + widgetTiles, stored)
+        assertEquals(
+            listOf(
+                TileLayoutEntry("sys:clock", TileSize.WIDE, 0, 0),
+                TileLayoutEntry("a", TileSize.SMALL, 2, 0),
+                TileLayoutEntry("b", TileSize.SMALL, 3, 0),
+                TileLayoutEntry("sys:status", TileSize.BANNER, 0, 1),
+            ),
+            state.toEntries(),
+        )
+    }
+
+    @Test
+    fun `an unplaced widget cannot be selected and the default layout has no widgets`() {
+        val state = TileLayoutEditorState.load(
+            listOf(tile("a")) + widgetTiles,
+            listOf(TileLayoutEntry("sys:clock", TileSize.SMALL, 1, 0), TileLayoutEntry("a", TileSize.SMALL, 0, 0)),
+        )
+        state.select("sys:status")
+        assertEquals("a", state.selectedId)
+        state.reset()
+        assertEquals(setOf("a"), state.layout.keys)
+        assertEquals(listOf(TileLayoutEntry("a", TileSize.SMALL, 0, 0)), state.toEntries())
     }
 
     @Test
