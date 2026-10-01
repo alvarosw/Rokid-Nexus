@@ -208,7 +208,7 @@ binary frame is dropped, not retried.
 | Timed lines | ≤ 2 000 entries, non-negative times |
 | Image surface | JPEG/PNG ≤ 64 KiB compressed, edges ≤ 512 px, ≤ 512² total px, ≥ 150 ms between updates |
 | Mono artwork | 16–192 px per edge (the glasses renderer floor is 16 even though the SDK accepts 1) |
-| Tile snapshot | pluginId/contentKey ≤ 128; title/subtitle ≤ 120; badge ≤ 24; unit ≤ 16; progress 0f..1f; ≤ 4 rows of ≤ 120 chars; payload ≤ 8 KiB |
+| Tile snapshot | pluginId/contentKey ≤ 128; title/subtitle ≤ 120; badge ≤ 24; unit ≤ 16; progress 0f..1f; ≤ 4 rows of ≤ 120 chars; template texts ≤ 120 except paragraph ≤ 280, summary/detail ≤ 60, summaryShort ≤ 6; ≤ 9 lines; ≤ 3 sections and ≤ 6 list items; staleAfterMs 60 s..24 h; payload ≤ 12 KiB |
 | Media artwork (binary) | image rules with 256 px edge cap |
 | Local binder binary | 512 KiB per frame |
 | SPP frame | 2 MiB body; binary metadata header ≤ 64 KiB |

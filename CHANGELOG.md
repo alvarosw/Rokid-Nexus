@@ -17,6 +17,10 @@ or `3x3` in `TILE_SIZES` needs hubs with this change.
   fits, tap it to pick one of seven sizes, auto-pack or reset, then save. The
   preview uses the glasses' real grid, each plugin's last published tile, and
   a "SCROLL ↓" line where the glasses screen actually ends.
+- **See a tile at any size before you place it.** The selected tile's card
+  previews it at the last size you tapped, even one with no room yet, drawn
+  exactly as the glasses draw it: the plugin's live tile, else the sample it
+  declares, else its icon and name.
 
 ### Glasses hub
 
@@ -24,6 +28,17 @@ or `3x3` in `TILE_SIZES` needs hubs with this change.
   the phone, empty cells included, and the ring moves through them in reading
   order. Tiles come in 1x1, 2x1, 3x1, 1x2, 2x2, 3x2 and 3x3, with the icon
   beside the name, rows by height and a progress track.
+- Tiles on the glasses and in the phone's layout editor are now drawn by one
+  shared renderer, so the editor shows exactly what the glasses show.
+
+### Plugin SDK
+
+- **Tile templates.** A tile can carry `TileContent.Music`, `Lines` or
+  `ListContent` besides the generic fields, plus a `staleAfterMs`; the payload
+  cap rises to 12 KiB. Until each template gets its own layout, the hub draws
+  its generic form, which older glasses hubs also show.
+- **`TILE_PREVIEW`**: a raw JSON resource with one sample tile, shown in the
+  layout editor's size preview until the plugin publishes.
 
 ## 1.5.0
 

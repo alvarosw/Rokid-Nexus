@@ -884,6 +884,77 @@ quietly" handling as `SURFACE_BUSY` elsewhere. The tile subsystem
 launcher is in grid mode (`HudModeContract.MODE_GRID`); in list mode it does not
 start at all.
 
+### Widget tile protocol v2 (templates)
+
+A v2 payload adds three fields next to the v1 ones: `template` (`generic`,
+`music`, `lines` or `list`), `content` (that template's fields) and
+`staleAfterMs` (60 000 .. 86 400 000; clamped on decode, default 600 000). The
+v1 top-level fields are still always written, filled by a down-level mapping
+(`WidgetTileContract.downLevel`), so a glasses hub that predates templates
+still shows a generic tile. A payload without `template`, with an unknown one,
+or whose `content` does not decode is read as `generic` from the v1 fields, so
+v1 publishers keep working unchanged.
+
+```json
+{
+  "pluginId": "relay",
+  "contentKey": "inbox",
+  "template": "list",
+  "content": {
+    "sections": [
+      {
+        "title": "",
+        "detail": "",
+        "items": [
+          {
+            "title": "Ana Ribeiro",
+            "detail": "WhatsApp",
+            "paragraph": "Leaving now, ten minutes away.",
+            "ageMs": 60000,
+            "leading": { "type": "initials", "text": "AR" }
+          }
+        ]
+      }
+    ],
+    "summary": "3 new",
+    "summaryShort": "3",
+    "footer": "",
+    "paragraphLines": 2,
+    "overflow": 2
+  },
+  "staleAfterMs": 600000,
+  "tone": "info",
+  "title": "3 new",
+  "subtitle": "",
+  "badge": "3",
+  "progress": null,
+  "unit": "",
+  "rows": ["Ana Ribeiro - Leaving now, ten minutes away."]
+}
+```
+
+`content` per template:
+
+- `generic`: `title`, `subtitle`, `badge`, `progress`, `unit`, `rows` — the v1
+  fields.
+- `music`: `title`, `artist`, `album`, `source`, `playing`, `positionMs`,
+  `durationMs`, `artworkKey` (`""` = no art).
+- `lines`: `lines` (≤ 9 of `{text, startMs}`), `current`, `title`,
+  `subtitle`, `source`, `positionMs`, `durationMs`, `playing`.
+- `list`: `sections` (≤ 3 of `{title, detail, items}`, ≤ 6 items in total, each
+  `{title, detail, paragraph, ageMs, leading}` with `leading` null,
+  `{"type":"initials","text"}` or `{"type":"glyph","name"}`), `summary`,
+  `summaryShort`, `footer`, `paragraphLines` (1..6), `overflow`.
+
+Bounds: every text ≤ 120 chars except `paragraph` ≤ 280, `summary` and
+`detail` ≤ 60, `summaryShort` ≤ 6, initials 1..2, a glyph name ≤ 24; the whole
+payload ≤ 12 KiB. Time-relative fields (`positionMs`, `ageMs`) are as of the
+publish: the glasses add the time since receipt, so neither device's wall clock
+matters. The receiving hub never throws on a payload: in `music`, `lines` and
+`list` content a text over its bound is truncated, a list over its count is cut
+and an unusable `leading` is dropped; a generic `title` over its bound rejects
+the payload, as in v1.
+
 ## Notice protocol v1
 
 A notice is a transient band across the top of the wearer's view: one
