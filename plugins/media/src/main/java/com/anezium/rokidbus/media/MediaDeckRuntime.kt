@@ -12,7 +12,6 @@ import com.anezium.rokidbus.media.session.MediaDeckMonitorStatus
 import com.anezium.rokidbus.media.session.MediaDeckSnapshot
 import com.anezium.rokidbus.media.session.MediaSessionMonitor
 import com.anezium.rokidbus.shared.plugin.NexusInputEvent
-import java.security.MessageDigest
 import kotlin.math.abs
 
 internal interface MediaDeckRuntimeHost {
@@ -153,7 +152,7 @@ internal class MediaDeckRuntime(
 
     private fun pushSnapshot(snapshot: MediaDeckSnapshot, force: Boolean) {
         val now = SystemClock.elapsedRealtime()
-        val contentKey = trackKey(snapshot)
+        val contentKey = MediaTrackKey.of(snapshot)
         val artworkMode = artworkModeFor(host.supportsImage())
         val artworkWasMissing = cachedArtworkTrackKey == contentKey &&
             cachedArtworkMode == artworkMode && cachedArtwork == null
@@ -268,29 +267,6 @@ internal class MediaDeckRuntime(
                 snapshot.artworkUri,
             )
         }
-
-    private fun trackKey(snapshot: MediaDeckSnapshot): String = shortHash(
-        listOf(
-            snapshot.packageName,
-            snapshot.mediaId,
-            snapshot.title,
-            snapshot.artist,
-            snapshot.album,
-            snapshot.durationMs?.toString().orEmpty(),
-        ).joinToString("\u0000"),
-    )
-
-    private fun shortHash(value: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
-        val hex = "0123456789abcdef"
-        return buildString(16) {
-            for (index in 0 until 8) {
-                val byte = digest[index].toInt() and 0xff
-                append(hex[byte ushr 4])
-                append(hex[byte and 0x0f])
-            }
-        }
-    }
 
     private fun clipped(value: String, limit: Int): String =
         value.replace('\n', ' ').replace('\r', ' ').trim().take(limit)
