@@ -91,6 +91,8 @@ object NexusPluginIcons {
             "map" -> R.drawable.ic_plugin_map
             "bolt" -> R.drawable.ic_plugin_bolt
             "bookmark" -> R.drawable.ic_plugin_bookmark
+            // The Status system widget's; kept out of the documented plugin keys so it stays distinct.
+            "battery" -> R.drawable.ic_plugin_battery
             else -> null
         }
 

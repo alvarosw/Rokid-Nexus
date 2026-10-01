@@ -28,6 +28,17 @@ class SystemWidgetsTest {
     }
 
     @Test
+    fun `no widget shares its icon with another widget or a bundled plugin`() {
+        // The ICON keys the plugins in this repository declare (plugins/*, plugin-feeds).
+        val pluginIcons = setOf(
+            "terminal", "assistant", "lens", "music", "disc", "map", "photosync", "relay", "star", "bolt", "bus", "send",
+        )
+        val icons = SystemWidgets.all.map { it.iconKey }
+        assertEquals(icons.size, icons.toSet().size)
+        icons.forEach { assertFalse(it, it in pluginIcons) }
+    }
+
+    @Test
     fun `placedIn keeps known widgets in stored order once each`() {
         val stored = listOf(
             at("a", TileSize.SMALL, 0, 0),

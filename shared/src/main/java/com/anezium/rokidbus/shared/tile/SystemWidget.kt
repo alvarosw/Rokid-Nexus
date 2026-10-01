@@ -36,7 +36,7 @@ object SystemWidgets {
     val STATUS = SystemWidget(
         id = "sys:status",
         displayName = "Status",
-        iconKey = "bolt",
+        iconKey = "battery",
         supportedSizes = listOf(TileSize.SMALL, TileSize.WIDE, TileSize.BANNER),
         defaultSize = TileSize.SMALL,
     )

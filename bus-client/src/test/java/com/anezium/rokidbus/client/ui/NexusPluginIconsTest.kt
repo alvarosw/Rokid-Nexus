@@ -31,6 +31,7 @@ class NexusPluginIconsTest {
             "map" to R.drawable.ic_plugin_map,
             "bolt" to R.drawable.ic_plugin_bolt,
             "bookmark" to R.drawable.ic_plugin_bookmark,
+            "battery" to R.drawable.ic_plugin_battery,
         )
 
         icons.forEach { (key, drawable) ->
