@@ -1,5 +1,12 @@
 # Changelog — Sample
 
+## 1.0.5
+
+- Publish the four tile templates in turn, one per open: generic, music,
+  lines and list, with the data of the live tiles design.
+- Declare a `TILE_PREVIEW` sample tile, which the layout editor's size preview
+  shows until a real tile is published.
+
 ## 1.0.4
 
 - Demonstrate activity extras with SDK 0.21.0 and Nexus hubs 1.5.0: a

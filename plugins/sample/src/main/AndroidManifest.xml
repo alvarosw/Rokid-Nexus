@@ -59,6 +59,10 @@
             <meta-data
                 android:name="com.anezium.rokidbus.plugin.RECEIVE_PREFIXES"
                 android:value="/plugin/hello,/system/plugin,/stt,/tts/started,/tts/done,/audio" />
+            <!-- The layout editor's size preview shows this until a real tile is published. -->
+            <meta-data
+                android:name="com.anezium.rokidbus.plugin.TILE_PREVIEW"
+                android:resource="@raw/tile_preview" />
             <meta-data
                 android:name="com.anezium.rokidbus.plugin.SETTINGS_ACTIVITY"
                 android:value=".HelloActivity" />
