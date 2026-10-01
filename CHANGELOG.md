@@ -21,6 +21,18 @@ or `3x3` in `TILE_SIZES` needs hubs with this change.
   previews it at the last size you tapped, even one with no room yet, drawn
   exactly as the glasses draw it: the plugin's live tile, else the sample it
   declares, else its icon and name.
+- **A plugin's declared tile sizes now count on the phone.** Discovery never
+  read `TILE_SIZES`, so the layout editor offered every size to every plugin.
+- **A busy tile no longer loses its last update.** Tile publishes are paced per
+  plugin before they reach the glasses; past the budget the newest one waits and
+  goes out as soon as it can, instead of being dropped by the glasses.
+- **Live tiles only while they can be seen.** The phone gives a plugin's tile a
+  lease while grid mode is on, the glasses are linked, the tile is placed and
+  `widget_tile` is granted, keeps that plugin bound for the lease, and asks
+  poll-based plugins to refresh when the home comes back into view and at most
+  every 15 minutes. Lease changes and refreshes show in the bus journal.
+- The editor forgets the last tile of a plugin that is uninstalled, loses
+  `widget_tile`, or leaves the launcher.
 
 ### Glasses hub
 
@@ -30,6 +42,9 @@ or `3x3` in `TILE_SIZES` needs hubs with this change.
   beside the name, rows by height and a progress track.
 - Tiles on the glasses and in the phone's layout editor are now drawn by one
   shared renderer, so the editor shows exactly what the glasses show.
+- A tile turns stale after the time its plugin set (`staleAfterMs`) instead of a
+  fixed ten minutes, and the cached tile of a plugin that leaves the launcher is
+  deleted.
 
 ### Plugin SDK
 
@@ -39,6 +54,14 @@ or `3x3` in `TILE_SIZES` needs hubs with this change.
   its generic form, which older glasses hubs also show.
 - **`TILE_PREVIEW`**: a raw JSON resource with one sample tile, shown in the
   layout editor's size preview until the plugin publishes.
+- **Tile lease callbacks.** `onNexusTileActive(active)` tells a plugin when its
+  tile is live and it may watch its own sources and publish;
+  `onNexusTileRefresh()` asks a poll-based plugin to fetch once and publish.
+  Both default to no-ops. The Background policy's fourth exception now
+  describes the lease.
+- **`OPTIONAL_CAPABILITIES`**: capabilities merged into the requested set by
+  hubs that know the key, with unknown values ignored. Declaring `widget_tile`
+  there keeps the same APK loadable on a hub without tiles.
 
 ## 1.5.0
 
