@@ -1,0 +1,47 @@
+{
+  "contentKey": "preview",
+  "template": "list",
+  "content": {
+    "sections": [
+      {
+        "title": "",
+        "detail": "",
+        "items": [
+          {
+            "title": "Inês Castro",
+            "detail": "@inescastro",
+            "paragraph": "Fixed the fog light on the old Vespa. Coast ride this weekend if the rain holds. [photo]",
+            "ageMs": 120000,
+            "leading": null
+          },
+          {
+            "title": "Port Weather",
+            "detail": "@portweather",
+            "paragraph": "Gusts up to 45 km/h after 18:00. Ferries on a reduced schedule.",
+            "ageMs": 360000,
+            "leading": null
+          },
+          {
+            "title": "Davi Lopes",
+            "detail": "@davilopes",
+            "paragraph": "Sketchbook pages from the market this morning. [3 photos]",
+            "ageMs": 660000,
+            "leading": null
+          }
+        ]
+      }
+    ],
+    "summary": "Bluesky · 8 new",
+    "summaryShort": "+8",
+    "footer": "",
+    "paragraphLines": 4,
+    "overflow": 5
+  },
+  "title": "Bluesky · 8 new",
+  "subtitle": "",
+  "badge": "+8",
+  "progress": null,
+  "unit": "",
+  "tone": "info",
+  "rows": ["Inês Castro - Fixed the fog light on the old Vespa. Coast ride this weekend if the rain holds. [photo]", "Port Weather - Gusts up to 45 km/h after 18:00. Ferries on a reduced schedule.", "Davi Lopes - Sketchbook pages from the market this morning. [3 photos]"]
+}
