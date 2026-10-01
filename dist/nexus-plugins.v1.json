@@ -1,4 +1,205 @@
 {
   "version": 1,
-  "plugins": []
+  "plugins": [
+    {
+      "id": "feeds",
+      "kind": "nexus-plugin",
+      "name": "Feeds",
+      "category": "News",
+      "summary": "Bluesky and X timelines on your glasses.",
+      "description": "Read your social feeds on the HUD. Bluesky needs no account; X connects through an in-app sign-in. Threads, images, and swipe navigation, rendered as structured cards.",
+      "author": "alvarosw",
+      "sourceUrl": "https://github.com/alvarosw/Rokid-Nexus",
+      "publishedAt": "2026-10-01T15:36:52Z",
+      "iconAsset": "feeds-icon.png",
+      "screenshotAssets": [
+        "feeds-1-timeline.png"
+      ],
+      "listing": {
+        "descriptionMarkdown": "## About\n\nRead your social feeds on the HUD. Bluesky needs no account; X connects through an in-app sign-in. Threads, images, and swipe navigation, rendered as structured cards."
+      },
+      "releases": [
+        {
+          "version": "1.1.0",
+          "date": "2026-10-01T15:36:52Z",
+          "notes": "- Live grid tile (optional `widget_tile` capability, all seven tile sizes): up\n  to six posts of the default timeline with author, handle, text, media marker\n  and age, and a \"N new\" summary. Fetched once when the hub's tile lease starts\n  and once per hub refresh, never on a timer of the plugin's own. X (WebView)\n  is never used for the tile; with that default the tile reads Bluesky.\n- The layout editor previews the tile with sample posts until a real one is\n  published.\n"
+        }
+      ],
+      "nexus": {
+        "pluginId": "feeds",
+        "apiVersion": 3,
+        "capabilities": [
+          "surfaces"
+        ],
+        "launchable": true,
+        "settingsActivity": ".FeedsSettingsActivity",
+        "minHostVersionCode": 6
+      },
+      "artifact": {
+        "target": "phone",
+        "url": "https://github.com/alvarosw/Rokid-Nexus/releases/download/feeds-v1.1.0/feeds-phone-release.apk",
+        "sha256": "47a965db02a1de469ffcccaaba6dfbbd11bcd57a19bea7a58f63bb6eb75bb7cf",
+        "signerSha256": "78a1be1045ba3b2614baa46e306a353a8a6bc3e5d07ba5d587490931d5f56d60",
+        "sizeBytes": 5875750,
+        "packageName": "com.anezium.rokidbus.plugin.feeds",
+        "versionCode": 4,
+        "versionName": "1.1.0"
+      },
+      "iconUrl": "https://raw.githubusercontent.com/Anezium/RokidBrew-Registry/main/assets/icons/feeds-icon.png",
+      "screenshotUrls": [
+        "https://raw.githubusercontent.com/Anezium/RokidBrew-Registry/main/assets/screenshots/feeds-1-timeline.png"
+      ]
+    },
+    {
+      "id": "lyrics",
+      "kind": "nexus-plugin",
+      "name": "Lyrics",
+      "category": "Music",
+      "summary": "Time-synced lyrics on your glasses.",
+      "description": "Synced lyrics that follow whatever is playing on your phone. Spotify sign-in for synced lines, with LrcLib and Netease fallbacks. Opens itself when a track starts, if you let it.",
+      "author": "alvarosw",
+      "sourceUrl": "https://github.com/alvarosw/Rokid-Nexus",
+      "publishedAt": "2026-10-01T15:36:00Z",
+      "iconAsset": "lyrics-icon.png",
+      "screenshotAssets": [
+        "lyrics-1-hud.png"
+      ],
+      "listing": {
+        "descriptionMarkdown": "## About\n\nSynced lyrics that follow whatever is playing on your phone. Spotify sign-in for synced lines, with LrcLib and Netease fallbacks. Opens itself when a track starts, if you let it."
+      },
+      "releases": [
+        {
+          "version": "1.1.0",
+          "date": "2026-10-01T15:36:00Z",
+          "notes": "- Live grid tile (optional `widget_tile` capability, all seven tile sizes):\n  synced lyrics as a window of timed lines that the glasses advance with the\n  playback position, unsynced lyrics from the top, and the track title when no\n  lyrics are found. Published per track, seek, play/pause, or when playback\n  nears the end of the published window, never per line.\n- The media session is followed for the tile only while the hub's tile lease\n  is active; closing the surface no longer stops it while the lease holds.\n- The layout editor previews the tile with sample lyrics until a real one is\n  published.\n"
+        }
+      ],
+      "nexus": {
+        "pluginId": "lyrics",
+        "apiVersion": 3,
+        "capabilities": [
+          "surfaces"
+        ],
+        "launchable": true,
+        "settingsActivity": "com.anezium.rokidbus.plugin.lyrics.LyricsSettingsActivity",
+        "minHostVersionCode": 6
+      },
+      "artifact": {
+        "target": "phone",
+        "url": "https://github.com/alvarosw/Rokid-Nexus/releases/download/lyrics-v1.1.0/lyrics-phone-release.apk",
+        "sha256": "abcc7870e80bf3e0d67c4b9a13faf77262f5d5921b659c0463dceb67a2c1da76",
+        "signerSha256": "78a1be1045ba3b2614baa46e306a353a8a6bc3e5d07ba5d587490931d5f56d60",
+        "sizeBytes": 8427262,
+        "packageName": "com.anezium.rokidbus.plugin.lyrics",
+        "versionCode": 5,
+        "versionName": "1.1.0"
+      },
+      "iconUrl": "https://raw.githubusercontent.com/Anezium/RokidBrew-Registry/main/assets/icons/lyrics-icon.png",
+      "screenshotUrls": [
+        "https://raw.githubusercontent.com/Anezium/RokidBrew-Registry/main/assets/screenshots/lyrics-1-hud.png"
+      ]
+    },
+    {
+      "id": "media",
+      "kind": "nexus-plugin",
+      "name": "Media Deck",
+      "category": "Music",
+      "summary": "Now playing and transport controls on the HUD.",
+      "description": "Whatever plays on your phone shows on the glasses: title, artist, artwork, and progress. Tap to play or pause, swipe to skip. Audio never passes through Nexus.",
+      "author": "alvarosw",
+      "sourceUrl": "https://github.com/alvarosw/Rokid-Nexus",
+      "publishedAt": "2026-10-01T15:36:25Z",
+      "iconAsset": "media-icon.png",
+      "screenshotAssets": [
+        "media-1-nowplaying.png"
+      ],
+      "listing": {
+        "descriptionMarkdown": "## About\n\nWhatever plays on your phone shows on the glasses: title, artist, artwork, and progress. Tap to play or pause, swipe to skip. Audio never passes through Nexus."
+      },
+      "releases": [
+        {
+          "version": "1.1.0",
+          "date": "2026-10-01T15:36:25Z",
+          "notes": "- Live grid tile (optional `widget_tile` capability, all seven tile sizes): the\n  playing track's title, artist, album, source app, position and cover, published\n  on a track change, play/pause, a seek or a late cover, and \"Nothing playing\"\n  when no media session is active. The media session is watched only while the\n  hub's tile lease is active; the plugin stays dormant otherwise.\n- The layout editor previews the tile with a sample track until a real one is\n  published.\n"
+        }
+      ],
+      "nexus": {
+        "pluginId": "media",
+        "apiVersion": 3,
+        "capabilities": [
+          "surfaces"
+        ],
+        "launchable": true,
+        "settingsActivity": "com.anezium.rokidbus.plugin.media.MediaDeckSettingsActivity",
+        "minHostVersionCode": 6
+      },
+      "artifact": {
+        "target": "phone",
+        "url": "https://github.com/alvarosw/Rokid-Nexus/releases/download/media-v1.1.0/media-phone-release.apk",
+        "sha256": "a08c6ae76c2e6269931106f661a1d43a97f85e60efa9206b53a84cf1847e0b7c",
+        "signerSha256": "78a1be1045ba3b2614baa46e306a353a8a6bc3e5d07ba5d587490931d5f56d60",
+        "sizeBytes": 5620153,
+        "packageName": "com.anezium.rokidbus.plugin.media",
+        "versionCode": 4,
+        "versionName": "1.1.0"
+      },
+      "iconUrl": "https://raw.githubusercontent.com/Anezium/RokidBrew-Registry/main/assets/icons/media-icon.png",
+      "screenshotUrls": [
+        "https://raw.githubusercontent.com/Anezium/RokidBrew-Registry/main/assets/screenshots/media-1-nowplaying.png"
+      ]
+    },
+    {
+      "id": "relay",
+      "kind": "nexus-plugin",
+      "name": "Relay",
+      "category": "Communication",
+      "summary": "Phone messages on your glasses, answered out loud.",
+      "description": "A message you can reply to reaches the glasses as it arrives. Read it without taking the phone out, speak your answer, and it sends itself. Anything you miss waits for you in Messages.",
+      "author": "alvarosw",
+      "sourceUrl": "https://github.com/alvarosw/Rokid-Nexus",
+      "publishedAt": "2026-10-01T15:36:40Z",
+      "iconAsset": "relay-icon.png",
+      "screenshotAssets": [
+        "relay-1-notice.png",
+        "relay-2-inbox.png"
+      ],
+      "listing": {
+        "descriptionMarkdown": "## About\n\nA message you can reply to reaches the glasses as it arrives, and lights the display if it was dark. You read it where you are already looking, answer out loud, and the phone stays in your pocket.\n\n## Reading\n\nEach message keeps its sender beside it, so a group conversation reads as a conversation rather than a wall of text. A long thread turns pages instead of stopping at eight lines.\n\n*Message display time* in the plugin's settings is a number you type, 2 to 45 seconds, and *Longer for long messages* adds reading time per character on top for threads that need it.\n\n## Privacy\n\nIn public or in a meeting, *Hide message text on the glasses* keeps the band to the sender's name and a Show chip — the words appear only when you tap for them, and Reply stays one tap away. *Hide previews in the inbox* does the same for the Messages list. While the band is hidden, read-aloud names the sender only.\n\n## Answering\n\nSpeak your reply and it sends itself after a few seconds, counted down on the chip you are looking at — cancellable for its whole length, and never sent before you have seen what it heard. If the glasses went dark or lost the link, the clock stops and waits for you.\n\nPrefer to type? Tap *Type* once dictation has started, or turn on *Reply by typing* in the plugin's settings to skip dictation altogether. With Rokid Nexus 1.4.13 the notice itself becomes the reply field: what you type appears under the message as you type it, and the phone keyboard opens on its own, then closes when you send. A keyboard paired to the glasses works too. Enter sends it through the same steps.\n\n## Messages you missed\n\nOne you let go, or one that arrived while you were in another plugin, is in **Messages** in the Nexus menu: every conversation waiting on you, newest first, read and answered the same way. The list updates while you are looking at it.\n\n## Hearing it instead\n\nTurn on *Read notifications aloud* and the glasses speak the message as it arrives — the whole message, in the voice and at the speed you already chose in your Rokid assistant settings. It is produced on the glasses, so it works with the phone in your pocket and nothing leaves the device. Off by default.\n\n## What it relays\n\nAnything with a reply box, from any app. Nothing else, and nothing to tick first.\n\n## What it keeps\n\nNothing. Messages live in memory while the plugin runs, are never written to disk, and never appear in a log. Revoke notification access and what it captured goes with it.\n\n## Needs\n\nRokid Nexus 1.4.11 or newer on both phone and glasses; 1.4.13 to type inside the notice.\n\nNotification access on the phone, plus *Show on your glasses*, *Speech to text* and *Text to speech* in Nexus → Settings → Plugin access."
+      },
+      "releases": [
+        {
+          "version": "1.3.0",
+          "date": "2026-10-01T15:36:40Z",
+          "notes": "- **Live grid tile** (optional `widget_tile` capability, all seven tile sizes):\n  the inbox's conversations with sender, app, newest message, age and initials\n  under an \"N new\" summary, republished as messages arrive, are removed or are\n  answered. The inbox is read for the tile only while the hub's tile lease is\n  active. Conversations Android redacted never appear on it, and the hide\n  switches hide the message text there too.\n- The layout editor previews the tile with sample conversations until a real\n  one is published.\n- **One bus registration.** The notice band now talks through the plugin\n  service's own connection instead of opening a second one under the same id,\n  so a band, the inbox and the tile lease can overlap without the hub losing\n  track of Relay.\n"
+        }
+      ],
+      "nexus": {
+        "pluginId": "relay",
+        "apiVersion": 3,
+        "capabilities": [
+          "surfaces",
+          "stt",
+          "tts"
+        ],
+        "launchable": true,
+        "settingsActivity": ".RelaySettingsActivity",
+        "minHostVersionCode": 10411
+      },
+      "artifact": {
+        "target": "phone",
+        "url": "https://github.com/alvarosw/Rokid-Nexus/releases/download/relay-v1.3.0/relay-phone-release.apk",
+        "sha256": "3c9634a069e22e824598f7580e179f640c74499dfdc15069948daefd2ca2d9d2",
+        "signerSha256": "78a1be1045ba3b2614baa46e306a353a8a6bc3e5d07ba5d587490931d5f56d60",
+        "sizeBytes": 5860669,
+        "packageName": "com.anezium.rokidbus.plugin.relay",
+        "versionCode": 14,
+        "versionName": "1.3.0"
+      },
+      "iconUrl": "https://raw.githubusercontent.com/Anezium/RokidBrew-Registry/main/assets/icons/relay-icon.png",
+      "screenshotUrls": [
+        "https://raw.githubusercontent.com/Anezium/RokidBrew-Registry/main/assets/screenshots/relay-1-notice.png",
+        "https://raw.githubusercontent.com/Anezium/RokidBrew-Registry/main/assets/screenshots/relay-2-inbox.png"
+      ]
+    }
+  ]
 }
