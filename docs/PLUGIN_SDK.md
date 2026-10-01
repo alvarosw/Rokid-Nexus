@@ -67,6 +67,22 @@ hub-produced transcript text and does not require the plugin to request raw
 (§3.3); it is likewise independent of `microphone`, since the plugin supplies
 text and never touches audio.
 
+A capability that the plugin can do without goes in `OPTIONAL_CAPABILITIES`
+instead. A hub that knows the key merges it into the requested set, so the
+wearer approves it like any other capability; an unknown value in it is
+ignored, unlike in `CAPABILITIES`, where it rejects the whole descriptor with
+`UNKNOWN_CAPABILITY`. The reason is compatibility: a hub that predates a
+capability, such as an upstream hub without `widget_tile`, would reject the
+plugin if it were listed in `CAPABILITIES`, but it ignores unknown meta-data
+keys, so the same APK still loads there without the optional feature.
+
+```xml
+<meta-data android:name="com.anezium.rokidbus.plugin.OPTIONAL_CAPABILITIES" android:value="widget_tile" />
+```
+
+Check the result at run time rather than assuming the optional capability is
+present: without the grant, `publish` returns `CAPABILITY_NOT_GRANTED`.
+
 Descriptor capabilities authorize Nexus hub resources and routes. They do not
 replace Android permissions for a phone-local platform API. A headless plugin
 may use such an API under permissions declared in its own manifest and granted

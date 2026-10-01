@@ -362,6 +362,7 @@ abstract class NexusPluginService : Service(), NexusPluginCallbacks {
             BusConstants.META_PLUGIN_DISPLAY_NAME,
             BusConstants.META_PLUGIN_API_VERSION,
             BusConstants.META_PLUGIN_CAPABILITIES,
+            BusConstants.META_PLUGIN_OPTIONAL_CAPABILITIES,
             BusConstants.META_PLUGIN_RECEIVE_PREFIXES,
             BusConstants.META_PLUGIN_SETTINGS_ACTIVITY,
             BusConstants.META_PLUGIN_LAUNCHABLE,

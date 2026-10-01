@@ -38,6 +38,14 @@ object BusConstants {
     const val META_PLUGIN_TILE_PREVIEW = "com.anezium.rokidbus.plugin.TILE_PREVIEW"
     const val META_PLUGIN_API_VERSION = "com.anezium.rokidbus.plugin.API_VERSION"
     const val META_PLUGIN_CAPABILITIES = "com.anezium.rokidbus.plugin.CAPABILITIES"
+
+    /**
+     * A comma list of capabilities merged into [META_PLUGIN_CAPABILITIES] by hubs that know this
+     * key. Unknown values are ignored rather than fatal: a hub that predates the key ignores it
+     * entirely, so a capability declared here (`widget_tile` on an upstream hub) never costs the
+     * plugin its registration where it is not understood.
+     */
+    const val META_PLUGIN_OPTIONAL_CAPABILITIES = "com.anezium.rokidbus.plugin.OPTIONAL_CAPABILITIES"
     const val META_PLUGIN_RECEIVE_PREFIXES = "com.anezium.rokidbus.plugin.RECEIVE_PREFIXES"
     const val META_PLUGIN_SETTINGS_ACTIVITY = "com.anezium.rokidbus.plugin.SETTINGS_ACTIVITY"
     const val META_PLUGIN_LAUNCHABLE = "com.anezium.rokidbus.plugin.LAUNCHABLE"
