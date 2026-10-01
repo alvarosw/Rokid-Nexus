@@ -37,6 +37,9 @@ class StorePluginDetailActivity : Activity() {
     private var installState: PluginInstallState? = null
     private var installOperation: PluginInstallOperation? = null
     private var notesExpanded = false
+    private var signerSwitchConfirming = false
+    private var signerSwitchPending = false
+    private var signerSwitchWaits = 0
     private val hostVersionCode: Long by lazy {
         StoreScreens.installedVersionCodes(packageManager, setOf(packageName))[packageName] ?: 0L
     }
@@ -47,6 +50,7 @@ class StorePluginDetailActivity : Activity() {
             finish()
             return
         }
+        signerSwitchPending = savedInstanceState?.getBoolean(STATE_SIGNER_SWITCH_PENDING) == true
         registryClient = StoreRegistry.create(applicationContext)
         iconLoader = StoreIconLoader(applicationContext)
         postInstallCoordinator = PluginPostInstallCoordinator(
@@ -73,6 +77,12 @@ class StorePluginDetailActivity : Activity() {
         super.onResume()
         resumeRecoveredPluginInstall()
         render()
+        continueSignerSwitch()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(STATE_SIGNER_SWITCH_PENDING, signerSwitchPending)
     }
 
     private fun buildUi() {
@@ -136,6 +146,10 @@ class StorePluginDetailActivity : Activity() {
         content.addView(BusTheme.gap(this, 15))
         content.addView(actionsRow(entry), pad(NexusUi.block()))
         hostBlockNote(entry)?.let {
+            content.addView(BusTheme.gap(this, 10))
+            content.addView(it, pad(NexusUi.block()))
+        }
+        signerSwitchNote(entry)?.let {
             content.addView(BusTheme.gap(this, 10))
             content.addView(it, pad(NexusUi.block()))
         }
@@ -223,10 +237,20 @@ class StorePluginDetailActivity : Activity() {
             bigButton(action.label, filled = action.filled, enabled = action.enabled, onClick = action.onClick),
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
         )
-        // While an update is pending the installed build stays openable.
-        if (entry.state == StoreEntryState.UPDATE_AVAILABLE && installState == null) {
+        // While an update or a signer switch is pending the installed build stays openable.
+        val keepsInstalledBuild = entry.state == StoreEntryState.UPDATE_AVAILABLE ||
+            entry.state == StoreEntryState.SIGNER_CHANGE
+        if (keepsInstalledBuild && installState == null) {
+            val cancelsSwitch = entry.state == StoreEntryState.SIGNER_CHANGE && signerSwitchConfirming
             row.addView(
-                bigButton("Open", filled = false, enabled = true) { openInstalled(entry) },
+                bigButton(if (cancelsSwitch) "Cancel" else "Open", filled = false, enabled = true) {
+                    if (cancelsSwitch) {
+                        signerSwitchConfirming = false
+                        render()
+                    } else {
+                        openInstalled(entry)
+                    }
+                },
                 LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.45f).apply {
                     marginStart = dp(9)
                 },
@@ -268,6 +292,14 @@ class StorePluginDetailActivity : Activity() {
                 true,
             ) { beginInstall(entry) }
             StoreEntryState.REQUIRES_HOST -> DetailAction("Requires Nexus update", false, false) {}
+            StoreEntryState.SIGNER_CHANGE -> if (signerSwitchConfirming) {
+                DetailAction("Uninstall and reinstall", true, true) { startSignerSwitch(entry) }
+            } else {
+                DetailAction("Switch to this build", true, false) {
+                    signerSwitchConfirming = true
+                    render()
+                }
+            }
             StoreEntryState.INSTALLED,
             StoreEntryState.SIDELOADED,
             -> {
@@ -300,6 +332,58 @@ class StorePluginDetailActivity : Activity() {
                 }
             }
             render()
+        }
+    }
+
+    private fun startSignerSwitch(entry: StoreEntry) {
+        val packageName = entry.registryPlugin?.artifact?.packageName ?: return
+        signerSwitchConfirming = false
+        signerSwitchPending = true
+        signerSwitchWaits = 0
+        runCatching {
+            startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName")))
+        }.onFailure {
+            signerSwitchPending = false
+            Toast.makeText(this, "Could not open the uninstaller", Toast.LENGTH_LONG).show()
+            render()
+        }
+    }
+
+    private fun continueSignerSwitch() {
+        if (!signerSwitchPending || isFinishing || isDestroyed) return
+        val entry = currentEntry()
+        when (SignerSwitch.afterUninstallPrompt(entry)) {
+            SignerSwitch.Next.INSTALL -> {
+                signerSwitchPending = false
+                entry?.let(::beginInstall)
+            }
+            SignerSwitch.Next.WAIT -> if (signerSwitchWaits++ < SignerSwitch.MAX_WAIT_ATTEMPTS) {
+                content.postDelayed({
+                    render()
+                    continueSignerSwitch()
+                }, SignerSwitch.WAIT_INTERVAL_MS)
+            } else {
+                signerSwitchPending = false
+            }
+            SignerSwitch.Next.ABANDON -> signerSwitchPending = false
+        }
+    }
+
+    private fun signerSwitchNote(entry: StoreEntry): TextView? {
+        if (entry.state != StoreEntryState.SIGNER_CHANGE || installState != null) return null
+        val publisher = entry.registryAuthor?.takeIf(String::isNotBlank) ?: "this publisher"
+        val text = if (signerSwitchConfirming) {
+            "Nexus opens the Android uninstaller for the installed copy, then installs " +
+                "${entry.displayName} from $publisher. The plugin's own settings and data are " +
+                "removed, and you approve its access again after the install."
+        } else {
+            "The installed copy is signed with a different key than $publisher's build, so it " +
+                "cannot be updated in place. Switching is a one-time reinstall: uninstall, " +
+                "install, then approve the plugin's access again."
+        }
+        return NexusUi.cardBody(this, text).apply {
+            textSize = 12f
+            setTextColor(NexusUi.AMBER)
         }
     }
 
@@ -598,7 +682,8 @@ class StorePluginDetailActivity : Activity() {
         if (entry.localGrantState == PluginCatalogState.BUILT_IN) return null
         if (entry.state != StoreEntryState.INSTALLED &&
             entry.state != StoreEntryState.SIDELOADED &&
-            entry.state != StoreEntryState.UPDATE_AVAILABLE
+            entry.state != StoreEntryState.UPDATE_AVAILABLE &&
+            entry.state != StoreEntryState.SIGNER_CHANGE
         ) {
             return null
         }
@@ -663,6 +748,7 @@ class StorePluginDetailActivity : Activity() {
 
     companion object {
         private const val EXTRA_PLUGIN_ID = "plugin_id"
+        private const val STATE_SIGNER_SWITCH_PENDING = "signer_switch_pending"
         private const val COLLAPSED_NOTES_LINES = 7
 
         /** The listing markdown often opens with its own "About" heading; ours is already on screen. */

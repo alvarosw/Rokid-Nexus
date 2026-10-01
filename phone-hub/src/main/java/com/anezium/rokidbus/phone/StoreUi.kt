@@ -36,9 +36,32 @@ internal object StoreScreens {
             feed = feed,
             localCatalog = local,
             installedVersionCodes = installedVersionCodes(context.packageManager, packageNames),
+            installedSignerSha256 = installedSignerSha256(context.packageManager, packageNames),
             hostVersionCode = hostVersionCode,
             logger = logger,
         )
+    }
+
+    /** Packages signed by more than one certificate are left out: their signer cannot be compared. */
+    fun installedSignerSha256(
+        packageManager: PackageManager,
+        packageNames: Set<String>,
+    ): Map<String, String> = buildMap {
+        packageNames.forEach { packageName ->
+            val info = runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    packageManager.getPackageInfo(
+                        packageName,
+                        PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong()),
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+                }
+            }.getOrNull() ?: return@forEach
+            val signer = info.signingInfo?.apkContentsSigners.orEmpty().singleOrNull() ?: return@forEach
+            put(packageName, signingCertificateSha256(signer.toByteArray()))
+        }
     }
 
     fun installedVersionCodes(

@@ -6,6 +6,12 @@ enum class StoreEntryState {
     INSTALLED,
     SIDELOADED,
     REQUIRES_HOST,
+
+    /**
+     * Installed, but signed with a different key than the registry's build. Android refuses an
+     * update across signing keys, so moving to that build takes an uninstall and a fresh install.
+     */
+    SIGNER_CHANGE,
 }
 
 data class StoreEntry(
@@ -58,6 +64,7 @@ data class StoreCatalog(val entries: List<StoreEntry>) {
             feed: RegistryFeed,
             localCatalog: PluginCatalog,
             installedVersionCodes: Map<String, Long>,
+            installedSignerSha256: Map<String, String>,
             hostVersionCode: Long,
             logger: (String) -> Unit = {},
         ): StoreCatalog {
@@ -68,10 +75,17 @@ data class StoreCatalog(val entries: List<StoreEntry>) {
                 val installedVersion = installedVersionCodes[plugin.artifact.packageName]
                 val requiresNewerHost = plugin.nexus.minHostVersionCode > hostVersionCode
                 val hasNewerRelease = installedVersion != null && plugin.artifact.versionCode > installedVersion
+                // An unknown installed signer offers neither an update nor a switch.
+                val installedSigner = installedSignerSha256[plugin.artifact.packageName]
+                val signerDiffers = installedVersion != null &&
+                    installedSigner != null &&
+                    installedSigner != plugin.artifact.signerSha256
                 val state = when {
                     local == null && requiresNewerHost -> StoreEntryState.REQUIRES_HOST
                     local == null -> StoreEntryState.AVAILABLE
-                    hasNewerRelease && !requiresNewerHost ->
+                    requiresNewerHost -> StoreEntryState.INSTALLED
+                    signerDiffers -> StoreEntryState.SIGNER_CHANGE
+                    hasNewerRelease && installedSigner == plugin.artifact.signerSha256 ->
                         StoreEntryState.UPDATE_AVAILABLE
                     else -> StoreEntryState.INSTALLED
                 }

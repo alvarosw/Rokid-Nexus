@@ -79,6 +79,10 @@ object PluginUpdateChecker {
                     feed = snapshot.feed,
                     localCatalog = BusHubService.pluginCatalog(appContext),
                     installedVersionCodes = installedVersions.mapValues { it.value.versionCode },
+                    installedSignerSha256 = StoreScreens.installedSignerSha256(
+                        appContext.packageManager,
+                        installedVersions.keys,
+                    ),
                     hostVersionCode = hostVersionCode,
                 )
                 catalog.availableUpdates(installedVersions).also { updates ->
@@ -166,6 +170,10 @@ object PluginUpdateChecker {
             feed = snapshot.feed,
             localCatalog = BusHubService.pluginCatalog(context),
             installedVersionCodes = installedVersions.mapValues { it.value.versionCode },
+            installedSignerSha256 = StoreScreens.installedSignerSha256(
+                context.packageManager,
+                installedVersions.keys,
+            ),
             hostVersionCode = hostVersionCode,
         )
         val updates = catalog.availableUpdates(installedVersions)

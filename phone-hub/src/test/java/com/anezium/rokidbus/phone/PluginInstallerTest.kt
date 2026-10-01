@@ -215,6 +215,29 @@ class PluginInstallerTest {
         assertTrue(states.last() is PluginInstallState.Failure)
     }
 
+    @Test
+    fun `signer change entries never download`() {
+        var downloadCount = 0
+        val gateway = FakeGateway()
+        val installer = PluginInstaller(
+            cacheDirectory = temporaryFolder.root,
+            hostVersionCode = 6,
+            downloader = ArtifactDownloader { _, _, _, _ -> downloadCount++ },
+            packageInspector = ArtifactPackageInspector {
+                ArtifactArchiveInfo(PACKAGE, 7L, listOf(SIGNER))
+            },
+            packageInstaller = gateway,
+            ioExecutor = Executor(Runnable::run),
+        )
+        val states = mutableListOf<PluginInstallState>()
+
+        installer.install(entry("apk".toByteArray(), state = StoreEntryState.SIGNER_CHANGE), states::add)
+
+        assertEquals(0, downloadCount)
+        assertEquals(0, gateway.installCount)
+        assertTrue(states.last() is PluginInstallState.Failure)
+    }
+
     private fun installer(
         bytes: ByteArray,
         gateway: FakeGateway,

@@ -65,6 +65,68 @@ class StoreCatalogTest {
     }
 
     @Test
+    fun `installed copy signed by another key is a signer change, never an update`() {
+        listOf(7L, 8L).forEach { registryVersion ->
+            val installedVersions = mapOf(PACKAGE to InstalledPluginVersion(7L, "0.1.0"))
+            val catalog = build(
+                remote = listOf(plugin(versionCode = registryVersion)),
+                local = listOf(local()),
+                versions = installedVersions.mapValues { it.value.versionCode },
+                signers = mapOf(PACKAGE to OTHER_SIGNER),
+            )
+
+            assertEquals(StoreEntryState.SIGNER_CHANGE, catalog.entry("feeds")?.state)
+            assertTrue(catalog.availableUpdates(installedVersions).isEmpty())
+        }
+    }
+
+    @Test
+    fun `unknown installed signer offers neither update nor switch`() {
+        val installedVersions = mapOf(PACKAGE to InstalledPluginVersion(7L, "0.1.0"))
+        val catalog = build(
+            remote = listOf(plugin(versionCode = 8)),
+            local = listOf(local()),
+            versions = installedVersions.mapValues { it.value.versionCode },
+            signers = emptyMap(),
+        )
+
+        assertEquals(StoreEntryState.INSTALLED, catalog.entry("feeds")?.state)
+        assertTrue(catalog.availableUpdates(installedVersions).isEmpty())
+    }
+
+    @Test
+    fun `signer change that needs a newer host stays installed and held`() {
+        val catalog = build(
+            remote = listOf(plugin(versionCode = 8, minHostVersionCode = 7)),
+            local = listOf(local()),
+            versions = mapOf(PACKAGE to 7L),
+            signers = mapOf(PACKAGE to OTHER_SIGNER),
+            hostVersionCode = 6,
+        )
+
+        assertEquals(StoreEntryState.INSTALLED, catalog.entry("feeds")?.state)
+        assertEquals(true, catalog.entry("feeds")?.updateBlockedByHost)
+    }
+
+    @Test
+    fun `signer switch installs once the package is gone and gives up when it stays`() {
+        val remote = listOf(plugin(versionCode = 8))
+        val installed = build(
+            remote = remote,
+            local = listOf(local()),
+            versions = mapOf(PACKAGE to 7L),
+            signers = mapOf(PACKAGE to OTHER_SIGNER),
+        ).entry("feeds")
+        val catalogueCatchingUp = build(remote = remote, local = listOf(local())).entry("feeds")
+        val uninstalled = build(remote = remote).entry("feeds")
+
+        assertEquals(SignerSwitch.Next.ABANDON, SignerSwitch.afterUninstallPrompt(installed))
+        assertEquals(SignerSwitch.Next.WAIT, SignerSwitch.afterUninstallPrompt(catalogueCatchingUp))
+        assertEquals(SignerSwitch.Next.INSTALL, SignerSwitch.afterUninstallPrompt(uninstalled))
+        assertEquals(SignerSwitch.Next.ABANDON, SignerSwitch.afterUninstallPrompt(null))
+    }
+
+    @Test
     fun `local-only plugin is sideloaded`() {
         val catalog = build(local = listOf(local()), versions = mapOf(PACKAGE to 7L))
 
@@ -151,12 +213,14 @@ class StoreCatalogTest {
         remote: List<RegistryPlugin> = emptyList(),
         local: List<PluginCatalogEntry> = emptyList(),
         versions: Map<String, Long> = emptyMap(),
+        signers: Map<String, String> = versions.mapValues { SIGNER },
         hostVersionCode: Long = 6,
         logger: (String) -> Unit = {},
     ) = StoreCatalog.build(
         feed = RegistryFeed(1, remote),
         localCatalog = PluginCatalog(local),
         installedVersionCodes = versions,
+        installedSignerSha256 = signers,
         hostVersionCode = hostVersionCode,
         logger = logger,
     )
@@ -187,7 +251,7 @@ class StoreCatalogTest {
             target = target,
             url = "https://github.com/Anezium/Rokid-Nexus/releases/download/feeds-v0.1.0/feeds-phone-release.apk",
             sha256 = "ab".repeat(32),
-            signerSha256 = "cd".repeat(32),
+            signerSha256 = SIGNER,
             sizeBytes = 123L,
             packageName = packageName,
             versionCode = versionCode,
@@ -227,5 +291,7 @@ class StoreCatalogTest {
 
     companion object {
         private const val PACKAGE = "com.anezium.rokidbus.plugin.feeds"
+        private val SIGNER = "cd".repeat(32)
+        private val OTHER_SIGNER = "ef".repeat(32)
     }
 }
