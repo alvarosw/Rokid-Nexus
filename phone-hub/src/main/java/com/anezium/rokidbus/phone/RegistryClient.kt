@@ -36,7 +36,11 @@ data class RegistryPlugin(
     val releases: List<RegistryRelease>,
     val nexus: RegistryNexus,
     val artifact: RegistryArtifact,
+    val feed: RegistryFeedOrigin = RegistryFeedOrigin.UPSTREAM,
 )
+
+/** Which registry feed an entry won from; only fork entries may steer a signer switch. */
+enum class RegistryFeedOrigin { FORK, UPSTREAM }
 
 data class RegistryRelease(
     val version: String,

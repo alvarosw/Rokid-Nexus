@@ -55,7 +55,7 @@ internal object RegistryMerge {
      */
     fun merge(fork: RegistrySnapshot?, upstream: RegistrySnapshot?): RegistrySnapshot? {
         if (fork == null && upstream == null) return null
-        val forkPlugins = fork?.feed?.plugins.orEmpty()
+        val forkPlugins = fork?.feed?.plugins.orEmpty().map { it.copy(feed = RegistryFeedOrigin.FORK) }
         val claimedIds = forkPlugins.flatMapTo(hashSetOf()) { listOf(it.id, it.nexus.pluginId) }
         val claimedPackages = forkPlugins.mapTo(hashSetOf()) { it.artifact.packageName }
         val upstreamPlugins = upstream?.feed?.plugins.orEmpty().filter { plugin ->

@@ -24,7 +24,9 @@ class StoreRegistryTest {
 
         assertEquals(setOf("media", "lyrics"), plugins.keys)
         assertEquals(FORK_SIGNER, plugins.getValue("media").artifact.signerSha256)
+        assertEquals(RegistryFeedOrigin.FORK, plugins.getValue("media").feed)
         assertEquals(UPSTREAM_SIGNER, plugins.getValue("lyrics").artifact.signerSha256)
+        assertEquals(RegistryFeedOrigin.UPSTREAM, plugins.getValue("lyrics").feed)
     }
 
     @Test
@@ -37,6 +39,7 @@ class StoreRegistryTest {
         val plugins = registry.loadedPlugins()
 
         assertEquals(FORK_SIGNER, plugins.getValue("media").artifact.signerSha256)
+        assertEquals(RegistryFeedOrigin.FORK, plugins.getValue("media").feed)
         assertEquals(UPSTREAM_SIGNER, plugins.getValue("lyrics").artifact.signerSha256)
     }
 
@@ -62,6 +65,7 @@ class StoreRegistryTest {
 
         assertEquals(setOf("media", "lyrics"), plugins.keys)
         assertEquals(UPSTREAM_SIGNER, plugins.getValue("media").artifact.signerSha256)
+        assertEquals(RegistryFeedOrigin.UPSTREAM, plugins.getValue("media").feed)
     }
 
     @Test

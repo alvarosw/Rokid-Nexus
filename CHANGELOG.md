@@ -44,10 +44,12 @@ or `3x3` in `TILE_SIZES` needs hubs with this change.
   URLs are build config.
 - **Updates come only from the installed signer.** The Store and the home
   `UPDATE` badge offer a new version only when the registry build is signed
-  with the same key as the installed copy. A plugin installed from another
-  publisher shows *Switch* instead: after an explicit confirmation the Store
-  opens the Android uninstaller, installs the registry build, and asks you to
-  approve the plugin's access again.
+  with the same key as the installed copy. When the fork publishes a plugin
+  that is installed from another publisher, the Store shows *Switch* instead:
+  after an explicit confirmation it opens the Android uninstaller, installs
+  the fork build, and asks you to approve the plugin's access again. An
+  upstream entry never offers a switch, so a fork build is never steered back
+  to upstream; it just shows as installed.
 
 ### Glasses hub
 

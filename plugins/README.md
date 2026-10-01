@@ -69,9 +69,13 @@ it before the upstream RokidBrew registry (`FORK_REGISTRY_URL` and
   alone. An unreachable upstream never hides the fork's plugins.
 - Android cannot update an app across signing keys, so an update is offered
   only when the registry entry's `signerSha256` matches the installed copy. A
-  plugin installed from upstream shows a one-time *Switch* in the Store: the
-  user confirms, the system uninstaller removes the old copy (with its data),
-  the fork build is installed, and the plugin's access is approved again.
+  plugin the fork publishes but installed from upstream shows a one-time
+  *Switch* in the Store: the user confirms, the system uninstaller removes the
+  old copy (with its data), the fork build is installed, and the plugin's
+  access is approved again. Only a winning fork entry offers a switch: when the
+  winning entry is upstream (the fork does not list the plugin, or its registry
+  has never loaded) and the signers differ, the plugin shows as installed with
+  no update and no switch, so a fork build is never steered back to upstream.
 
 Publishing a plugin build to the fork registry:
 

@@ -65,11 +65,11 @@ class StoreCatalogTest {
     }
 
     @Test
-    fun `installed copy signed by another key is a signer change, never an update`() {
+    fun `fork build signed by another key than the installed copy is a signer change, never an update`() {
         listOf(7L, 8L).forEach { registryVersion ->
             val installedVersions = mapOf(PACKAGE to InstalledPluginVersion(7L, "0.1.0"))
             val catalog = build(
-                remote = listOf(plugin(versionCode = registryVersion)),
+                remote = listOf(plugin(versionCode = registryVersion, feed = RegistryFeedOrigin.FORK)),
                 local = listOf(local()),
                 versions = installedVersions.mapValues { it.value.versionCode },
                 signers = mapOf(PACKAGE to OTHER_SIGNER),
@@ -78,6 +78,20 @@ class StoreCatalogTest {
             assertEquals(StoreEntryState.SIGNER_CHANGE, catalog.entry("feeds")?.state)
             assertTrue(catalog.availableUpdates(installedVersions).isEmpty())
         }
+    }
+
+    @Test
+    fun `upstream build signed by another key offers neither update nor switch`() {
+        val installedVersions = mapOf(PACKAGE to InstalledPluginVersion(7L, "0.1.0"))
+        val catalog = build(
+            remote = listOf(plugin(versionCode = 8)),
+            local = listOf(local()),
+            versions = installedVersions.mapValues { it.value.versionCode },
+            signers = mapOf(PACKAGE to OTHER_SIGNER),
+        )
+
+        assertEquals(StoreEntryState.INSTALLED, catalog.entry("feeds")?.state)
+        assertTrue(catalog.availableUpdates(installedVersions).isEmpty())
     }
 
     @Test
@@ -97,7 +111,7 @@ class StoreCatalogTest {
     @Test
     fun `signer change that needs a newer host stays installed and held`() {
         val catalog = build(
-            remote = listOf(plugin(versionCode = 8, minHostVersionCode = 7)),
+            remote = listOf(plugin(versionCode = 8, minHostVersionCode = 7, feed = RegistryFeedOrigin.FORK)),
             local = listOf(local()),
             versions = mapOf(PACKAGE to 7L),
             signers = mapOf(PACKAGE to OTHER_SIGNER),
@@ -110,7 +124,7 @@ class StoreCatalogTest {
 
     @Test
     fun `signer switch installs once the package is gone and gives up when it stays`() {
-        val remote = listOf(plugin(versionCode = 8))
+        val remote = listOf(plugin(versionCode = 8, feed = RegistryFeedOrigin.FORK))
         val installed = build(
             remote = remote,
             local = listOf(local()),
@@ -233,6 +247,7 @@ class StoreCatalogTest {
         versionName: String = "0.1.0",
         minHostVersionCode: Long = 6,
         target: String = "phone",
+        feed: RegistryFeedOrigin = RegistryFeedOrigin.UPSTREAM,
     ) = RegistryPlugin(
         id = id,
         name = "Feeds",
@@ -257,6 +272,7 @@ class StoreCatalogTest {
             versionCode = versionCode,
             versionName = versionName,
         ),
+        feed = feed,
     )
 
     private fun local(
