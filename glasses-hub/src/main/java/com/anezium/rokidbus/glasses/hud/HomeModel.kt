@@ -5,8 +5,11 @@ import com.anezium.rokidbus.glasses.GlassesHub
 import com.anezium.rokidbus.shared.tile.TilePlacement
 import com.anezium.rokidbus.shared.tile.TileSnapshot
 
-/** A plugin's last published tile snapshot and whether it is old enough to be drawn dimmed. */
-internal data class HomeTile(val snapshot: TileSnapshot, val stale: Boolean)
+/**
+ * A plugin's last published tile snapshot, whether it is old enough to be drawn dimmed, and when it
+ * arrived (`elapsedRealtime`), which a template's time-relative fields count from.
+ */
+internal data class HomeTile(val snapshot: TileSnapshot, val stale: Boolean, val receivedAtElapsed: Long = 0L)
 
 internal sealed interface HomeStatus {
     data object None : HomeStatus

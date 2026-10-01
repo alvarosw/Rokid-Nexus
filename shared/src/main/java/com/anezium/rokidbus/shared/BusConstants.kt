@@ -29,6 +29,13 @@ object BusConstants {
      * gracefully rule as an unrecognized [META_PLUGIN_ICON].
      */
     const val META_PLUGIN_TILE_SIZES = "com.anezium.rokidbus.plugin.TILE_SIZES"
+
+    /**
+     * A raw JSON resource holding one `/tile/publish` payload: the sample the layout editor shows
+     * in the size preview until the plugin has published a real tile. Hubs that predate the key
+     * ignore it; an unreadable or invalid sample is ignored, never fatal to the descriptor.
+     */
+    const val META_PLUGIN_TILE_PREVIEW = "com.anezium.rokidbus.plugin.TILE_PREVIEW"
     const val META_PLUGIN_API_VERSION = "com.anezium.rokidbus.plugin.API_VERSION"
     const val META_PLUGIN_CAPABILITIES = "com.anezium.rokidbus.plugin.CAPABILITIES"
     const val META_PLUGIN_RECEIVE_PREFIXES = "com.anezium.rokidbus.plugin.RECEIVE_PREFIXES"

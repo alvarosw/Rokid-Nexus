@@ -194,6 +194,26 @@ class PluginDescriptorTest {
     }
 
     @Test
+    fun `tile preview resource is optional and never makes the descriptor invalid`() {
+        fun previewFor(value: String?): Int? {
+            val metadata = if (value == null) validMetadata() else validMetadata() + (BusConstants.META_PLUGIN_TILE_PREVIEW to value)
+            val result = PluginDescriptorParser.parse(metadata)
+            assertTrue(result is PluginDescriptorParseResult.Valid)
+            return (result as PluginDescriptorParseResult.Valid).descriptor.tilePreviewResId
+        }
+
+        assertEquals(null, previewFor(null))
+        assertEquals(2131034112, previewFor("2131034112"))
+        assertEquals(null, previewFor("0"))
+        assertEquals(null, previewFor("not-a-resource"))
+        val conflicting = validMetadata().entries.map { it.key to it.value } + listOf(
+            BusConstants.META_PLUGIN_TILE_PREVIEW to "1",
+            BusConstants.META_PLUGIN_TILE_PREVIEW to "2",
+        )
+        assertTrue(PluginDescriptorParser.parse(conflicting) is PluginDescriptorParseResult.Valid)
+    }
+
+    @Test
     fun `malformed tile size token is rejected`() {
         assertEquals(
             PluginDescriptorParseResult.Invalid("INVALID_TILE_SIZE"),

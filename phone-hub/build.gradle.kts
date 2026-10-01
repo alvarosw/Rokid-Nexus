@@ -41,6 +41,7 @@ android {
 dependencies {
     implementation(project(":shared"))
     implementation(project(":bus-client"))
+    implementation(project(":hud-tiles"))
     implementation(project(":ink-engine"))
     implementation("androidx.activity:activity:1.10.1")
     implementation("androidx.customview:customview:1.1.0")

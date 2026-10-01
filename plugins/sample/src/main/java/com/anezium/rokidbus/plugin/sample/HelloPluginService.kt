@@ -49,8 +49,6 @@ import com.anezium.rokidbus.shared.NoticeSurfaceContract
 import com.anezium.rokidbus.shared.plugin.NexusInputEvent
 import com.anezium.rokidbus.shared.plugin.PluginCapability
 import com.anezium.rokidbus.shared.plugin.PluginOpenTypes
-import com.anezium.rokidbus.shared.tile.TileSnapshot
-import com.anezium.rokidbus.shared.tile.TileTone
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -277,21 +275,15 @@ class HelloPluginService : NexusPluginService() {
     }
 
     /**
-     * Synthetic publisher for the grid HUD tile pipeline (Delivery 3): a real plugin would
-     * publish here or from any other legitimate wake — never on a timer of its own. This is the
-     * fake publisher the pipeline's own tests exercise; it carries no meaning for Hello's demo
-     * beyond proving `publish → cache → render → expire → throttle` end to end.
+     * Synthetic publisher for the grid HUD tile pipeline: a real plugin would publish here or from
+     * any other legitimate wake — never on a timer of its own. Each open publishes the next of the
+     * four tile templates ([DemoTiles]), so every template can be exercised end to end.
      */
     private fun publishDemoTile() {
-        nexusWidgetTileSession("demo")?.publish(
-            TileSnapshot(
-                pluginId = "hello",
-                contentKey = "demo-tile",
-                title = "Hello",
-                subtitle = "Sample tile",
-                tone = TileTone.INFO,
-            ),
-        )
+        val prefs = getSharedPreferences(TILE_PREFS, MODE_PRIVATE)
+        val index = prefs.getInt(KEY_NEXT_TILE, 0).mod(DemoTiles.all.size)
+        val result = nexusWidgetTileSession("demo")?.publish(DemoTiles.all[index])
+        if (result == NexusSdkResult.SENT) prefs.edit().putInt(KEY_NEXT_TILE, index + 1).apply()
     }
 
     override fun onNexusBackground() {
@@ -652,6 +644,8 @@ class HelloPluginService : NexusPluginService() {
         const val DEMO_CHANNEL_ID = "demo_route"
         const val DEMO_NOTIFICATION_ID = 7302
         const val DEMO_REGISTRATION_ATTEMPTS = 20
+        const val TILE_PREFS = "demo_tile"
+        const val KEY_NEXT_TILE = "next_template"
 
         val DEMO_ROUTE_WALK = NexusActivity(
             glyph = "turn-right",

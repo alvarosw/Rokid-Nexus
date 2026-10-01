@@ -31,6 +31,7 @@ import com.anezium.rokidbus.shared.plugin.PluginCapability
 import com.anezium.rokidbus.shared.tile.GridRect
 import com.anezium.rokidbus.shared.tile.TileGridLayout
 import com.anezium.rokidbus.shared.tile.TileSize
+import com.anezium.rokidbus.shared.tile.TileSnapshot
 
 /**
  * The free-placement tile-layout editor: a preview of the glasses' home grid the wearer drags
@@ -48,6 +49,11 @@ open class TileLayoutSettingsActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private val restoreSaveLabel = Runnable { saveButton.text = SAVE_LABEL }
     private var cardSignature: String? = null
+
+    /** The size the card previews: the last size chip tapped for [previewTileId], room or not. */
+    private var previewTileId: String? = null
+    private var previewSize: TileSize? = null
+    private val samples = HashMap<String, TileSnapshot?>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -95,6 +101,12 @@ open class TileLayoutSettingsActivity : Activity() {
 
     private fun dp(value: Int) = NexusUi.dp(this, value)
 
+    /** The plugin's declared `TILE_PREVIEW` sample, read once per screen. */
+    internal open fun tilePreviewSample(tileId: String): TileSnapshot? =
+        samples.getOrPut(tileId) {
+            entryById[tileId]?.principal?.let { PluginTilePreviewReader.read(this, it) }
+        }
+
     internal open fun glyphFor(tileId: String): Drawable {
         val entry = entryById[tileId]
         return NexusPluginIcons.resolve(
@@ -123,7 +135,7 @@ open class TileLayoutSettingsActivity : Activity() {
             bind(
                 state,
                 state.tiles.associate { tile ->
-                    tile.id to TileVisual(glyphFor(tile.id), TileSnapshotCache.get(tile.id))
+                    tile.id to TileVisual(glyphFor(tile.id), TileSnapshotCache.get(tile.id) ?: tilePreviewSample(tile.id))
                 },
                 visibleRows,
             )
@@ -233,7 +245,11 @@ open class TileLayoutSettingsActivity : Activity() {
     private fun renderCard() {
         val id = state.selectedId
         val rect = id?.let { state.layout[it] }
-        val signature = "$id|$rect|${state.message}"
+        if (id != previewTileId) {
+            previewTileId = id
+            previewSize = rect?.let { TileLayoutEditorState.sizeOf(it) }
+        }
+        val signature = "$id|$rect|${state.message}|$previewSize"
         if (signature == cardSignature) return
         cardSignature = signature
         cardHost.removeAllViews()
@@ -337,6 +353,23 @@ open class TileLayoutSettingsActivity : Activity() {
                     NexusUi.block().apply { topMargin = dp(10) },
                 )
             }
+            val size = previewSize ?: TileLayoutEditorState.sizeOf(rect)
+            addView(
+                mono("PREVIEW · ${TileLayoutEditorState.sizeLabel(size)}", 9.5f, 0.22f, NexusUi.INK3),
+                NexusUi.block().apply { topMargin = dp(14) },
+            )
+            addView(
+                TileSizePreviewView(this@TileLayoutSettingsActivity).apply {
+                    // The live tile first, then the plugin's declared sample, else the header alone.
+                    bind(
+                        tile.name,
+                        glyphFor(tile.id),
+                        TileSnapshotCache.get(tile.id) ?: tilePreviewSample(tile.id),
+                        size,
+                    )
+                },
+                NexusUi.block().apply { topMargin = dp(10) },
+            )
         }
     }
 
@@ -401,6 +434,8 @@ open class TileLayoutSettingsActivity : Activity() {
             if (ok) {
                 setOnClickListener {
                     state.select(tile.id)
+                    previewTileId = tile.id
+                    previewSize = size
                     state.resize(size)
                     canvasView.stateChanged()
                     onEditorChanged()

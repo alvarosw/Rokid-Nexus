@@ -3,6 +3,7 @@ package com.anezium.rokidbus.client.plugin
 import com.anezium.rokidbus.client.PluginRegistrationResult
 import com.anezium.rokidbus.shared.BusPaths
 import com.anezium.rokidbus.shared.plugin.NexusInputEvent
+import com.anezium.rokidbus.shared.tile.TileContent
 import com.anezium.rokidbus.shared.tile.TileSnapshot
 import com.anezium.rokidbus.shared.tile.TileTone
 import org.json.JSONObject
@@ -64,6 +65,21 @@ class WidgetTileModelsTest {
         assertEquals(BusPaths.TILE_PUBLISH, payload.first)
         assertEquals("12 min", payload.second.getString("title"))
         assertEquals("info", payload.second.getString("tone"))
+    }
+
+    @Test
+    fun `publish sends a templated snapshot with its template and the legacy fields`() {
+        val (client, transport) = client("widget_tile")
+        val music = TileSnapshot(
+            pluginId = "hello",
+            contentKey = "track",
+            content = TileContent.Music(title = "Harbour Lights", artist = "Nova Reyes", playing = true),
+        )
+        assertEquals(NexusSdkResult.SENT, client.widgetTileSession("main").publish(music))
+        val payload = transport.sends.single().second
+        assertEquals("music", payload.getString("template"))
+        assertEquals("Harbour Lights", payload.getString("title"))
+        assertEquals("Nova Reyes", payload.getString("subtitle"))
     }
 
     @Test

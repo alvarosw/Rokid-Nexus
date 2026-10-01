@@ -1,0 +1,40 @@
+{
+  "contentKey": "preview",
+  "template": "list",
+  "content": {
+    "sections": [
+      {
+        "title": "",
+        "detail": "",
+        "items": [
+          {
+            "title": "Ana Ribeiro",
+            "detail": "WhatsApp",
+            "paragraph": "Leaving now, ten minutes away. Want me to grab bread on the way?",
+            "ageMs": 60000,
+            "leading": { "type": "initials", "text": "AR" }
+          },
+          {
+            "title": "Family",
+            "detail": "WhatsApp",
+            "paragraph": "Dad: dinner moved to 8, bring the speaker",
+            "ageMs": 360000,
+            "leading": { "type": "initials", "text": "FA" }
+          }
+        ]
+      }
+    ],
+    "summary": "3 new",
+    "summaryShort": "3",
+    "footer": "",
+    "paragraphLines": 2,
+    "overflow": 1
+  },
+  "title": "3 new",
+  "subtitle": "",
+  "badge": "3",
+  "progress": null,
+  "unit": "",
+  "tone": "info",
+  "rows": ["Ana Ribeiro - Leaving now, ten minutes away. Want me to grab bread on the way?", "Family - Dad: dinner moved to 8, bring the speaker"]
+}

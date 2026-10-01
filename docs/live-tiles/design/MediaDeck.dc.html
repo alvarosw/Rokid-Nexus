@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Media Deck — closed-state tiles</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#000}
+.hud{font-family:sans-serif;color:rgba(64,255,94,0.72);background:#000;-webkit-font-smoothing:antialiased}
+.t{box-sizing:border-box;border:1px solid rgba(64,255,94,0.24);border-radius:6px;padding:8px;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.t.f{border:2px solid #40FF5E;padding:7px;background:rgba(64,255,94,0.12)}
+.t.f .q,.t.f .hd .ic,.t.f .lb{color:rgba(64,255,94,0.72)}
+.t.f .ini{border-color:rgba(64,255,94,0.72)}
+.w1{width:106px}.w2{width:220px}.w3{width:334px}.h1{height:106px}.h2{height:220px}.h3{height:334px}
+.hd{display:flex;align-items:center;gap:4px;height:16px;flex:none;min-width:0;color:rgba(64,255,94,0.48)}
+.hd .r{margin-left:auto;display:flex;align-items:center;gap:4px;min-width:0}
+.lb{font:500 11px/14px sans-serif;letter-spacing:.06em;text-transform:uppercase;color:rgba(64,255,94,0.48);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb.p{color:rgba(64,255,94,0.72)}
+.ic{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter}
+.ic *{vector-effect:non-scaling-stroke}
+.hh{font:600 16px/22px sans-serif}
+.b{font:400 14px/20px sans-serif}
+.s{font:400 12px/16px sans-serif}
+.w5{font-weight:500}
+.d{font:500 13px/18px monospace}
+.m{font:400 11px/14px monospace;white-space:nowrap}
+.p{color:rgba(64,255,94,0.72)}.q{color:rgba(64,255,94,0.48)}
+.k1,.k2,.k3,.k4,.k6{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden}
+.k1{-webkit-line-clamp:1}.k2{-webkit-line-clamp:2}.k3{-webkit-line-clamp:3}.k4{-webkit-line-clamp:4}.k6{-webkit-line-clamp:6}
+.el{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.row{display:flex;min-width:0}.col{display:flex;flex-direction:column;min-width:0}.fx{flex:1 1 auto}
+.bl{align-items:baseline}.ct{align-items:center}.sb{justify-content:space-between}
+.au{margin-top:auto}
+.trk{position:relative;height:3px;border-radius:2px;background:rgba(64,255,94,0.24);flex:none}
+.trk i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:rgba(64,255,94,0.72)}
+.sep{height:1px;background:rgba(64,255,94,0.24);flex:none}
+.art{flex:none;box-sizing:border-box;border:1px solid rgba(64,255,94,0.24);border-radius:2px;background-image:radial-gradient(circle at 38% 42%,rgba(64,255,94,0.24) 0 34%,transparent 35%),radial-gradient(rgba(64,255,94,0.48) 0.7px,transparent 1px);background-size:100% 100%,3px 3px}
+.ini{flex:none;box-sizing:border-box;width:24px;height:24px;border:1px solid rgba(64,255,94,0.48);border-radius:4px;display:flex;align-items:center;justify-content:center;font:500 11px/14px monospace;color:rgba(64,255,94,0.72)}
+.ini.o{border-color:rgba(64,255,94,0.24);color:rgba(64,255,94,0.48)}
+.cap{font:400 11px/14px monospace;color:rgba(64,255,94,0.48);letter-spacing:.02em}
+</style>
+</helmet>
+<div class="hud" style="width:1210px;height:586px;box-sizing:border-box;padding:48px;display:flex;flex-direction:column;gap:32px"><div class="row bl" style="gap:16px"><span style="font:600 22px/28px sans-serif;color:rgba(64,255,94,0.72)">Media Deck</span><span class="lb">Closed state · live</span></div><div class="row" style="gap:40px;align-items:flex-start"><div class="col" style="gap:40px"><div class="row" style="gap:40px;align-items:flex-start"><div class="col" style="gap:8px"><span class="cap">1x1 · 106 × 106</span><div class="t w1 h1"><div class="hd"><svg class="ic" viewBox="0 0 16 16"><path d="M2.5 2.5H13.5V13.5H2.5Z"/><path d="M6.5 5.5L10.5 8L6.5 10.5Z"/></svg><span class="lb">Media</span><div class="r"><span class="p row"><svg class="ic" viewBox="0 0 16 16"><path d="M5.5 3.5L12 8L5.5 12.5Z"/></svg></span></div></div><div class="s p k2" style="margin-top:4px">Low Tide Static</div><div class="s q k1">Marta Velez</div><div class="au"><div class="trk"><i style="width:43%"></i></div></div></div></div><div class="col" style="gap:8px"><span class="cap">2x1 · 220 × 106</span><div class="t w2 h1"><div class="hd"><svg class="ic" viewBox="0 0 16 16"><path d="M2.5 2.5H13.5V13.5H2.5Z"/><path d="M6.5 5.5L10.5 8L6.5 10.5Z"/></svg><span class="lb">Media Deck</span><div class="r"><span class="lb p row ct" style="gap:4px"><svg class="ic" viewBox="0 0 16 16" style="color:inherit"><path d="M5.5 3.5L12 8L5.5 12.5Z"/></svg>Playing</span></div></div><div class="row" style="gap:8px;margin-top:4px"><div class="art" style="width:48px;height:48px"></div><div class="col fx"><span class="b p el">Low Tide Static</span><span class="s q el">Marta Velez</span><span class="m q">1:42 / 3:56</span></div></div><div class="au"><div class="trk"><i style="width:43%"></i></div></div></div></div><div class="col" style="gap:8px"><span class="cap">3x1 · 334 × 106</span><div class="t w3 h1"><div class="hd"><svg class="ic" viewBox="0 0 16 16"><path d="M2.5 2.5H13.5V13.5H2.5Z"/><path d="M6.5 5.5L10.5 8L6.5 10.5Z"/></svg><span class="lb">Media Deck</span><div class="r"><span class="lb p row ct" style="gap:4px"><svg class="ic" viewBox="0 0 16 16" style="color:inherit"><path d="M5.5 3.5L12 8L5.5 12.5Z"/></svg>Playing</span><span class="lb">· Spotify</span></div></div><div class="row" style="gap:12px;margin-top:4px"><div class="art" style="width:48px;height:48px"></div><div class="col fx"><div class="row sb bl" style="gap:8px"><span class="b p el">Low Tide Static</span><span class="m p">1:42 / 3:56</span></div><span class="s q el">Marta Velez · Salt Rooms</span></div></div><div class="au"><div class="trk"><i style="width:43%"></i></div></div></div></div></div><div class="row" style="gap:40px;align-items:flex-start"><div class="col" style="gap:8px"><span class="cap">1x2 · 106 × 220</span><div class="t w1 h2"><div class="hd"><svg class="ic" viewBox="0 0 16 16"><path d="M2.5 2.5H13.5V13.5H2.5Z"/><path d="M6.5 5.5L10.5 8L6.5 10.5Z"/></svg><span class="lb">Media</span><div class="r"><span class="p row"><svg class="ic" viewBox="0 0 16 16"><path d="M5.5 3.5L12 8L5.5 12.5Z"/></svg></span></div></div><div style="margin-top:8px"><div class="art" style="width:80px;height:80px"></div></div><div class="b p k2" style="margin-top:8px">Low Tide Static</div><div class="s q k1">Marta Velez</div><div class="au col" style="gap:4px"><div class="trk"><i style="width:43%"></i></div><div class="row sb"><span class="m p">1:42</span><span class="m q">3:56</span></div></div></div></div><div class="col" style="gap:8px"><span class="cap">2x2 · 220 × 220</span><div class="t w2 h2"><div class="hd"><svg class="ic" viewBox="0 0 16 16"><path d="M2.5 2.5H13.5V13.5H2.5Z"/><path d="M6.5 5.5L10.5 8L6.5 10.5Z"/></svg><span class="lb">Media Deck</span><div class="r"><span class="lb p row ct" style="gap:4px"><svg class="ic" viewBox="0 0 16 16" style="color:inherit"><path d="M5.5 3.5L12 8L5.5 12.5Z"/></svg>Playing</span></div></div><div class="row" style="gap:12px;margin-top:8px"><div class="art" style="width:96px;height:96px"></div><div class="col fx"><span class="b p k3">Low Tide Static</span><span class="s q k2" style="margin-top:2px">Marta Velez</span><span class="lb au">Spotify</span></div></div><div class="au col" style="gap:4px"><div class="trk"><i style="width:43%"></i></div><div class="row sb"><span class="m p">1:42</span><span class="m q">3:56</span></div></div></div></div><div class="col" style="gap:8px"><span class="cap">3x2 · 334 × 220</span><div class="t w3 h2"><div class="hd"><svg class="ic" viewBox="0 0 16 16"><path d="M2.5 2.5H13.5V13.5H2.5Z"/><path d="M6.5 5.5L10.5 8L6.5 10.5Z"/></svg><span class="lb">Media Deck</span><div class="r"><span class="lb p row ct" style="gap:4px"><svg class="ic" viewBox="0 0 16 16" style="color:inherit"><path d="M5.5 3.5L12 8L5.5 12.5Z"/></svg>Playing</span></div></div><div class="row" style="gap:16px;margin-top:8px"><div class="art" style="width:120px;height:120px"></div><div class="col fx"><span class="hh p k2">Low Tide Static</span><span class="b p el" style="margin-top:2px">Marta Velez</span><span class="s q el">Salt Rooms</span><span class="lb au">Spotify</span></div></div><div class="au col" style="gap:4px"><div class="trk"><i style="width:43%"></i></div><div class="row sb"><span class="m p">1:42</span><span class="m q">3:56</span></div></div></div></div></div></div><div class="col" style="gap:8px"><span class="cap">3x3 · 334 × 334</span><div class="t w3 h3"><div class="hd"><svg class="ic" viewBox="0 0 16 16"><path d="M2.5 2.5H13.5V13.5H2.5Z"/><path d="M6.5 5.5L10.5 8L6.5 10.5Z"/></svg><span class="lb">Media Deck</span><div class="r"><span class="lb p row ct" style="gap:4px"><svg class="ic" viewBox="0 0 16 16" style="color:inherit"><path d="M5.5 3.5L12 8L5.5 12.5Z"/></svg>Playing</span></div></div><div class="row" style="gap:12px;margin-top:12px"><div class="art" style="width:200px;height:200px"></div><div class="col fx"><span class="hh p k3">Low Tide Static</span><span class="b p k2" style="margin-top:4px">Marta Velez</span><span class="s q k2" style="margin-top:2px">Salt Rooms</span><div class="col au" style="gap:2px"><span class="lb">Source</span><span class="s p el">Spotify</span></div></div></div><div class="au col" style="gap:6px"><div class="trk"><i style="width:43%"></i></div><div class="row sb"><span class="d p">1:42</span><span class="d q">3:56</span></div></div></div></div></div></div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1210,"height":586}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

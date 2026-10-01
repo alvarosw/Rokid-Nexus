@@ -1256,12 +1256,75 @@ val result = nexusWidgetTileSession("main")?.publish(
 )
 ```
 
+That constructor builds the `generic` template. A tile can instead carry one of
+four `TileContent` templates; you only ever supply data, and the hub decides
+what to show of it at each size:
+
+| Template | For | Fields |
+|---|---|---|
+| `TileContent.Generic` | anything that fits none of the others | `title`, `subtitle`, `badge`, `progress`, `unit`, `rows` |
+| `TileContent.Music` | a playing track | `title`, `artist`, `album`, `source`, `playing`, `positionMs`, `durationMs`, `artworkKey` |
+| `TileContent.Lines` | lyrics, steps: a list of lines with the current one centered | `lines` (`Line(text, startMs)`), `current`, `title`, `subtitle`, `source`, `positionMs`, `durationMs`, `playing` |
+| `TileContent.ListContent` | messages, headlines, posts | `sections` (`Section(title, detail, items)`), `summary`, `summaryShort`, `footer`, `paragraphLines`, `overflow`; each `Item(title, detail, paragraph, ageMs, leading)` with `Leading.Initials` or `Leading.Glyph` |
+
+```kotlin
+nexusWidgetTileSession("main")?.publish(
+    TileSnapshot(
+        pluginId = "relay",
+        contentKey = "inbox",
+        content = TileContent.ListContent(
+            sections = listOf(
+                TileContent.ListContent.Section(
+                    items = listOf(
+                        TileContent.ListContent.Item(
+                            title = "Ana Ribeiro",
+                            detail = "WhatsApp",
+                            paragraph = "Leaving now, ten minutes away.",
+                            ageMs = 60_000,                      // as of this publish
+                            leading = TileContent.ListContent.Leading.Initials("AR"),
+                        ),
+                    ),
+                ),
+            ),
+            summary = "3 new",   // header right at width >= 2
+            summaryShort = "3",  // header right at width 1
+        ),
+        tone = TileTone.INFO,
+        staleAfterMs = 10 * 60_000L, // shown as stale this long after receipt
+    ),
+)
+```
+
+`positionMs` and `ageMs` are measured at the moment you publish; the glasses
+add the time since they received it, so neither device's clock matters. A hub
+that has no layout for a template yet draws its down-level generic tile, and
+the payload always carries those generic fields too, so an older glasses hub
+still shows something.
+
 `TileSnapshot` is bounded the same way `SurfaceModels` is (see
 [`WidgetTileContract`](../shared/src/main/java/com/anezium/rokidbus/shared/tile/WidgetTileContract.kt)):
 `pluginId`/`contentKey` ≤ 128 chars, `title`/`subtitle` ≤ 120, `badge` ≤ 24, `unit` ≤
-16, `progress` in `0f..1f`, at most 4 `rows` of ≤ 120 chars each, whole payload ≤ 8
-KiB. Violating a bound throws `IllegalArgumentException` in your process at
-construction time, exactly like an oversized `NexusCard`.
+16, `progress` in `0f..1f`, at most 4 `rows` of ≤ 120 chars each. In the richer
+templates every text is ≤ 120 chars except `paragraph` ≤ 280, `summary` and
+`detail` ≤ 60 and `summaryShort` ≤ 6; `Lines` holds ≤ 9 lines, `ListContent` ≤ 3
+sections and ≤ 6 items in total with `paragraphLines` in 1..6; initials are 1..2
+chars. `staleAfterMs` is 60 s .. 24 h, and the whole payload ≤ 12 KiB. Violating a
+bound throws `IllegalArgumentException` in your process at construction time,
+exactly like an oversized `NexusCard`.
+
+The layout editor on the phone previews your tile at every size the wearer
+picks. Until you have published a real tile it shows a sample you declare: a
+raw JSON resource holding one `/tile/publish` payload (see `BUSSPEC.md`),
+named by the `TILE_PREVIEW` meta-data key:
+
+```xml
+<meta-data android:name="com.anezium.rokidbus.plugin.TILE_PREVIEW"
+    android:resource="@raw/tile_preview" />
+```
+
+The hub stamps the sample with your plugin id and decodes it like a publish; an
+unreadable or invalid sample is ignored and never affects your plugin's
+registration. Hubs that predate the key ignore it.
 
 The hub decides how much of the snapshot to show at each declared `TileSize`
 (seven shapes: `1x1`, `2x1`, `3x1`, `1x2`, `2x2`, `3x2`, `3x3`; `TILE_SIZES` takes

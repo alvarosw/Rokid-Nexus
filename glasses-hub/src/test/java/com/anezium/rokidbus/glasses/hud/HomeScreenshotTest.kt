@@ -176,8 +176,7 @@ class HomeScreenshotTest {
         "plugin2" to HomeTile(snapshot("plugin2", title = "3", unit = "new", tone = TileTone.WARN), false),
         "plugin3" to HomeTile(snapshot("plugin3", title = "21", unit = "C", tone = TileTone.OFF), false),
         "plugin4" to HomeTile(
-            snapshot("plugin4", title = "3", unit = "tasks", tone = TileTone.OK, subtitle = "Today")
-                .copy(rows = listOf("Call Ana", "Buy milk", "Send report")),
+            snapshot("plugin4", title = "3", unit = "tasks", tone = TileTone.OK, subtitle = "Today", rows = listOf("Call Ana", "Buy milk", "Send report")),
             false,
         ),
         "plugin5" to HomeTile(snapshot("plugin5", title = "94", unit = "%", tone = TileTone.CRITICAL), false),
@@ -242,13 +241,11 @@ class HomeScreenshotTest {
         ),
         "plugin1" to HomeTile(snapshot("plugin1", title = "7", unit = "new", tone = TileTone.INFO), false),
         "plugin2" to HomeTile(
-            snapshot("plugin2", title = "3", unit = "tasks", tone = TileTone.OK, subtitle = "Today")
-                .copy(rows = listOf("Call Ana", "Buy milk", "Send report"), progress = 0.66f),
+            snapshot("plugin2", title = "3", unit = "tasks", tone = TileTone.OK, subtitle = "Today", rows = listOf("Call Ana", "Buy milk", "Send report"), progress = 0.66f),
             false,
         ),
         "plugin4" to HomeTile(
-            snapshot("plugin4", title = "Sync", unit = "", tone = TileTone.OFF, subtitle = "Photos")
-                .copy(rows = listOf("IMG_0412", "IMG_0413", "IMG_0414", "IMG_0415"), progress = 0.3f, badge = "42%"),
+            snapshot("plugin4", title = "Sync", unit = "", tone = TileTone.OFF, subtitle = "Photos", rows = listOf("IMG_0412", "IMG_0413", "IMG_0414", "IMG_0415"), progress = 0.3f, badge = "42%"),
             false,
         ),
     )
@@ -297,11 +294,10 @@ class HomeScreenshotTest {
             stored = listOf(at(0, TileSize.SMALL, 0, 0), at(1, TileSize.SMALL, 1, 0)),
             live = mapOf(
                 "plugin0" to HomeTile(
-                    snapshot("plugin0", title = "Transit planner", unit = "", tone = TileTone.OK)
-                        .copy(progress = 0.5f, badge = "NEW"),
+                    snapshot("plugin0", title = "Transit planner", unit = "", tone = TileTone.OK, progress = 0.5f, badge = "NEW"),
                     false,
                 ),
-                "plugin1" to HomeTile(snapshot("plugin1", title = "88", unit = "%").copy(progress = 0.88f), false),
+                "plugin1" to HomeTile(snapshot("plugin1", title = "88", unit = "%", progress = 0.88f), false),
             ),
         ) {
             it.show(HomeMode.GRID, withIcons(2), "plugin0")

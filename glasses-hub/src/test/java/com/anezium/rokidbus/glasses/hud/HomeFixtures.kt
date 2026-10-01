@@ -30,7 +30,20 @@ internal fun snapshot(
     unit: String = "min",
     tone: TileTone = TileTone.OK,
     subtitle: String = "",
-) = TileSnapshot(pluginId = id, contentKey = "k", title = title, unit = unit, tone = tone, subtitle = subtitle)
+    rows: List<String> = emptyList(),
+    progress: Float? = null,
+    badge: String = "",
+) = TileSnapshot(
+    pluginId = id,
+    contentKey = "k",
+    title = title,
+    subtitle = subtitle,
+    badge = badge,
+    progress = progress,
+    unit = unit,
+    tone = tone,
+    rows = rows,
+)
 
 /** Placement seam for a home layer: [pairs] are the declared sizes, positions come from the auto-pack. */
 internal fun placementsOf(vararg pairs: Pair<String, TileSize>): (List<GlassesHub.LauncherEntry>) -> List<TilePlacement> {

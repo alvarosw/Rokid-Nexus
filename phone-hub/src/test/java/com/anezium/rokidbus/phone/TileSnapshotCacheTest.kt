@@ -1,5 +1,6 @@
 package com.anezium.rokidbus.phone
 
+import com.anezium.rokidbus.shared.tile.TileContent
 import com.anezium.rokidbus.shared.tile.TileSnapshot
 import com.anezium.rokidbus.shared.tile.WidgetTileContract
 import org.json.JSONObject
@@ -19,7 +20,7 @@ class TileSnapshotCacheTest {
     @Test
     fun `a recorded snapshot is returned for the stamped plugin`() {
         TileSnapshotCache.record("clock", payload("clock", "12:00"))
-        assertEquals("12:00", TileSnapshotCache.get("clock")?.title)
+        assertEquals("12:00", (TileSnapshotCache.get("clock")?.content as? TileContent.Generic)?.title)
     }
 
     @Test

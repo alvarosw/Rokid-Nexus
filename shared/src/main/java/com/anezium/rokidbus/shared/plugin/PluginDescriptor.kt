@@ -26,6 +26,11 @@ data class PluginDescriptor(
      * at whatever size the wearer picks, exactly like an unrecognized icon key degrades.
      */
     val supportedTileSizes: Set<TileSize> = emptySet(),
+    /**
+     * Raw JSON resource holding a sample `/tile/publish` payload, from `META_PLUGIN_TILE_PREVIEW`,
+     * resolved cross-package like [glyphsResId]. An unparseable value is dropped, never an error.
+     */
+    val tilePreviewResId: Int? = null,
 ) {
     companion object {
         private val idPattern = Regex("[a-z][a-z0-9._-]{2,63}")
@@ -47,6 +52,7 @@ object PluginDescriptorParser {
         BusConstants.META_PLUGIN_ICON_DRAWABLE,
         BusConstants.META_PLUGIN_GLYPHS,
         BusConstants.META_PLUGIN_TILE_SIZES,
+        BusConstants.META_PLUGIN_TILE_PREVIEW,
         BusConstants.META_PLUGIN_API_VERSION,
         BusConstants.META_PLUGIN_CAPABILITIES,
         BusConstants.META_PLUGIN_RECEIVE_PREFIXES,
@@ -64,6 +70,7 @@ object PluginDescriptorParser {
                 key !in setOf(
                     BusConstants.META_PLUGIN_ICON,
                     BusConstants.META_PLUGIN_ICON_DRAWABLE,
+                    BusConstants.META_PLUGIN_TILE_PREVIEW,
                 ) &&
                 values.containsKey(key) &&
                 values[key] != value
@@ -123,6 +130,10 @@ object PluginDescriptorParser {
             ?.trim()
             ?.toIntOrNull()
             ?.takeIf { it != 0 }
+        val tilePreviewResId = values[BusConstants.META_PLUGIN_TILE_PREVIEW]
+            ?.trim()
+            ?.toIntOrNull()
+            ?.takeIf { it != 0 }
         val tileSizesResult = TileSize.parseList(values[BusConstants.META_PLUGIN_TILE_SIZES].orEmpty())
         val supportedTileSizes = when (tileSizesResult) {
             is TileSizeParseResult.Valid -> tileSizesResult.sizes
@@ -146,6 +157,7 @@ object PluginDescriptorParser {
                 iconDrawableResId = iconDrawableResId,
                 glyphsResId = glyphsResId,
                 supportedTileSizes = supportedTileSizes,
+                tilePreviewResId = tilePreviewResId,
             ),
         )
     }
