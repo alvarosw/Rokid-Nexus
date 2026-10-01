@@ -99,8 +99,15 @@ internal class EditorTilePainter {
             )
         }
         if (sizeLabel != null) {
-            val track = layout.footer.filterIsInstance<TileOp.Track>().firstOrNull()
-            val labelBottom = if (track != null) rect.top + track.top - RokidHudTokens.SPACE_1 else rect.bottom - pad
+            // Above the tile's foot (a track, a list's "+N more" line), never over it.
+            val footTop = layout.footer.mapNotNull { op ->
+                when (op) {
+                    is TileOp.Track -> op.top
+                    is TileOp.Text -> op.top
+                    else -> null
+                }
+            }.minOrNull()
+            val labelBottom = if (footTop != null) rect.top + footTop - RokidHudTokens.SPACE_1 else rect.bottom - pad
             text.typeface = Typeface.MONOSPACE
             text.textSize = 10f
             text.letterSpacing = 0.04f
