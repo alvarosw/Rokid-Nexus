@@ -6,6 +6,7 @@ import com.anezium.rokidbus.client.plugin.NexusCard
 import com.anezium.rokidbus.client.plugin.NexusImage
 import com.anezium.rokidbus.client.plugin.NexusPluginService
 import com.anezium.rokidbus.client.plugin.NexusSurfaceSession
+import com.anezium.rokidbus.client.plugin.WidgetTileSession
 import com.anezium.rokidbus.shared.plugin.NexusInputEvent
 import org.json.JSONObject
 
@@ -14,6 +15,16 @@ class FeedsPluginService : NexusPluginService() {
     private var surface: NexusSurfaceSession? = null
     private var surfaceShown = false
     private val settingsStore by lazy { FeedsSettingsStore(applicationContext) }
+    private var tileSession: WidgetTileSession? = null
+    private val tileRuntime by lazy {
+        FeedsTileRuntime(
+            publish = { snapshot -> tileSession?.publish(snapshot) },
+            settings = settingsStore::load,
+            sourceFactory = { settings, kind -> FeedsRuntime.defaultSource(applicationContext, settings, kind) },
+            post = { action -> mainExecutor.execute(action) },
+            log = { message -> Log.i(TAG, message) },
+        )
+    }
 
     private val runtimeHost = object : FeedsRuntimeHost {
         override fun sendCard(card: FeedCardContent, show: Boolean) {
@@ -86,7 +97,23 @@ class FeedsPluginService : NexusPluginService() {
         if (result != PluginRegistrationResult.APPROVED) runtime?.close()
     }
 
+    override fun onNexusTileActive(active: Boolean) {
+        if (active) {
+            tileSession = nexusWidgetTileSession(TILE_ID)
+            tileRuntime.start()
+        } else {
+            tileRuntime.stop()
+            tileSession = null
+        }
+    }
+
+    override fun onNexusTileRefresh() {
+        tileRuntime.refresh()
+    }
+
     override fun onDestroy() {
+        tileRuntime.stop()
+        tileSession = null
         runtime?.close()
         runtime = null
         surface = null
@@ -102,5 +129,6 @@ class FeedsPluginService : NexusPluginService() {
     private companion object {
         const val TAG = "NexusFeeds"
         const val SURFACE_ID = "feeds"
+        const val TILE_ID = "feeds"
     }
 }
