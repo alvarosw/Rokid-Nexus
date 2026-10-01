@@ -43,6 +43,7 @@ class NexusPluginClient internal constructor(
     private var registrationState = PluginRegistrationResult.REGISTRATION_FAILED
     private var opened = false
     private var backgrounded = false
+    private var tileActive = false
     private var closed = false
     private var approvedCapabilities: Set<PluginCapability> = emptySet()
     private var noticeInteractionVersion = 0
@@ -537,6 +538,7 @@ class NexusPluginClient internal constructor(
             terminateSnapshotSession(NexusSnapshotError.ERROR)
         }
         callbacks.onRegistrationState(result)
+        if (result != PluginRegistrationResult.APPROVED) endTileLease()
         if (result != PluginRegistrationResult.APPROVED && (opened || backgrounded)) {
             opened = false
             backgrounded = false
@@ -699,6 +701,16 @@ class NexusPluginClient internal constructor(
                     }
                 }
             }
+            BusPaths.PLUGIN_TILE_ACTIVE -> if (isApproved) {
+                val active = payload.optBoolean("active", false)
+                if (active != tileActive) {
+                    tileActive = active
+                    callbacks.onTileActive(active)
+                }
+            }
+            BusPaths.PLUGIN_TILE_REFRESH -> if (isApproved && tileActive) {
+                callbacks.onTileRefresh()
+            }
             BusPaths.PLUGIN_INPUT -> if (opened && isApproved) {
                 callbacks.onInput(
                     NexusInputEvent(
@@ -716,7 +728,9 @@ class NexusPluginClient internal constructor(
                 noticeInteractionVersion = payload.optInt("noticeInteractionVersion", 0)
                 // A fresh registration means the hub has no open session with us (it just
                 // (re)accepted this client), so a stale `opened` from a previous hub life
-                // must not swallow the next PLUGIN_OPEN.
+                // must not swallow the next PLUGIN_OPEN. The same goes for a tile lease: the hub
+                // re-grants it right after a registration that finds it still active.
+                endTileLease()
                 if (opened || backgrounded) {
                     opened = false
                     backgrounded = false
@@ -799,6 +813,7 @@ class NexusPluginClient internal constructor(
             stopCurrent = false,
         )
         terminateSnapshotSession(NexusSnapshotError.ERROR)
+        endTileLease()
         if (opened || backgrounded) {
             opened = false
             backgrounded = false
@@ -809,6 +824,12 @@ class NexusPluginClient internal constructor(
         hubCapabilities = 0
         seenEventIds.clear()
         seenEventIdSet.clear()
+    }
+
+    private fun endTileLease() {
+        if (!tileActive) return
+        tileActive = false
+        callbacks.onTileActive(false)
     }
 
     private fun routeAudioMessage(path: String, payload: JSONObject): Boolean {

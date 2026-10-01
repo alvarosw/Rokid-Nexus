@@ -206,6 +206,18 @@ object BusPaths {
     const val PLUGIN_CLOSE = "/system/plugin/close"
     const val PLUGIN_INPUT = "/system/plugin/input"
     const val PLUGIN_REGISTRATION = "/system/plugin/registration"
+
+    /**
+     * Phone hub to one plugin, owner-scoped: its grid tile lease began (`active: true`) or ended
+     * (`active: false`). The lease, not the plugin, decides when a tile may be kept current.
+     */
+    const val PLUGIN_TILE_ACTIVE = "/system/plugin/tile/active"
+
+    /**
+     * Phone hub to one plugin while its tile lease is active, on a hub-owned cadence: fetch once,
+     * publish the tile, and return to dormant.
+     */
+    const val PLUGIN_TILE_REFRESH = "/system/plugin/tile/refresh"
     const val HUB_CAPABILITIES = "/system/hub/capabilities"
     const val ERROR = "/error"
 
