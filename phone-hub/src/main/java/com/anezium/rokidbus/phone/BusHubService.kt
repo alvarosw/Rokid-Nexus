@@ -349,6 +349,8 @@ class BusHubService : Service() {
     private lateinit var externalPluginController: ExternalPluginController
     private lateinit var cameraConsumerReadiness: CameraConsumerReadiness
     private lateinit var cameraCompanionController: CameraCompanionController
+    private lateinit var tileLeaseController: TileLeaseController
+    private val tileLeaseExecutor = SerialExecutor(executor)
     private lateinit var pluginGuardianCoordinator: PluginGuardianCoordinator
     private lateinit var mediaSyncCoordinator: MediaSyncCoordinator
     private lateinit var coreRemoteBridge: PhoneCoreRemoteBridge
@@ -561,6 +563,9 @@ class BusHubService : Service() {
                         }
                         if (::cameraCompanionController.isInitialized) {
                             cameraCompanionController.onRegistered(principal)
+                        }
+                        if (::tileLeaseController.isInitialized) {
+                            tileLeaseController.onRegistered(principal)
                         }
                         log("plugin registered package=$packageName plugin=$pluginId status=approved")
                         pluginRegistrationResult(pluginId, PluginRegistrationResult.APPROVED)
@@ -876,7 +881,12 @@ class BusHubService : Service() {
             scheduler = MainThreadExternalPluginScheduler(),
             logger = ::log,
             onRegisteredPrincipal = ::offerTransitLegacyMigration,
-            onForegroundChanged = { updateStatusNotification(linkState()) },
+            onForegroundChanged = {
+                updateStatusNotification(linkState())
+                // A plugin closing hands the glasses back to the home: the closest signal the
+                // phone has that the grid is visible again.
+                if (externalPluginController.activeId() == null) recomputeTileLeases(homeVisible = true)
+            },
             onBackgroundChanged = NexusPhoneState::setBackgroundAudioPluginId,
             journal = pluginBusJournal,
         )
@@ -891,6 +901,23 @@ class BusHubService : Service() {
                     cameraCompanionController.onBinderDied(principal.grantKey())
                 }
             },
+        )
+        tileLeaseController = TileLeaseController(
+            runtime = AndroidExternalPluginRuntime(
+                context = applicationContext,
+                isRegisteredCallback = ::isExternalPrincipalRegistered,
+                deliverCallback = ::deliverExternalLifecycle,
+                hideCallback = {},
+                disconnectedCallback = { principal ->
+                    if (::tileLeaseController.isInitialized) {
+                        tileLeaseController.onBinderDied(principal.grantKey())
+                    }
+                },
+            ),
+            scheduler = MainThreadExternalPluginScheduler(),
+            nowMs = SystemClock::elapsedRealtime,
+            logger = ::log,
+            journal = pluginBusJournal,
         )
         cameraCompanionController = CameraCompanionController(
             runtime = cameraRuntime,
@@ -1094,6 +1121,7 @@ class BusHubService : Service() {
         developerModeJournalSubscription = null
         if (::pluginGuardianCoordinator.isInitialized) pluginGuardianCoordinator.close()
         if (::pluginRegistry.isInitialized) pluginRegistry.close()
+        if (::tileLeaseController.isInitialized) tileLeaseController.close()
         inkRouter.close()
         if (::cameraCompanionController.isInitialized) cameraCompanionController.close()
         if (::mediaSyncCoordinator.isInitialized) mediaSyncCoordinator.close()
@@ -1365,6 +1393,7 @@ class BusHubService : Service() {
             // Same reasoning again for the tile layout: an edit made while disconnected must
             // still land on reconnect.
             executor.execute { pushTileLayoutConfig() }
+            recomputeTileLeases(homeVisible = true)
             return
         }
         if (envelope.path == RemoteInputContract.SESSION_PATH ||
@@ -1644,7 +1673,9 @@ class BusHubService : Service() {
         BusPaths.NOTICE_INPUT, BusPaths.NOTICE_ACTION, BusPaths.NOTICE_CLOSED,
         BusPaths.ACTIVITY_ACTION, BusPaths.ACTIVITY_CLOSED,
         -> PluginBusJournal.Category.INPUT
-        BusPaths.PLUGIN_OPEN, BusPaths.PLUGIN_CLOSE -> PluginBusJournal.Category.LIFECYCLE
+        BusPaths.PLUGIN_OPEN, BusPaths.PLUGIN_CLOSE,
+        BusPaths.PLUGIN_TILE_ACTIVE, BusPaths.PLUGIN_TILE_REFRESH,
+        -> PluginBusJournal.Category.LIFECYCLE
         BusPaths.PLUGIN_REGISTRATION -> PluginBusJournal.Category.REGISTRATION
         BusPaths.LAUNCHER_LIST, BusPaths.LAUNCHER_OPEN -> PluginBusJournal.Category.LAUNCHER
         else -> if (hasBinary) PluginBusJournal.Category.BINARY else PluginBusJournal.Category.TRANSPORT
@@ -2356,6 +2387,9 @@ class BusHubService : Service() {
                 }
                 if (::cameraCompanionController.isInitialized) {
                     cameraCompanionController.onBinderDied(principal.grantKey())
+                }
+                if (::tileLeaseController.isInitialized) {
+                    tileLeaseController.onBinderDied(principal.grantKey())
                 }
             }
         }
@@ -4913,6 +4947,34 @@ class BusHubService : Service() {
         } else {
             lastAnnouncedPhoneCapabilities = null
         }
+        recomputeTileLeases()
+    }
+
+    /**
+     * Re-derives which plugins hold a tile lease from every input, on one serial lane so an older
+     * computation never lands after a newer one. [homeVisible] marks an edge where the glasses
+     * home has just become visible; the phone has no direct signal for it, so link-up, a mode or
+     * layout change, and the foreground plugin closing stand in.
+     */
+    private fun recomputeTileLeases(homeVisible: Boolean = false) {
+        if (!::tileLeaseController.isInitialized || !::pluginRegistry.isInitialized) return
+        tileLeaseExecutor.execute {
+            val catalog = runCatching { pluginRegistry.catalog() }.getOrNull() ?: return@execute
+            val transportBits = LinkStateBits.CXR_CONTROL_UP or LinkStateBits.SPP_DATA_UP
+            val leased = TileLeasePolicy.leasedPlugins(
+                gridMode = HudModeSettingsStore(applicationContext).isGridModeEnabled(),
+                linkUp = linkState() and transportBits != 0,
+                launchable = catalog.launchableEntries.mapNotNull { it.principal },
+                storedLayout = TileLayoutSettingsStore(applicationContext).getEntries(),
+                hasWidgetTile = { principal ->
+                    (pluginGrantStore.stateFor(principal) as? PluginGrantState.Approved)
+                        ?.capabilities
+                        ?.contains(PluginCapability.WIDGET_TILE) == true
+                },
+            )
+            tileLeaseController.update(leased)
+            if (homeVisible) tileLeaseController.onHomeVisible()
+        }
     }
 
     private fun advertisedCameraConsumerName(): String? {
@@ -5267,6 +5329,7 @@ class BusHubService : Service() {
         internal fun onHudModeSettingChanged() {
             activeInstance?.let { service ->
                 service.executor.execute { service.pushHudModeConfig() }
+                service.recomputeTileLeases(homeVisible = true)
             }
         }
 
@@ -5286,6 +5349,7 @@ class BusHubService : Service() {
         internal fun onTileLayoutSettingChanged() {
             activeInstance?.let { service ->
                 service.executor.execute { service.pushTileLayoutConfig() }
+                service.recomputeTileLeases(homeVisible = true)
             }
         }
 
