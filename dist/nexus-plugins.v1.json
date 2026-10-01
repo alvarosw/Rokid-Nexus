@@ -149,6 +149,59 @@
       ]
     },
     {
+      "id": "news",
+      "kind": "nexus-plugin",
+      "name": "News",
+      "category": "News",
+      "summary": "RSS and Atom feeds on the HUD, read with the ring.",
+      "description": "Subscribe to RSS or Atom feeds on the phone and read them on the glasses: sources with unread counts, headlines newest first, and the article text on the glasses' native reader surface. Fully operable with the R08 ring.",
+      "author": "alvarosw",
+      "sourceUrl": "https://github.com/alvarosw/news-nexus",
+      "publishedAt": "2026-10-01T20:29:37Z",
+      "iconAsset": "news-icon.png",
+      "screenshotAssets": [
+        "news-1-sources.png",
+        "news-2-headlines.png",
+        "news-3-reader.png"
+      ],
+      "listing": {
+        "descriptionMarkdown": "## About\n\nNews puts your RSS and Atom feeds on the Rokid glasses. Subscribe on the phone, then browse headlines and read articles on the HUD without touching anything but the ring.\n\n- Three views on one axis: sources, headlines, reader. Forward/back moves, tap opens, double tap goes back.\n- Headlines use both text bands of a list row, with age and source as trailing tokens; read items dim instead of disappearing.\n- Article text is reduced to paragraphs on the phone and rendered on the glasses' native reader surface: continuous prose that the ring scrolls, opening on the first paragraph.\n- Per-feed unread counts, cached articles between sessions, and a feed that fails to fetch keeps what it had.\n- Add feeds by URL or from seven verified presets (BBC World, NYT World, Hacker News, Ars Technica, The Verge, G1, Tecnoblog); each feed names itself from its channel title on the first fetch.\n\nRequests only the `surfaces` capability: feeds are fetched phone-side with the app's own HTTP stack.\n"
+      },
+      "releases": [
+        {
+          "version": "1.2.0",
+          "date": "2026-10-01T20:29:37Z",
+          "notes": "\n- **A live tile for the glasses grid** (optional `widget_tile` capability, all\n  seven tile sizes `1x1` to `3x3`): the newest unread headlines, up to six, in up\n  to three sections, one per outlet with its unread count. Each item carries the\n  headline, the outlet, the opening of its summary and its age; the header reads\n  `N unread` (`N` on a one-column tile) and the rest count as \"+N more\".\n- The tile is refresh-driven and lives only inside the hub's tile lease: one\n  fetch of every feed when the lease starts and one per hub refresh, then idle.\n  News schedules no refresh of its own. A refresh within a minute of the last\n  fetch republishes from the cache, so what was read in the plugin leaves the\n  tile without a second fetch.\n- The tile's fetch refreshes the cache the plugin opens on; a fetch no feed\n  answered keeps showing the cached headlines and leaves the cache's age alone.\n- The phone's layout editor previews the tile with a sample until a real one is\n  published (`TILE_PREVIEW`).\n- Built against the live tiles SDK from the `alvarosw/Rokid-Nexus` fork\n  (`ed7ca9a1c4`) instead of `sdk-v0.15.0`; no other behavior changes. Because\n  `widget_tile` is optional, the APK still loads on a hub without tiles; on a hub\n  with them, the new capability asks for re-approval once.\n- Releases from the fork are signed with the fork's certificate\n  (`78a1be10…5f56d60`), so moving from an upstream build needs a reinstall.\n\n\n### Artifact\n\n- File: `news-phone-release.apk`\n- SHA-256: `04acf95088d4145608877bd3c5d5f5cec71ad885c0941655de09da99777e2dde`\n- Signer SHA-256: `78a1be1045ba3b2614baa46e306a353a8a6bc3e5d07ba5d587490931d5f56d60`\n"
+        }
+      ],
+      "nexus": {
+        "pluginId": "news",
+        "apiVersion": 3,
+        "capabilities": [
+          "surfaces"
+        ],
+        "launchable": true,
+        "settingsActivity": ".NewsSettingsActivity",
+        "minHostVersionCode": 10403
+      },
+      "artifact": {
+        "target": "phone",
+        "url": "https://github.com/alvarosw/news-nexus/releases/download/news-v1.2.0/news-phone-release.apk",
+        "sha256": "04acf95088d4145608877bd3c5d5f5cec71ad885c0941655de09da99777e2dde",
+        "signerSha256": "78a1be1045ba3b2614baa46e306a353a8a6bc3e5d07ba5d587490931d5f56d60",
+        "sizeBytes": 5677521,
+        "packageName": "com.beyondlevi.nexus.news",
+        "versionCode": 6,
+        "versionName": "1.2.0"
+      },
+      "iconUrl": "https://raw.githubusercontent.com/Anezium/RokidBrew-Registry/main/assets/icons/news-icon.png",
+      "screenshotUrls": [
+        "https://raw.githubusercontent.com/Anezium/RokidBrew-Registry/main/assets/screenshots/news-1-sources.png",
+        "https://raw.githubusercontent.com/Anezium/RokidBrew-Registry/main/assets/screenshots/news-2-headlines.png",
+        "https://raw.githubusercontent.com/Anezium/RokidBrew-Registry/main/assets/screenshots/news-3-reader.png"
+      ]
+    },
+    {
       "id": "relay",
       "kind": "nexus-plugin",
       "name": "Relay",
