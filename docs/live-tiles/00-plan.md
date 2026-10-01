@@ -171,6 +171,8 @@ A0. Pipeline:
 - Prune `TileCache` and `TileSnapshotCache` per plugin on uninstall, on `widget_tile` revocation,
   and when a plugin leaves the launcher list.
 - Staleness from `staleAfterMs`.
+- Phone plugin discovery collects `TILE_SIZES` (it never did, so declared sizes are ignored on
+  the phone), and the list template's `summary` moves into the header once `ListTileLayout` lands.
 
 A1. Layouts for `Music`, `Lines`, `List` at all seven sizes, following the artboards. Rule of
 thumb per size, in this drop order as space shrinks: paragraph, then detail, then section headers;
