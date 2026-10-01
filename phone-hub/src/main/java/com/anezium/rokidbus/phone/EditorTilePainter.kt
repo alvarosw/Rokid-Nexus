@@ -12,6 +12,7 @@ import com.anezium.rokidbus.client.ui.RokidHudTokens
 import com.anezium.rokidbus.hudtiles.TileOp
 import com.anezium.rokidbus.hudtiles.TileRenderInput
 import com.anezium.rokidbus.hudtiles.TileRenderer
+import com.anezium.rokidbus.shared.tile.TileContent
 import com.anezium.rokidbus.shared.tile.TileSize
 import com.anezium.rokidbus.shared.tile.TileSnapshot
 import com.anezium.rokidbus.shared.tile.TileTone
@@ -79,6 +80,8 @@ internal class EditorTilePainter {
                 tone = tone ?: TileTone.OFF,
                 focusAmount = if (selected) 1f else 0f,
                 headerEndInset = if (alert) RokidHudTokens.ICON_SM + RokidHudTokens.SPACE_1 else 0,
+                // Only a cover this hub received; a declared sample or an uncached key is text-only.
+                artwork = (snapshot?.content as? TileContent.Music)?.let { TileArtworkCache.bitmap(snapshot.pluginId, it.artworkKey) },
             ),
             size,
         )

@@ -73,6 +73,7 @@ import com.anezium.rokidbus.shared.plugin.PathRules
 import com.anezium.rokidbus.shared.plugin.PluginCapability
 import com.anezium.rokidbus.shared.plugin.PluginOpenTypes
 import com.anezium.rokidbus.shared.plugin.PluginCapability.Companion.serialize
+import com.anezium.rokidbus.shared.tile.WidgetTileContract
 import com.anezium.rokidbus.ink.InkProblem
 import com.anezium.rokidbus.phone.speech.HubSecretStore
 import com.anezium.rokidbus.phone.speech.InternalAudioAccess
@@ -1188,9 +1189,22 @@ class BusHubService : Service() {
         ) {
             // The hub stamps the authenticated plugin id server-side; a plugin's own claimed
             // `pluginId` in the payload is never trusted.
-            val stamped = JSONObject(envelope.payload.toString()).put("pluginId", sender.principal.descriptor.id)
-            TileSnapshotCache.record(sender.principal.descriptor.id, stamped)
-            envelope.copy(payload = stamped)
+            val pluginId = sender.principal.descriptor.id
+            val stamped = JSONObject(envelope.payload.toString()).put("pluginId", pluginId)
+            val cover = envelope.binary
+            if (cover != null) {
+                val key = WidgetTileContract.artworkKeyOf(stamped)
+                if (!isDecodableTileArtwork(stamped, cover)) {
+                    recordLocalRoute(envelope, senderUid, sender, PluginBusJournal.Verdict.REJECTED, ImageSurfaceContract.ERROR_INVALID_IMAGE)
+                    deliverError(sender.replyBinder, envelope.id, ImageSurfaceContract.ERROR_INVALID_IMAGE)
+                    return
+                }
+                TileArtworkCache.put(pluginId, TileArtworkCache.Artwork(key, stamped.getJSONObject(WidgetTileContract.ARTWORK_FIELD), cover))
+            }
+            // The cover is held here and attached to whichever publish crosses the link.
+            val plain = WidgetTileContract.withoutArtwork(stamped)
+            TileSnapshotCache.record(pluginId, plain)
+            envelope.copy(payload = plain, binary = null)
         } else {
             envelope
         }
@@ -1393,6 +1407,7 @@ class BusHubService : Service() {
             // Same reasoning again for the tile layout: an edit made while disconnected must
             // still land on reconnect.
             executor.execute { pushTileLayoutConfig() }
+            TileArtworkCache.forgetDelivered()
             recomputeTileLeases(homeVisible = true)
             return
         }
@@ -2412,6 +2427,7 @@ class BusHubService : Service() {
         refreshMediaSyncConsent()
         if (key.pluginId !in tilePluginIds()) {
             TileSnapshotCache.remove(key.pluginId)
+            TileArtworkCache.remove(key.pluginId)
             tilePublishCoalescer.remove(key.pluginId)
         }
         notifyLinkState()
@@ -2495,6 +2511,7 @@ class BusHubService : Service() {
         if (!cameraAvailable) cameraCompanionController.onPackageUnavailable(packageName)
         val tilePluginIds = tilePluginIds()
         TileSnapshotCache.retainOnly(tilePluginIds)
+        TileArtworkCache.retainOnly(tilePluginIds)
         tilePublishCoalescer.retainOnly(tilePluginIds)
         notifyLinkState()
         if (::pluginRegistry.isInitialized && isCxrUp()) pluginRegistry.syncLauncherList()
@@ -3347,7 +3364,7 @@ class BusHubService : Service() {
     private fun publishTile(pluginId: String, envelope: BusEnvelope, replyBinder: IBinder?) {
         when (val decision = tilePublishCoalescer.offer(pluginId, envelope)) {
             is TilePublishCoalescer.Decision.Send -> {
-                val errorCode = sendRemote(decision.item)
+                val errorCode = sendTile(pluginId, decision.item)
                 if (errorCode != null) deliverError(replyBinder, envelope.id, errorCode)
             }
             is TilePublishCoalescer.Decision.Held -> scheduleTilePublishFlush()
@@ -3356,10 +3373,35 @@ class BusHubService : Service() {
 
     private fun flushHeldTilePublishes() {
         tilePublishCoalescer.drainDue().forEach { (pluginId, envelope) ->
-            val errorCode = sendRemote(envelope)
+            val errorCode = sendTile(pluginId, envelope)
             if (errorCode != null) log("tile publish flush failed plugin=$pluginId code=$errorCode")
         }
         scheduleTilePublishFlush()
+    }
+
+    /**
+     * Sends a paced tile snapshot, carrying its plugin's cover when the glasses lack that
+     * `artworkKey`. Without a data plane for the bytes the snapshot still goes, text-only; the cover
+     * rides a later publish.
+     */
+    private fun sendTile(pluginId: String, envelope: BusEnvelope): String? {
+        val withCover = TileArtworkCache.forDelivery(pluginId, envelope)
+        if (withCover !== envelope && sendRemote(withCover) == null) {
+            TileArtworkCache.markDelivered(pluginId, WidgetTileContract.artworkKeyOf(envelope.payload))
+            return null
+        }
+        return sendRemote(envelope)
+    }
+
+    /** The cover's description matches its bytes, and the bytes decode as described. */
+    private fun isDecodableTileArtwork(payload: JSONObject, bytes: ByteArray): Boolean {
+        val validation = WidgetTileContract.validateArtwork(payload, bytes)
+        if (validation !is ImageSurfaceValidationResult.Valid) return false
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+        return options.outWidth == validation.metadata.pixelWidth &&
+            options.outHeight == validation.metadata.pixelHeight &&
+            options.outMimeType == validation.metadata.mimeType
     }
 
     private fun scheduleTilePublishFlush() {
