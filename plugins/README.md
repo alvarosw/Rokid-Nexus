@@ -52,3 +52,52 @@ tags**, one stream per plugin, separate from the app's `v*` releases:
 
 Before pushing a plugin tag, set that module's `versionName` and add the
 matching `## <version>` changelog section; release CI rejects either mismatch.
+
+### Fork registry
+
+This fork publishes its own builds of some plugins, signed with the fork key
+(signer SHA-256
+`78a1be1045ba3b2614baa46e306a353a8a6bc3e5d07ba5d587490931d5f56d60`), through
+its own registry at `dist/nexus-plugins.v1.json` on `main`. The phone hub reads
+it before the upstream RokidBrew registry (`FORK_REGISTRY_URL` and
+`UPSTREAM_REGISTRY_URL` in `phone-hub/build.gradle.kts`):
+
+- A plugin listed by the fork comes only from the fork's entry; every other
+  plugin comes from upstream. Matching is by plugin id and package name.
+- Each registry has its own cache. If the fork registry cannot be fetched, its
+  last cached copy is used; if it has never loaded, the Store shows upstream
+  alone. An unreachable upstream never hides the fork's plugins.
+- Android cannot update an app across signing keys, so an update is offered
+  only when the registry entry's `signerSha256` matches the installed copy. A
+  plugin installed from upstream shows a one-time *Switch* in the Store: the
+  user confirms, the system uninstaller removes the old copy (with its data),
+  the fork build is installed, and the plugin's access is approved again.
+
+Publishing a plugin build to the fork registry:
+
+1. Push the plugin tag (`media-v1.0.3`); the release workflow above builds and
+   signs the APK with the fork key and creates the GitHub release.
+2. The workflow's `update-registry` job then runs
+   `tools/registry/upsert-plugin.py` on `main` and opens a pull request with
+   the updated `dist/nexus-plugins.v1.json`. GitHub only lets the job open it
+   when *Settings → Actions → General → Allow GitHub Actions to create and
+   approve pull requests* is enabled; otherwise run the generator by hand:
+
+   ```
+   ANDROID_HOME=/path/to/sdk tools/registry/upsert-plugin.py --tag media-v1.0.3
+   ```
+
+3. Review and merge the pull request. The Store picks the entry up on its next
+   registry refresh.
+
+The generator downloads the release APK, records its `sha256` and size, reads
+the package, version and single signer with `aapt2`/`apksigner` from the SDK
+build-tools, and the Nexus meta-data (`ID`, `API_VERSION`, `CAPABILITIES`,
+`LAUNCHABLE`, `SETTINGS_ACTIVITY`). It rejects an APK whose version or plugin id
+does not match the tag. Listing text, icon and screenshots are copied from the
+upstream registry's entry for the same id, or taken from the plugin's README
+when upstream does not list it; `author` is the repository owner and
+`minHostVersionCode` is carried over unless `--min-host-version-code` is
+passed. Release notes are the GitHub release body. Re-running it for an older
+tag adds that release's notes without moving the served artifact back. The
+file is written sorted by plugin id with a stable field order.
