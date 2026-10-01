@@ -95,7 +95,7 @@ internal object NotificationControl {
         liveInstance?.bandCallbacks(service)
 
     /**
-     * A message arrived while the wearer is in the inbox, so its visible surface redraws.
+     * A message arrived, so the inbox's visible surface redraws and a leased tile republishes.
      *
      * This matters more than it looks: the band stands down while the inbox
      * holds the bus, so if the inbox did not refresh, a message arriving during
@@ -104,7 +104,18 @@ internal object NotificationControl {
      * the time this runs; the visible inbox surface only has to look again.
      */
     fun notifyCaptured(notificationId: String) {
-        main.post { inbox?.onCaptureChanged(notificationId) }
+        main.post {
+            inbox?.onCaptureChanged(notificationId)
+            pluginService?.onInboxChanged()
+        }
+    }
+
+    /**
+     * The tile may read differently without a capture: a reply was sent, the inbox was cleared,
+     * or a hide switch flipped.
+     */
+    fun notifyInboxChanged() {
+        main.post { pluginService?.onInboxChanged() }
     }
 
     fun refreshFromSettings() {

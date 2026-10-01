@@ -50,6 +50,7 @@ class RelayNotificationListener : NotificationListenerService() {
     override fun onListenerDisconnected() {
         RelayDiagnostics.recordListenerDisconnected(this)
         ReplyRepository.clear()
+        NotificationControl.notifyInboxChanged()
         NotificationControl.detach(this)
         runtime.shutdown()
         Log.w(TAG, "notification listener disconnected")
@@ -95,6 +96,7 @@ class RelayNotificationListener : NotificationListenerService() {
     internal fun refreshFromSettings() {
         if (!RelaySettings(this).enabled()) {
             ReplyRepository.clear()
+            NotificationControl.notifyInboxChanged()
             runtime.shutdown()
             return
         }

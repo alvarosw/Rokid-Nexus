@@ -108,6 +108,16 @@
                 android:name="com.anezium.rokidbus.plugin.CAPABILITIES"
                 android:value="surfaces,stt,tts" />
             <meta-data
+                android:name="com.anezium.rokidbus.plugin.OPTIONAL_CAPABILITIES"
+                android:value="widget_tile" />
+            <meta-data
+                android:name="com.anezium.rokidbus.plugin.TILE_SIZES"
+                android:value="1x1,2x1,3x1,1x2,2x2,3x2,3x3" />
+            <!-- The layout editor's size preview shows this until a real tile is published. -->
+            <meta-data
+                android:name="com.anezium.rokidbus.plugin.TILE_PREVIEW"
+                android:resource="@raw/tile_preview" />
+            <meta-data
                 android:name="com.anezium.rokidbus.plugin.RECEIVE_PREFIXES"
                 android:value="/plugin/relay,/system/plugin,/stt,/tts/started,/tts/done" />
             <meta-data

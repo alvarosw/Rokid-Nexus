@@ -1,0 +1,54 @@
+{
+  "contentKey": "preview",
+  "template": "list",
+  "content": {
+    "sections": [
+      {
+        "title": "",
+        "detail": "",
+        "items": [
+          {
+            "title": "Ana Ribeiro",
+            "detail": "WhatsApp",
+            "paragraph": "Leaving now, ten minutes away. Want me to grab bread on the way?",
+            "ageMs": 60000,
+            "leading": { "type": "initials", "text": "AR" }
+          },
+          {
+            "title": "Family",
+            "detail": "WhatsApp",
+            "paragraph": "Dad: dinner moved to 8, bring the speaker",
+            "ageMs": 360000,
+            "leading": { "type": "initials", "text": "FA" }
+          },
+          {
+            "title": "Tomás Prado",
+            "detail": "Telegram",
+            "paragraph": "Did the files come through?",
+            "ageMs": 1080000,
+            "leading": { "type": "initials", "text": "TP" }
+          },
+          {
+            "title": "Júlia Mendes",
+            "detail": "Signal",
+            "paragraph": "ok, see you there",
+            "ageMs": 2520000,
+            "leading": { "type": "initials", "text": "JM" }
+          }
+        ]
+      }
+    ],
+    "summary": "4 new",
+    "summaryShort": "4",
+    "footer": "",
+    "paragraphLines": 2,
+    "overflow": 0
+  },
+  "title": "4 new",
+  "subtitle": "",
+  "badge": "4",
+  "progress": null,
+  "unit": "",
+  "tone": "info",
+  "rows": ["Ana Ribeiro - Leaving now, ten minutes away. Want me to grab bread on the way?", "Family - Dad: dinner moved to 8, bring the speaker", "Tomás Prado - Did the files come through?", "Júlia Mendes - ok, see you there"]
+}
