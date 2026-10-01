@@ -26,6 +26,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- The weather widget's place: coarse only, asked for in its settings, read in the foreground
+         or by the hub service while the widget is placed. Never background location. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <queries>
         <package android:name="com.rokid.sprite.global.aiapp" />
@@ -118,6 +121,12 @@
             android:name=".TileLayoutSettingsActivity"
             android:exported="false"
             android:parentActivityName=".GlassesDisplaySettingsActivity" />
+
+        <activity
+            android:name=".WeatherSettingsActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:parentActivityName=".TileLayoutSettingsActivity" />
 
         <activity
             android:name=".SpeechSettingsActivity"
