@@ -93,6 +93,8 @@ object NexusPluginIcons {
             "bookmark" -> R.drawable.ic_plugin_bookmark
             // The Status system widget's; kept out of the documented plugin keys so it stays distinct.
             "battery" -> R.drawable.ic_plugin_battery
+            // The Weather system widget's; `weather` is a documented plugin key, so it has its own.
+            "forecast" -> R.drawable.ic_plugin_forecast
             else -> null
         }
 

@@ -45,7 +45,17 @@ object SystemWidgets {
         defaultSize = TileSize.SMALL,
     )
 
-    val all: List<SystemWidget> = listOf(CLOCK, STATUS)
+    /** Fed by the phone hub on `/phone/weather`; while it is placed, the phone fetches about every 30 min. */
+    val WEATHER = SystemWidget(
+        id = "sys:weather",
+        displayName = "Weather",
+        description = "Temperature, conditions and forecast",
+        iconKey = "forecast",
+        supportedSizes = listOf(TileSize.SMALL, TileSize.WIDE, TileSize.BANNER, TileSize.LARGE, TileSize.PANEL),
+        defaultSize = TileSize.WIDE,
+    )
+
+    val all: List<SystemWidget> = listOf(CLOCK, STATUS, WEATHER)
 
     fun isSystemId(id: String): Boolean = id.startsWith(ID_PREFIX)
 

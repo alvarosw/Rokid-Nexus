@@ -36,6 +36,8 @@ class SystemWidgetsTest {
         val icons = SystemWidgets.all.map { it.iconKey }
         assertEquals(icons.size, icons.toSet().size)
         icons.forEach { assertFalse(it, it in pluginIcons) }
+        // Any plugin may declare the documented `weather` key; the widget has a glyph of its own.
+        assertFalse(SystemWidgets.WEATHER.iconKey == "weather")
     }
 
     @Test
