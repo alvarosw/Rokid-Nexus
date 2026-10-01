@@ -30,6 +30,11 @@ or `3x3` in `TILE_SIZES` needs hubs with this change.
   beside the name, rows by height and a progress track.
 - Tiles on the glasses and in the phone's layout editor are now drawn by one
   shared renderer, so the editor shows exactly what the glasses show.
+- **System widgets.** The grid can show a clock (time and date, redrawn on the
+  minute) and a status tile (glasses and phone charge, phone link) placed like
+  any tile. The ring passes them by: they are never selected or opened, and
+  selecting the first or last tile scrolls to show a widget beyond it. Adding
+  them from the phone's layout editor follows in a later change.
 
 ### Plugin SDK
 

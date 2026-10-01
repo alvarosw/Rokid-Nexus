@@ -1,0 +1,73 @@
+{
+  "description": "System widgets (debug, until the phone editor can add them): the clock at the top-left, the status below the last plugin tile so it is reached by selecting that tile. Play after plugins8 and hud-grid; tile-sizes-clear removes them.",
+  "envelopes": [
+    {
+      "path": "/glasses/tile-layout/config",
+      "payload": {
+        "version": 2,
+        "entries": [
+          {
+            "pluginId": "sys:clock",
+            "size": "2x1",
+            "col": 0,
+            "row": 0
+          },
+          {
+            "pluginId": "lyrics",
+            "size": "1x1",
+            "col": 2,
+            "row": 0
+          },
+          {
+            "pluginId": "media",
+            "size": "1x1",
+            "col": 3,
+            "row": 0
+          },
+          {
+            "pluginId": "nav",
+            "size": "2x1",
+            "col": 0,
+            "row": 1
+          },
+          {
+            "pluginId": "transit",
+            "size": "1x1",
+            "col": 2,
+            "row": 1
+          },
+          {
+            "pluginId": "relay",
+            "size": "1x1",
+            "col": 3,
+            "row": 1
+          },
+          {
+            "pluginId": "agents",
+            "size": "2x1",
+            "col": 0,
+            "row": 2
+          },
+          {
+            "pluginId": "lens",
+            "size": "1x1",
+            "col": 2,
+            "row": 2
+          },
+          {
+            "pluginId": "tasker",
+            "size": "1x1",
+            "col": 1,
+            "row": 4
+          },
+          {
+            "pluginId": "sys:status",
+            "size": "3x1",
+            "col": 0,
+            "row": 6
+          }
+        ]
+      }
+    }
+  ]
+}

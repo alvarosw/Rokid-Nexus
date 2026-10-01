@@ -228,6 +228,16 @@ debug-only classes.
 - Camera, media sync, self-arm and tiles are not scripted; tile envelopes can still be sent as plain
   envelopes.
 
+### System widgets
+
+Until the phone's layout editor can add them, `widgets` pushes a tile layout with `sys:clock` at the
+top-left and `sys:status` below the last plugin tile (`plugins8` ids); `tile-sizes-clear` removes it.
+Selecting `tasker`, the last tile, scrolls to the status widget; the ring never stops on a widget.
+
+```
+tools/emulator/fake-phone.sh plugins8 hud-grid widgets
+```
+
 ### Ambient layers
 
 `/notice/*`, `/pin/*` and `/activity/*` envelopes without a `seq` get a fresh one, like `/surface/*`.
