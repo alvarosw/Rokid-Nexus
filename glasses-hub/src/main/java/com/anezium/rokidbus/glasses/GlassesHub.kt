@@ -635,6 +635,9 @@ object GlassesHub {
 
     internal fun launcherEntryOpensSurface(pluginId: String): Boolean = pluginId != CAMERA_LAUNCHER_ID
 
+    /** A plugin's own glyph by name, as its launcher icon and activity verbs resolve them. */
+    fun pluginGlyph(pluginId: String, name: String): Drawable? = pluginGlyphCache.drawableFor(pluginId, name)
+
     fun launcherDrawable(context: Context, entry: LauncherEntry): Drawable {
         NexusPluginIcons.drawableForBuiltIn(entry.iconKey)?.let { resourceId ->
             return requireNotNull(context.getDrawable(resourceId))
@@ -1244,7 +1247,11 @@ object GlassesHub {
             }
         }
         launcherEntries = entries
-        appContext?.let { context -> TileCache.retainOnly(context, entries.mapTo(mutableSetOf()) { it.id }) }
+        appContext?.let { context ->
+            val ids = entries.mapTo(mutableSetOf()) { it.id }
+            TileCache.retainOnly(context, ids)
+            TileArtworkCache.retainOnly(context, ids)
+        }
         notifyLauncherEntries()
         log("launcher list synced count=${entries.size}")
     }

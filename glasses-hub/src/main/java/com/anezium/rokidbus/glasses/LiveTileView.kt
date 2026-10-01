@@ -74,7 +74,7 @@ internal class LiveTileView(
     private var artwork: Bitmap? = null
 
     /** The plugin's own glyphs by name, for a list item's glyph leading. */
-    var glyphs: (String) -> Drawable? = { null }
+    private var glyphs: (String) -> Drawable? = { null }
     private var alertShown = false
     private var onScreen = false
     private var input: TileRenderInput? = null
@@ -117,8 +117,10 @@ internal class LiveTileView(
     fun bindEntry(
         entry: GlassesHub.LauncherEntry,
         iconLoader: (Context, GlassesHub.LauncherEntry) -> Drawable = GlassesHub::launcherDrawable,
+        glyphLoader: (String, String) -> Drawable? = GlassesHub::pluginGlyph,
     ) {
         icon = iconLoader(context, entry)
+        glyphs = { name -> glyphLoader(entry.id, name) }
         name = entry.displayName
         relayout()
     }
