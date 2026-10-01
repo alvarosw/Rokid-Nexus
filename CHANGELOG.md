@@ -33,8 +33,13 @@ or `3x3` in `TILE_SIZES` needs hubs with this change.
 - **System widgets.** The grid can show a clock (time and date, redrawn on the
   minute) and a status tile (glasses and phone charge, phone link) placed like
   any tile. The ring passes them by: they are never selected or opened, and
-  selecting the first or last tile scrolls to show a widget beyond it. Adding
-  them from the phone's layout editor follows in a later change.
+  selecting the first or last tile scrolls to show a widget beyond it. The
+  phone's layout editor adds them ("+ ADD WIDGET"), moves and sizes them like
+  tiles and removes them; a widget shows a "SYSTEM" chip and previews with
+  sample content. Status has a battery icon of its own, and a grid of widgets
+  only no longer reads "WAITING FOR PHONE".
+- Fix the phone layout editor dropping system widgets on save, which the next
+  glasses connection then erased from the glasses too.
 
 ### Plugin SDK
 

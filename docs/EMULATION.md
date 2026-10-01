@@ -230,7 +230,7 @@ debug-only classes.
 
 ### System widgets
 
-Until the phone's layout editor can add them, `widgets` pushes a tile layout with `sys:clock` at the
+Without a phone to add them in the layout editor, `widgets` pushes a tile layout with `sys:clock` at the
 top-left and `sys:status` below the last plugin tile (`plugins8` ids); `tile-sizes-clear` removes it.
 Selecting `tasker`, the last tile, scrolls to the status widget; the ring never stops on a widget.
 
