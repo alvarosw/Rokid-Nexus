@@ -2368,7 +2368,22 @@ class BusHubService : Service() {
         revokePrincipal(key)
         cameraConsumerReadiness.recompute()
         refreshMediaSyncConsent()
+        if (key.pluginId !in tilePluginIds()) TileSnapshotCache.remove(key.pluginId)
         notifyLinkState()
+    }
+
+    /**
+     * The plugins whose tile the launcher can show: launchable, enabled, and holding the
+     * `widget_tile` grant. A cached tile outside this set belongs to a plugin that was
+     * uninstalled, revoked or dropped from the launcher list.
+     */
+    private fun tilePluginIds(): Set<String> {
+        if (!::pluginRegistry.isInitialized) return emptySet()
+        return pluginRegistry.catalog().launchableEntries.mapNotNullTo(mutableSetOf()) { entry ->
+            val principal = entry.principal ?: return@mapNotNullTo null
+            val grant = pluginGrantStore.stateFor(principal) as? PluginGrantState.Approved
+            entry.id?.takeIf { grant != null && PluginCapability.WIDGET_TILE in grant.capabilities }
+        }
     }
 
     private fun registerPluginPackageReceiver() {
@@ -2433,6 +2448,7 @@ class BusHubService : Service() {
                 cameraConsumerReadiness.isApprovedCameraConsumer(principal)
         }
         if (!cameraAvailable) cameraCompanionController.onPackageUnavailable(packageName)
+        TileSnapshotCache.retainOnly(tilePluginIds())
         notifyLinkState()
         if (::pluginRegistry.isInitialized && isCxrUp()) pluginRegistry.syncLauncherList()
     }

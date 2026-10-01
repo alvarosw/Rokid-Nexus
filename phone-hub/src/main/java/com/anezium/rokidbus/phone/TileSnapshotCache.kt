@@ -30,5 +30,10 @@ internal object TileSnapshotCache {
 
     fun get(pluginId: String): TileSnapshot? = synchronized(lock) { snapshots[pluginId] }
 
+    fun remove(pluginId: String) = synchronized(lock) { snapshots.remove(pluginId) }
+
+    /** Keeps only [pluginIds]: the plugins that can still put a tile in the launcher. */
+    fun retainOnly(pluginIds: Set<String>) = synchronized(lock) { snapshots.keys.retainAll(pluginIds) }
+
     fun clear() = synchronized(lock) { snapshots.clear() }
 }
