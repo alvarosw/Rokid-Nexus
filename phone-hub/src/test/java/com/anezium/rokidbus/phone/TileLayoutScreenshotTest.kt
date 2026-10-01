@@ -178,15 +178,27 @@ class TileLayoutScreenshotTest {
                 ),
             ),
         )
-        fun snap(id: String, title: String, unit: String, tone: TileTone, subtitle: String = "") =
-            TileSnapshot(id, "k", title, unit = unit, tone = tone, subtitle = subtitle)
+        fun snap(
+            id: String,
+            title: String,
+            unit: String,
+            tone: TileTone,
+            subtitle: String = "",
+            rows: List<String> = emptyList(),
+            progress: Float? = null,
+            badge: String = "",
+        ) = TileSnapshot(id, "k", title, subtitle, badge, progress, unit, tone, rows)
         val snapshots = mapOf(
             "plugin0" to snap("plugin0", "Next bus in 12 min", "", TileTone.OK, "Line 4 to Central"),
             "plugin1" to snap("plugin1", "7", "new", TileTone.INFO),
-            "plugin2" to snap("plugin2", "3", "tasks", TileTone.OK, "Today")
-                .copy(rows = listOf("Call Ana", "Buy milk", "Send report"), progress = 0.66f),
-            "plugin4" to snap("plugin4", "Sync", "", TileTone.OFF, "Photos")
-                .copy(rows = listOf("IMG_0412", "IMG_0413", "IMG_0414", "IMG_0415"), progress = 0.3f, badge = "42%"),
+            "plugin2" to snap(
+                "plugin2", "3", "tasks", TileTone.OK, "Today",
+                rows = listOf("Call Ana", "Buy milk", "Send report"), progress = 0.66f,
+            ),
+            "plugin4" to snap(
+                "plugin4", "Sync", "", TileTone.OFF, "Photos",
+                rows = listOf("IMG_0412", "IMG_0413", "IMG_0414", "IMG_0415"), progress = 0.3f, badge = "42%",
+            ),
         )
         val state = TileLayoutEditorState(tiles, layout, layout)
         state.select("plugin2")
