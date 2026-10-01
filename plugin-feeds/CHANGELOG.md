@@ -1,5 +1,15 @@
 # Changelog — Feeds
 
+## 1.1.0
+
+- Live grid tile (optional `widget_tile` capability, all seven tile sizes): up
+  to six posts of the default timeline with author, handle, text, media marker
+  and age, and a "N new" summary. Fetched once when the hub's tile lease starts
+  and once per hub refresh, never on a timer of the plugin's own. X (WebView)
+  is never used for the tile; with that default the tile reads Bluesky.
+- The layout editor previews the tile with sample posts until a real one is
+  published.
+
 ## 1.0.2
 
 - Android 11 support: the plugin now installs on Android 11 (API 30) phones.
