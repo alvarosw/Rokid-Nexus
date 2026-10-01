@@ -1244,6 +1244,7 @@ object GlassesHub {
             }
         }
         launcherEntries = entries
+        appContext?.let { context -> TileCache.retainOnly(context, entries.mapTo(mutableSetOf()) { it.id }) }
         notifyLauncherEntries()
         log("launcher list synced count=${entries.size}")
     }

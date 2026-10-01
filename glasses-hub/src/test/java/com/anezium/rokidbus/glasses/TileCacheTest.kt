@@ -1,6 +1,8 @@
 package com.anezium.rokidbus.glasses
 
+import com.anezium.rokidbus.shared.tile.TileContent
 import com.anezium.rokidbus.shared.tile.TileSnapshot
+import com.anezium.rokidbus.shared.tile.WidgetTileContract
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -40,8 +42,39 @@ class TileCacheTest {
         TileCache.clear(context)
         TileCache.put(context, snapshot(), nowElapsedRealtime = 0L)
         val cached = TileCache.get(context, "transit")!!
-        assertTrue(!TileCache.isStale(cached, nowElapsedRealtime = TileCache.STALENESS_THRESHOLD_MS - 1))
-        assertTrue(TileCache.isStale(cached, nowElapsedRealtime = TileCache.STALENESS_THRESHOLD_MS))
+        val threshold = WidgetTileContract.DEFAULT_STALE_AFTER_MS
+        assertTrue(!TileCache.isStale(cached, nowElapsedRealtime = threshold - 1))
+        assertTrue(TileCache.isStale(cached, nowElapsedRealtime = threshold))
+    }
+
+    @Test
+    fun `staleness follows the snapshot's own staleAfterMs`() {
+        TileCache.clear(context)
+        val shortLived = TileSnapshot(
+            pluginId = "transit",
+            contentKey = "eta",
+            content = TileContent.Generic(title = "12"),
+            staleAfterMs = 2 * 60_000L,
+        )
+        TileCache.put(context, shortLived, nowElapsedRealtime = 0L)
+        val cached = TileCache.get(context, "transit")!!
+        assertTrue(!TileCache.isStale(cached, nowElapsedRealtime = 2 * 60_000L - 1))
+        assertTrue(TileCache.isStale(cached, nowElapsedRealtime = 2 * 60_000L))
+    }
+
+    @Test
+    fun `an entry from a prior boot is reported exactly at its stale boundary`() {
+        TileCache.clear(context)
+        val longLived = TileSnapshot(
+            pluginId = "transit",
+            contentKey = "eta",
+            content = TileContent.Generic(title = "12"),
+            staleAfterMs = 60 * 60_000L,
+        )
+        TileCache.put(context, longLived, nowElapsedRealtime = 500_000L)
+        val cached = TileCache.get(context, "transit")!!
+        assertEquals(60 * 60_000L, TileCache.ageMs(cached, nowElapsedRealtime = 1_000L))
+        assertTrue(TileCache.isStale(cached, nowElapsedRealtime = 1_000L))
     }
 
     @Test
@@ -57,5 +90,23 @@ class TileCacheTest {
         TileCache.put(context, snapshot("b"), 0L)
         assertEquals("a", TileCache.get(context, "a")?.snapshot?.pluginId)
         assertEquals("b", TileCache.get(context, "b")?.snapshot?.pluginId)
+    }
+
+    @Test
+    fun `retainOnly drops plugins that left the launcher list`() {
+        TileCache.clear(context)
+        TileCache.put(context, snapshot("a"), 0L)
+        TileCache.put(context, snapshot("b"), 0L)
+        TileCache.retainOnly(context, setOf("b", "c"))
+        assertNull(TileCache.get(context, "a"))
+        assertEquals("b", TileCache.get(context, "b")?.snapshot?.pluginId)
+    }
+
+    @Test
+    fun `retainOnly with an empty launcher list empties the cache`() {
+        TileCache.clear(context)
+        TileCache.put(context, snapshot("a"), 0L)
+        TileCache.retainOnly(context, emptySet())
+        assertNull(TileCache.get(context, "a"))
     }
 }
