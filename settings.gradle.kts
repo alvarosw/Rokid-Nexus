@@ -21,6 +21,7 @@ dependencyResolutionManagement {
 rootProject.name = "RokidNexus"
 include(":shared")
 include(":bus-client")
+include(":hud-tiles")
 include(":plugin-lyrics")
 include(":plugin-media")
 include(":plugin-transit")
