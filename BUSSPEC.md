@@ -270,6 +270,8 @@ reserved, hub-to-plugin paths only to the verified principal:
 - `/system/plugin/open`
 - `/system/plugin/close`
 - `/system/plugin/input`
+- `/system/plugin/tile/active`
+- `/system/plugin/tile/refresh`
 - `/glasses/device-info`
 
 Lifecycle payloads include `version`, `type`, `id`, and `pluginId`. On
@@ -304,6 +306,9 @@ final `/system/plugin/close` with `type:"closed"` and unbinds it. An absent or
 unknown close type always means a full close; old SDKs therefore fail closed.
 There is no background slot without an active audio lease, and this lifecycle
 adds no descriptor field, capability, grant, or approval step.
+
+`/system/plugin/tile/active` and `/system/plugin/tile/refresh` carry the tile
+lease (see "Tile lease" under the widget tile protocol below).
 
 `/glasses/device-info` is a zero-capability, phone-hub-to-plugin version-1 JSON
 message carrying `type=glasses_device_info`, `id`, `pluginId`, `deviceName`,
@@ -883,6 +888,45 @@ quietly" handling as `SURFACE_BUSY` elsewhere. The tile subsystem
 (`TileController`/`TileCache`/`TileRateLimiter`) only runs while the wearer's
 launcher is in grid mode (`HudModeContract.MODE_GRID`); in list mode it does not
 start at all.
+
+Before forwarding, the phone hub paces each plugin's publishes inside the glasses'
+budget (`TilePublishCoalescer`: a burst of 4, then one per 15 s, against the
+glasses' 5 and one per 12 s). A publish past it is held rather than dropped; a
+newer one replaces the held one, which is sent as soon as the budget refills, so
+the latest state always reaches the glasses while the link is up.
+
+A tile is shown as stale once it is as old as its own `staleAfterMs`. A snapshot
+cached before a glasses reboot is reported at exactly that age. Each launcher
+list the phone sends prunes the glasses' cache to the plugins in it, and the
+phone forgets its own copy of a plugin's last tile when the plugin is
+uninstalled, loses `widget_tile`, or leaves the launcher.
+
+### Tile lease
+
+The phone hub decides which plugins' tiles are live: a plugin holds a *tile
+lease* while grid mode is on, the glasses link is up, its tile is placed in the
+grid (the glasses' resolution of the stored layout over the launcher list; with
+no stored layout, every launchable plugin), and it holds `widget_tile`. The hub
+recomputes the lease on every change to those inputs. While a plugin holds it,
+the hub keeps the plugin service bound, as for an open plugin, and sends these
+owner-scoped lifecycle messages (`version`, `type`, `id`, `pluginId`):
+
+- `/system/plugin/tile/active`, `type` `active` or `inactive`, with the boolean
+  `active`. Sent once the bound plugin has registered and again after a binder
+  restart; `active:false` is sent when the lease ends, after which the hub
+  unbinds.
+- `/system/plugin/tile/refresh`, `type` `refresh`: fetch once, publish, return to
+  dormant. Sent when the lease is delivered, when the glasses home becomes
+  visible again (the phone uses glasses link-up, a grid mode or layout change, and
+  the foreground plugin closing), and by a timer while the lease lasts, never
+  more than once per 15 minutes per plugin.
+
+A plugin that does not register within 5 s of the bind is unbound and is not
+bound again until its lease ends and is granted anew. Grants, ends, failures and
+refreshes are recorded in the plugin bus journal (`LEASE_GRANTED`,
+`LEASE_ENDED`, `REFRESH`, `BIND_FAILED`, `REGISTRATION_TIMEOUT`,
+`DELIVERY_FAILED`). A hub that predates the lease never sends these paths; an
+SDK that predates them hands them to the raw `onNexusMessage` hook.
 
 ### Widget tile protocol v2 (templates)
 

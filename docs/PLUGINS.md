@@ -202,7 +202,8 @@ surface: a `show` while the HUD is idle adopts its sender as foreground and
 delivers a real `PLUGIN_OPEN`; a `show` or `update` while another plugin owns
 the HUD returns `SURFACE_BUSY`. Give up quietly rather than retry-looping.
 Android may keep an enabled notification-listener component alive, but that
-listener must remain idle until the plugin is open. While open, the SDK
+listener must remain idle until the plugin is open or holds the tile lease
+described below. While open, the SDK
 promotes the plugin service to a special-use foreground service so OEM app
 freezers leave it alone; when closed, it returns the plugin to dormant state.
 
@@ -236,14 +237,21 @@ a general background-work permission. A pin can indicate listening without
 keeping the display awake; use a short TTL renewed by audio frames so it expires
 after a crash. See [the SDK example](PLUGIN_SDK.md#let-the-display-sleep-while-listening).
 
-**Grid tile publishing is the fourth**, and it grants no plugin new background time
-at all: it adds a side effect to a wake that already exists. From inside any of the
-first three exceptions above — Transit's location-driven wake, Relay's
-notification-listener wake, Media Deck's `MediaSession` callback — a plugin holding
-`widget_tile` may call `nexusWidgetTileSession(id).publish(snapshot)` to update its
-closed-state grid tile. As with Pins, this buys you one push, not a foothold: it does
-not open a surface, does not adopt foreground, and does not license a new wake of its
-own — only a plugin already awake for a legitimate reason may publish. See
+**The tile lease is the fourth**, and the hub holds it, not the plugin. A
+plugin with `widget_tile` holds a lease only while its tile is live: grid mode
+is on, the glasses are linked, its tile is placed in the grid, and the grant
+stands. The hub binds the plugin for the length of the lease and tells it so
+with `onNexusTileActive(true)`; until `onNexusTileActive(false)` it may watch
+its own event sources (a `MediaSession` callback, its notification listener)
+and publish its tile with `nexusWidgetTileSession(id).publish(snapshot)`. A
+poll-based plugin waits for `onNexusTileRefresh()` instead, which the hub sends
+on its own cadence (when the glasses home comes back into view, and at most
+every 15 minutes), and does one fetch, one publish, and nothing more. The lease
+buys a tile, not a foothold: no surface is opened, nothing is adopted as
+foreground, no notification is posted, and the plugin never schedules its own
+wake, timer, or refresh to keep a tile current. When the lease ends, return to
+dormant at once. A plugin may still publish from inside one of the first three
+exceptions, but publishing is never a reason to wake. See
 [the Widget tiles section of the SDK reference](PLUGIN_SDK.md#widget-tiles).
 
 The SDK always constructs the notification object required for the session
