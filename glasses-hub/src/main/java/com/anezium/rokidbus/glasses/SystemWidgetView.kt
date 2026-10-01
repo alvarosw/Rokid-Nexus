@@ -37,7 +37,8 @@ internal class SystemWidgetView(
     private val redraw = Runnable { relayout() }
 
     init {
-        background = HomeChrome.blended(0f, RokidHudTokens.LINE, RokidHudTokens.BORDER_DEFAULT)
+        // Dashed at `line` with no fill, as the reference draws a widget: it reads as not selectable.
+        background = HomeChrome.blended(0f, RokidHudTokens.LINE, RokidHudTokens.BORDER_DEFAULT, restDashed = true)
         relayout()
     }
 

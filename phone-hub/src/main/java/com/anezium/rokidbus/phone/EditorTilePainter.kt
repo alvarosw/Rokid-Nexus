@@ -1,6 +1,7 @@
 package com.anezium.rokidbus.phone
 
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Path
@@ -58,6 +59,7 @@ internal class EditorTilePainter {
         fill.color = when {
             lifted -> LIFTED_FILL
             selected -> RokidHudTokens.GREEN_12
+            widget != null -> Color.TRANSPARENT
             else -> RokidHudTokens.GREEN_06
         }
         canvas.drawRoundRect(rect, RADIUS, RADIUS, fill)
@@ -65,11 +67,14 @@ internal class EditorTilePainter {
         // Resting border intensity as the glasses draw it: the fallback tile at `line`, a live one by tone.
         stroke.color = when {
             selected -> RokidHudTokens.GREEN_100
+            widget != null -> RokidHudTokens.LINE
             snapshot == null -> RokidHudTokens.LINE
             tone == TileTone.OK || tone == TileTone.WARN || tone == TileTone.CRITICAL -> RokidHudTokens.GREEN_72
             else -> RokidHudTokens.GREEN_48
         }
-        stroke.pathEffect = if (tone == TileTone.WARN) DashPathEffect(floatArrayOf(4f, 3f), 0f) else null
+        // A system widget rests dashed, as the reference draws it; selected it takes the solid frame.
+        val dashed = tone == TileTone.WARN || (widget != null && !selected)
+        stroke.pathEffect = if (dashed) DashPathEffect(floatArrayOf(4f, 3f), 0f) else null
         tmp.set(rect)
         tmp.inset(borderWidth / 2f, borderWidth / 2f)
         canvas.drawRoundRect(tmp, RADIUS - borderWidth / 2f, RADIUS - borderWidth / 2f, stroke)
