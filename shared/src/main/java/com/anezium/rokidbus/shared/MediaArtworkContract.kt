@@ -3,7 +3,8 @@ package com.anezium.rokidbus.shared
 import org.json.JSONObject
 
 /**
- * Binary album-art validation for a media v1 surface.
+ * Binary album-art validation for a media v1 surface, and for a music tile's artwork
+ * (`/tile/publish`), which carries the same `artwork` object.
  *
  * The actual JPEG/PNG rules intentionally stay owned by [ImageSurfaceContract].
  * This adapter only maps the nested media artwork metadata onto that contract and
@@ -23,7 +24,15 @@ object MediaArtworkContract {
         if (integer(payload.opt("mediaVersion")) != MEDIA_VERSION) {
             return invalid("mediaVersion must be 1")
         }
-        val artwork = payload.optJSONObject("artwork") ?: return invalid("artwork is required")
+        return validateArtwork(payload.opt("contentKey"), payload.optJSONObject("artwork"), binary)
+    }
+
+    /**
+     * The nested `artwork` object and its binary body alone, keyed by [contentKey]: a media
+     * surface's artwork, or a music tile's under its `artworkKey`.
+     */
+    fun validateArtwork(contentKey: Any?, artwork: JSONObject?, binary: ByteArray?): ImageSurfaceValidationResult {
+        if (artwork == null) return invalid("artwork is required")
         if (artwork.opt("encoding") != ENCODING_BINARY) {
             return invalid("artwork encoding must be binary")
         }
@@ -31,7 +40,7 @@ object MediaArtworkContract {
         val imagePayload = JSONObject()
             .put("kind", ImageSurfaceContract.KIND)
             .put("imageVersion", ImageSurfaceContract.VERSION)
-            .put("contentKey", payload.opt("contentKey"))
+            .put("contentKey", contentKey)
             .put("mimeType", artwork.opt("mimeType"))
             .put("pixelWidth", artwork.opt("pixelWidth"))
             .put("pixelHeight", artwork.opt("pixelHeight"))
@@ -44,6 +53,26 @@ object MediaArtworkContract {
             return invalid("media artwork edge exceeds $MAX_EDGE_PIXELS")
         }
         return validation
+    }
+
+    /**
+     * The `artwork` object describing [bytes] (a JPEG or PNG, told by its signature), or null when
+     * the bytes are not an image these limits accept.
+     */
+    fun describe(bytes: ByteArray): JSONObject? {
+        val mimeType = when {
+            bytes.size >= 3 && bytes[0] == 0xff.toByte() && bytes[1] == 0xd8.toByte() -> ImageSurfaceContract.MIME_JPEG
+            bytes.size >= 8 && bytes[0] == 0x89.toByte() && bytes[1] == 'P'.code.toByte() -> ImageSurfaceContract.MIME_PNG
+            else -> return null
+        }
+        val dimensions = ImageSurfaceContract.dimensions(mimeType, bytes) ?: return null
+        val artwork = JSONObject()
+            .put("encoding", ENCODING_BINARY)
+            .put("mimeType", mimeType)
+            .put("pixelWidth", dimensions.width)
+            .put("pixelHeight", dimensions.height)
+            .put("sha256", ImageSurfaceContract.sha256(bytes))
+        return artwork.takeIf { validateArtwork("describe", it, bytes) is ImageSurfaceValidationResult.Valid }
     }
 
     private fun integer(value: Any?): Int? {

@@ -1,5 +1,8 @@
 package com.anezium.rokidbus.shared.tile
 
+import com.anezium.rokidbus.shared.ImageSurfaceContract
+import com.anezium.rokidbus.shared.ImageSurfaceValidationResult
+import com.anezium.rokidbus.shared.MediaArtworkContract
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -104,6 +107,9 @@ object WidgetTileContract {
     const val MAX_PARAGRAPH_LINES = 6
     const val MAX_PAYLOAD_BYTES = 12 * 1024
 
+    /** The payload field describing artwork bytes that ride with a music publish. */
+    const val ARTWORK_FIELD = "artwork"
+
     const val DEFAULT_STALE_AFTER_MS = 10 * 60 * 1000L
     const val MIN_STALE_AFTER_MS = 60 * 1000L
     const val MAX_STALE_AFTER_MS = 24 * 60 * 60 * 1000L
@@ -161,6 +167,37 @@ object WidgetTileContract {
             )
         }.getOrNull()
     }
+
+    /**
+     * The music template's `artworkKey` in a `/tile/publish` payload, or "" when the payload is
+     * not music or names no artwork. A tile's artwork is cached and looked up under it.
+     */
+    fun artworkKeyOf(payload: JSONObject): String {
+        if (payload.optString("template") != TileContent.Template.MUSIC.wireValue) return ""
+        val key = payload.optJSONObject("content")?.optString("artworkKey").orEmpty()
+        return if (key.length <= MAX_CONTENT_KEY_CHARS) key else ""
+    }
+
+    /**
+     * A publish that carries artwork bytes: the payload's `artwork` object (as a media surface's,
+     * see [MediaArtworkContract]) must describe [binary], and the payload must be music with an
+     * `artworkKey`.
+     */
+    fun validateArtwork(payload: JSONObject, binary: ByteArray?): ImageSurfaceValidationResult {
+        val key = artworkKeyOf(payload)
+        if (key.isBlank()) {
+            return ImageSurfaceValidationResult.Invalid(ImageSurfaceContract.ERROR_INVALID_IMAGE, "artwork needs a music artworkKey")
+        }
+        return MediaArtworkContract.validateArtwork(key, payload.optJSONObject(ARTWORK_FIELD), binary)
+    }
+
+    /** [payload] with its artwork description removed: what travels when the bytes do not. */
+    fun withoutArtwork(payload: JSONObject): JSONObject =
+        JSONObject(payload.toString()).apply { remove(ARTWORK_FIELD) }
+
+    /** [payload] describing [artwork], an object from [MediaArtworkContract.describe]. */
+    fun withArtwork(payload: JSONObject, artwork: JSONObject): JSONObject =
+        JSONObject(payload.toString()).put(ARTWORK_FIELD, JSONObject(artwork.toString()))
 
     /**
      * What a template looks like in the legacy fields, and what a renderer draws for a template it
