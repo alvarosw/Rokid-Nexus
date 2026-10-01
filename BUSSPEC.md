@@ -2049,13 +2049,46 @@ glasses capabilities announce. `size` is one of `1x1 2x1 3x1 1x2 2x2 3x2 3x3`.
   `version < 1`) but ignore `col`/`row`, pack the entries in order, and drop any
   entry whose `size` they do not know (the 3-wide shapes).
 - System widgets: an entry's `pluginId` may be a reserved `sys:` id (`sys:clock`,
-  `sys:status`; `sys:weather` is reserved). `:` is invalid in a plugin id, so no
+  `sys:status`, `sys:weather`). `:` is invalid in a plugin id, so no
   plugin can collide. The entry is what enables the widget: present in the
   layout means shown, absent means not shown; there is no other switch. The
   glasses place a widget they know like any stored entry, draw it from their own
   data, and never select or open it (it is not a launcher entry). A `sys:` id the
   glasses do not know is dropped like an entry for an uninstalled plugin, and
   glasses that predate widgets drop every one the same way.
+
+## Phone weather (`/phone/weather`)
+
+Phone hub → glasses hub only, for the `sys:weather` system widget. **Hub-only:**
+`PathRules` lists it with `/tts/cancel`, so the phone hub refuses it from every
+plugin whatever its grants (`SYSTEM_ROUTE_DENIED`, debug legacy callers included)
+and no plugin may declare `/phone` or `/phone/weather` as a receive prefix. It is
+never a plugin capability.
+
+```json
+{"version":1,"seq":1790865000000,"ageMs":0,
+ "location":"Lisbon","temperature":19,"unit":"c","code":3,"condition":"Overcast",
+ "high":23,"low":17,
+ "hourly":[{"label":"11:00","temperature":20,"code":3}],
+ "daily":[{"label":"Fri","high":27,"low":17,"code":3}]}
+```
+
+- `seq` (required) orders readings: wall-clock seeded on the phone, like
+  `/phone/battery`; the glasses drop a `seq` not above the last one they accepted.
+- `ageMs` (required, 0..7 days): how old the reading was when sent. The glasses
+  add the time since receipt on their elapsed clock; neither wall clock matters.
+- Temperatures are integers in `unit` (`c` or `f`, -130..140), already converted
+  on the phone (the wearer's setting, else the phone's region). `code` is the WMO
+  weather code (0..99) and `condition` its text (≤ 24 chars); `location` is a
+  place name (≤ 40 chars), never coordinates.
+- `hourly` are the hours after the current one and `daily` the days after today,
+  at most 6 each, with phone-formatted `label`s (1..8 chars). Absent means empty.
+- Any field out of bounds rejects the whole message; the glasses keep the last
+  good reading. They persist it, and draw it stale (dimmed, age in the header)
+  once it is 2 hours old, or when it was received in an earlier boot.
+- The phone sends only while the stored layout places `sys:weather` and the link
+  is up: after a fetch (about every 30 minutes) and, with its current age, on
+  link-up and on the glasses' capabilities announce.
 
 ## Transport selection (hub-side routing)
 

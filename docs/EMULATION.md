@@ -238,6 +238,23 @@ Selecting `tasker`, the last tile, scrolls to the status widget; the ring never 
 tools/emulator/fake-phone.sh plugins8 hud-grid widgets
 ```
 
+### Weather
+
+`weather` plays a `/phone/weather` reading as the phone hub sends it (Lisbon, recorded from
+Open-Meteo); the fake phone stamps a fresh `seq` on every `/phone/` envelope, so it replays like a
+new fetch. Edit its `ageMs` (e.g. `10800000`) to see a stale reading: dimmed, with `3H AGO` in the
+header. `weather-layout` places a widgets-only grid (weather 2x1, clock 2x1, status 3x1 below the
+screen) on which each ring step scrolls one row and nothing is selected; `weather-layout-large`
+places the weather at 3x2. `tile-sizes-clear` removes either layout. The glasses persist the
+reading (`phone_weather` preferences), so it survives a hub restart.
+
+```
+tools/emulator/fake-phone.sh empty hud-grid weather-layout weather
+tools/emulator/ring.sh launcher; tools/emulator/ring.sh fwd     # scrolls one row
+tools/emulator/fake-phone.sh weather-layout-large
+tools/emulator/fake-phone.sh tile-sizes-clear
+```
+
 ### Ambient layers
 
 `/notice/*`, `/pin/*` and `/activity/*` envelopes without a `seq` get a fresh one, like `/surface/*`.
