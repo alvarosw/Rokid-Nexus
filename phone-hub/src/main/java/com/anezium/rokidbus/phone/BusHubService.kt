@@ -220,6 +220,7 @@ class BusHubService : Service() {
 
     private val executor = Executors.newCachedThreadPool()
     private val speechBusExecutor = SerialExecutor(executor)
+    private val debugLane = SerialExecutor(executor)
     private val audioHandler = Handler(Looper.getMainLooper())
     private val pinHandler = Handler(Looper.getMainLooper())
     private val inkResultHandler = Handler(Looper.getMainLooper())
@@ -234,6 +235,7 @@ class BusHubService : Service() {
     private val pendingTilePublishes = PendingTilePublishes()
     private val glassesHomeVisibility = GlassesHomeVisibility(
         scheduler = MainThreadExternalPluginScheduler(),
+        graceMs = { debugScreenOffGraceMs ?: GlassesHomeVisibility.SCREEN_OFF_LEASE_GRACE_MS },
         onScreenOffGraceElapsed = { recomputeTileLeases() },
     )
     @Volatile private var updateCheckLoopStopped = true
@@ -3372,6 +3374,10 @@ class BusHubService : Service() {
 
     private fun sendRemote(envelope: BusEnvelope): String? {
         if (SppKeyProvisioning.isReserved(envelope.path)) return "INVALID_PATH"
+        if (debugOutboundInterceptor?.invoke(envelope) == true) {
+            recordRemoteTransport(envelope, PluginBusJournal.Verdict.OK, "FAKE")
+            return null
+        }
         if (envelope.binary != null) {
             if (sppSession == null) {
                 recordRemoteTransport(envelope, PluginBusJournal.Verdict.REJECTED, "NO_DATA_PLANE")
@@ -4950,7 +4956,7 @@ class BusHubService : Service() {
             .notify(NOTIFICATION_ID, buildStatusNotification(state))
     }
 
-    private fun linkState(): Int = PhoneLinkState.compose(
+    private fun linkState(): Int = debugLinkBits ?: PhoneLinkState.compose(
         cxrControlUp = isCxrUp(),
         sppDataUp = sppSession != null && socket?.isConnected == true,
         glassesBondedOrPhoneConnected = isGlassesBonded(),
@@ -4963,7 +4969,8 @@ class BusHubService : Service() {
             pickBondedDevice() != null
 
     private fun isCxrUp(): Boolean =
-        cxrConnected && glassBtConnected && cxrLink?.isServiceConnected() == true
+        debugLinkBits?.let { it and LinkStateBits.CXR_CONTROL_UP != 0 }
+            ?: (cxrConnected && glassBtConnected && cxrLink?.isServiceConnected() == true)
 
     private fun notifyGlassesAiButton(active: Boolean) {
         registrations.forEach { registration ->
@@ -5460,6 +5467,43 @@ class BusHubService : Service() {
 
     companion object {
         @Volatile private var activeInstance: BusHubService? = null
+
+        // Debug-build seams for the fake-glasses harness (docs/EMULATION.md). All null in normal
+        // operation; the only way to set them is the debug* functions below, which refuse a build
+        // that is not debuggable.
+        @Volatile private var debugOutboundInterceptor: ((BusEnvelope) -> Boolean)? = null
+        @Volatile private var debugLinkBits: Int? = null
+        @Volatile private var debugScreenOffGraceMs: Long? = null
+
+        private fun isDebuggable(context: android.content.Context): Boolean =
+            context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+
+        /** Consumes outbound envelopes as if they had crossed a link; true means consumed. */
+        internal fun debugSetOutboundInterceptor(
+            context: android.content.Context,
+            interceptor: ((BusEnvelope) -> Boolean)?,
+        ) {
+            if (isDebuggable(context)) debugOutboundInterceptor = interceptor
+        }
+
+        /** Forces the link state bits (null restores the real ones) and announces the change. */
+        internal fun debugSetLink(context: android.content.Context, bits: Int?) {
+            if (!isDebuggable(context)) return
+            debugLinkBits = bits
+            // The lane the transport callbacks effectively use: a background thread, never main.
+            activeInstance?.let { service -> service.debugLane.execute { service.notifyLinkState() } }
+        }
+
+        /** Hands an envelope to the router as if it had arrived over SPP or CXR. */
+        internal fun debugInjectRemote(context: android.content.Context, envelope: BusEnvelope) {
+            if (!isDebuggable(context)) return
+            activeInstance?.let { service -> service.debugLane.execute { service.routeRemote(envelope) } }
+        }
+
+        /** Replaces the screen-off lease grace (null restores the default). */
+        internal fun debugSetScreenOffGraceMs(context: android.content.Context, graceMs: Long?) {
+            if (isDebuggable(context)) debugScreenOffGraceMs = graceMs
+        }
         private val lastGlassesSetupUserIntentAtMillis = AtomicLong(0L)
 
         // Process-wide so the inspector can read events across service restarts.
