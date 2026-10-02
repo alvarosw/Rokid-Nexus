@@ -28,6 +28,7 @@ import com.anezium.rokidbus.shared.FrameProtocol
 import com.anezium.rokidbus.shared.SppKeyProvisioning
 import com.anezium.rokidbus.shared.GlassesAccessibilityCheckContract
 import com.anezium.rokidbus.shared.GlassesHubCapabilitiesContract
+import com.anezium.rokidbus.shared.HomeVisibilityContract
 import com.anezium.rokidbus.shared.GlassesKeyboardContract
 import com.anezium.rokidbus.shared.GlassesKeyboardReply
 import com.anezium.rokidbus.shared.GlassesRepairContract
@@ -207,6 +208,7 @@ object GlassesHub {
         val applicationContext = context.applicationContext
         appContext = applicationContext
         GlassesKeyboardKeeper.start(applicationContext)
+        HomeVisibilityReporter.start(applicationContext)
         RemoteInputHubBridge.initialize { path, payload ->
             sendRemote(BusEnvelope(path = path, payload = payload)) == null
         }
@@ -276,11 +278,13 @@ object GlassesHub {
             RemotePointerHubBridge.onLinkLost()
             SurfaceController.onPhoneLinkLost()
             NoticeController.onPhoneLinkLost()
+            HomeVisibilityReporter.onLinkDown()
         }
         notifyLinkState()
         if (connected) {
             TtsController.onPhoneLinkAvailable()
             announceRendererCapabilities()
+            HomeVisibilityReporter.onTransportUp()
             RemoteInputHubBridge.onLinkAvailable()
         }
     }
@@ -294,11 +298,13 @@ object GlassesHub {
             RemotePointerHubBridge.onLinkLost()
             SurfaceController.onPhoneLinkLost()
             NoticeController.onPhoneLinkLost()
+            HomeVisibilityReporter.onLinkDown()
         }
         notifyLinkState()
         if (connected) {
             TtsController.onPhoneLinkAvailable()
             announceRendererCapabilities()
+            HomeVisibilityReporter.onTransportUp()
             RemoteInputHubBridge.onLinkAvailable()
         }
     }
@@ -679,6 +685,10 @@ object GlassesHub {
 
     fun sendInkEvent(payload: JSONObject): String? =
         sendRemote(BusEnvelope(path = BusPaths.INK_EVENT, payload = payload))
+
+    /** Tells the phone what the glasses show; true when it went out. */
+    internal fun sendHomeVisibility(payload: JSONObject): Boolean =
+        sendRemote(BusEnvelope(path = HomeVisibilityContract.PATH, payload = payload)) == null
 
     fun resendCapabilitiesNow() {
         synchronized(setupCapabilitiesLock) {
