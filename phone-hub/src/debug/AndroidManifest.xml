@@ -8,5 +8,14 @@
                 <action android:name="com.anezium.rokidbus.phone.PROBE" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".DebugFakeGlassesReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="com.anezium.rokidbus.phone.DEBUG_GLASSES" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

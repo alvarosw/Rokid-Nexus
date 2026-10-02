@@ -7,9 +7,9 @@ import com.anezium.rokidbus.shared.HomeVisibility
  * report: an older glasses hub never does, and unknown behaves exactly as visible did before the
  * report existed. The report is dropped when the link goes down.
  *
- * Also owns the screen-off grace: after [SCREEN_OFF_LEASE_GRACE_MS] of the display reported off,
- * [screenOffLong] turns true and [onScreenOffGraceElapsed] runs once so the leases can end. It
- * clears with the next report of the display on, or when the link drops.
+ * Also owns the screen-off grace: after [graceMs] (default [SCREEN_OFF_LEASE_GRACE_MS]) of the
+ * display reported off, [screenOffLong] turns true and [onScreenOffGraceElapsed] runs once so the
+ * leases can end. It clears with the next report of the display on, or when the link drops.
  *
  * Thread-safe: reports arrive on the remote-route thread, the grace timer on the main thread, and
  * readers anywhere; state changes under the lock, reads go through volatile fields, and the
@@ -17,6 +17,7 @@ import com.anezium.rokidbus.shared.HomeVisibility
  */
 internal class GlassesHomeVisibility(
     private val scheduler: ExternalPluginScheduler,
+    private val graceMs: () -> Long = { SCREEN_OFF_LEASE_GRACE_MS },
     private val onScreenOffGraceElapsed: () -> Unit,
 ) {
     data class Snapshot(val screenOn: Boolean?, val homeVisible: Boolean?)
@@ -47,7 +48,7 @@ internal class GlassesHomeVisibility(
         val after = Snapshot(report.screenOn, report.homeVisible)
         snapshot = after
         if (!report.screenOn) {
-            if (before.screenOn != false) scheduler.schedule(GRACE_KEY, SCREEN_OFF_LEASE_GRACE_MS) { onGraceTimer() }
+            if (before.screenOn != false) scheduler.schedule(GRACE_KEY, graceMs()) { onGraceTimer() }
         } else {
             scheduler.cancel(GRACE_KEY)
             screenOffLong = false
