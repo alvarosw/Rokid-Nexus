@@ -352,6 +352,14 @@ Things to know when asserting:
 - The fake media session is activated after its metadata is set, as a real player does: Media Deck attaches
   on the activation edge and ignores a session without a title.
 
+### Tile power tour
+
+`tools/emulator/scenarios/tile-power-tour.sh [--install] [--slow] [S1 ...]` runs the tile-lease and
+home-visibility scenarios (baseline, plugin killed, plugin force-stopped, home hidden, legacy glasses, screen
+off, phone battery badge, refresh with `--slow`, and a known-issue probe) against a booted phone emulator with
+the debug APKs built. It polls logcat with timeouts, prints PASS/FAIL per scenario and exits non-zero on a FAIL.
+Approve the plugin before the link comes up: approving one that holds a lease drops its registration.
+
 ### Smoke chain
 
 ```
