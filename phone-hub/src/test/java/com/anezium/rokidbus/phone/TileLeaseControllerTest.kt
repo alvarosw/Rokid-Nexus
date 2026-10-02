@@ -357,6 +357,59 @@ class TileLeaseControllerTest {
     }
 
     @Test
+    fun `a revoked registration rebinds the lease through the retry path`() {
+        val media = principal()
+        runtime.registered += "media"
+        controller.update(listOf(media))
+        runtime.deliveries.clear()
+
+        // The hub dropped the registration; the plugin stays bound but cannot register again.
+        runtime.registered -= "media"
+        controller.onRegistrationRevoked(media.grantKey())
+
+        assertEquals(listOf("media"), runtime.unbound)
+        assertTrue(controller.activePluginIds().isEmpty())
+        assertEquals(5_000L, scheduler.delays.getValue("tile-retry:dev.example.media:media"))
+        assertEquals("AUTHORIZATION_CHANGED", journal.snapshot().last().reason)
+
+        runtime.registered += "media"
+        now += TileLeaseController.HOME_VISIBLE_REFRESH_MIN_MS
+        scheduler.run("tile-retry:")
+        assertEquals(listOf("media", "media"), runtime.bound)
+        assertEquals(listOf("media:active=true", "media:refresh"), runtime.events())
+        assertEquals(setOf("media"), controller.activePluginIds())
+    }
+
+    @Test
+    fun `a revoked registration for an unknown or already failed lease changes nothing`() {
+        val media = principal()
+        controller.onRegistrationRevoked(media.grantKey())
+        assertTrue(runtime.unbound.isEmpty())
+        assertTrue(scheduler.actions.isEmpty())
+
+        runtime.bindResult = false
+        controller.update(listOf(media))
+        val unbound = runtime.unbound.size
+        controller.onRegistrationRevoked(media.grantKey())
+        assertEquals(unbound, runtime.unbound.size)
+    }
+
+    @Test
+    fun `a lease that ends after a revoke cancels the retry without a delivery`() {
+        val media = principal()
+        runtime.registered += "media"
+        controller.update(listOf(media))
+        runtime.deliveries.clear()
+        controller.onRegistrationRevoked(media.grantKey())
+
+        controller.update(emptyList())
+
+        assertTrue(scheduler.actions.isEmpty())
+        assertTrue(runtime.deliveries.isEmpty())
+        assertEquals(listOf("media", "media"), runtime.unbound)
+    }
+
+    @Test
     fun `close ends every lease`() {
         runtime.registered += setOf("media", "relay")
         controller.update(listOf(principal("media"), principal("relay")))

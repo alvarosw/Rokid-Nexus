@@ -94,6 +94,18 @@ class TileLeaseController(
         awaitRegistration(lease, REBIND_REGISTRATION_TIMEOUT_MS)
     }
 
+    /**
+     * The hub dropped the plugin's registration because its grant changed. The lease cannot
+     * deliver any more and the still-bound plugin will not register again by itself, so route it
+     * through the retry path: unbind, then rebind so the plugin registers anew. If the new grant
+     * no longer allows a lease, the recomputation that follows ends it.
+     */
+    @Synchronized
+    fun onRegistrationRevoked(key: PluginGrantKey) {
+        val lease = leases[key]?.takeIf { !it.failed } ?: return
+        fail(lease, "AUTHORIZATION_CHANGED")
+    }
+
     @Synchronized
     fun onHomeVisible() {
         leases.values.toList().forEach { lease ->

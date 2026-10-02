@@ -933,11 +933,15 @@ backoff), cannot be bound, or cannot be delivered to is unbound and its lease is
 marked failed, but the lease stays. The hub binds it again after 5 s, 30 s,
 2 min and then every 10 min after consecutive failures, and at once when the
 glasses home becomes visible (without resetting that schedule); a retry that is
-still awaiting registration is not repeated. The schedule restarts once the lease
+still awaiting registration is not repeated. When a leased plugin's grant changes,
+the hub drops its registration and treats the lease as failed with reason
+`AUTHORIZATION_CHANGED`: the plugin is unbound and rebound through the same retry
+(first after 5 s), registers again and receives `active` and the delivery
+refresh (when due); if the new grant no longer allows a lease, the lease ends instead. The schedule restarts once the lease
 is delivered, and every retry stops when the lease ends. Grants, ends, retries,
 failures and refreshes are recorded in the plugin bus journal (`LEASE_GRANTED`,
 `LEASE_RETRY`, `LEASE_ENDED`, `REFRESH`, `BIND_FAILED`, `REGISTRATION_TIMEOUT`,
-`DELIVERY_FAILED`). A hub that predates the lease never sends these paths; an
+`DELIVERY_FAILED`, `AUTHORIZATION_CHANGED`). A hub that predates the lease never sends these paths; an
 SDK that predates them hands them to the raw `onNexusMessage` hook.
 
 ### Widget tile protocol v2 (templates)
