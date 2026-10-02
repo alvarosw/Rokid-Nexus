@@ -266,7 +266,7 @@ class TileLeaseController(
         const val REGISTRATION_TIMEOUT_MS = 5_000L
         const val REBIND_REGISTRATION_TIMEOUT_MS = 15_000L
         const val REFRESH_INTERVAL_MS = 15 * 60_000L
-        const val HOME_VISIBLE_REFRESH_MIN_MS = 60_000L
+        const val HOME_VISIBLE_REFRESH_MIN_MS = 5 * 60_000L
         val RETRY_BACKOFF_MS = longArrayOf(5_000L, 30_000L, 120_000L, 600_000L)
     }
 }

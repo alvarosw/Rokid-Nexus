@@ -924,7 +924,7 @@ owner-scoped lifecycle messages (`version`, `type`, `id`, `pluginId`):
   visible again (the phone uses glasses link-up, a grid mode or layout change, and
   the foreground plugin closing), and by a timer while the lease lasts. Those
   delivery and home-visible refreshes are sent only when the plugin's last refresh
-  is at least 60 s old; the timer fires every 15 minutes, counted from the last
+  is at least 5 minutes old; the timer fires every 15 minutes, counted from the last
   refresh of any kind.
 
 A plugin that does not register within 5 s of the bind (15 s when the wait follows

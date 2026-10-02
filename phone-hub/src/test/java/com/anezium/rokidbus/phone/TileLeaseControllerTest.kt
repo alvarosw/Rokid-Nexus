@@ -318,6 +318,9 @@ class TileLeaseControllerTest {
     fun `the home becoming visible refreshes after the shorter minimum but the timer waits`() {
         runtime.registered += "media"
         controller.update(listOf(principal()))
+        now = TileLeaseController.HOME_VISIBLE_REFRESH_MIN_MS - 1
+        controller.onHomeVisible()
+        assertEquals(1, runtime.events().count { it == "media:refresh" })
         now = TileLeaseController.HOME_VISIBLE_REFRESH_MIN_MS
         controller.onHomeVisible()
         assertEquals(2, runtime.events().count { it == "media:refresh" })

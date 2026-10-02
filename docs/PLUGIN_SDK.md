@@ -1278,8 +1278,8 @@ open plugin, and calls `onNexusTileActive(true)` once you have registered.
 `onNexusTileActive` is called only on a change, and `false` also arrives when
 your registration is lost or the client closes. `onNexusTileRefresh` arrives only
 while the lease is active: when it begins or is re-delivered (after a retry or a
-process restart), when the glasses home comes back into view (at most once a
-minute), and on a hub timer every 15 minutes. It means "publish your current
+process restart), when the glasses home comes back into view (at most once every
+5 minutes), and on a hub timer every 15 minutes. It means "publish your current
 state now": re-read your source of truth and publish unconditionally, even if
 it matches your last publish, because that publish may have been lost in transit.
 Do not de-duplicate a refresh against what you last sent. A lease whose bind or
