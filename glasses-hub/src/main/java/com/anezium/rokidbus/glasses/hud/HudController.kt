@@ -12,6 +12,7 @@ import com.anezium.rokidbus.glasses.ActivityController
 import com.anezium.rokidbus.glasses.ActivityInputTarget
 import com.anezium.rokidbus.glasses.BuildConfig
 import com.anezium.rokidbus.glasses.GlassesHub
+import com.anezium.rokidbus.glasses.HomeVisibilityReporter
 import com.anezium.rokidbus.glasses.HudModeStore
 import com.anezium.rokidbus.glasses.HudTopInset
 import com.anezium.rokidbus.glasses.NexusSurface
@@ -411,6 +412,7 @@ internal object HudController {
         override fun settled(state: HudState) {
             host?.sync(state.screen)
             host?.home?.setNoticeOwnsRing(state.noticeOwnsRing)
+            HomeVisibilityReporter.onHudScreen(state.screen is HudScreen.Home)
             val shown = isLauncherScreen(state.screen)
             if (shown != launcherShown) {
                 launcherShown = shown

@@ -167,6 +167,7 @@ class PhoneWeatherTest {
         var linked = true
         var fetches = 0
         var result: WeatherContract.Reading? = WeatherContract.Reading("Lisbon", 19, WeatherContract.TemperatureUnit.CELSIUS, 3, "Overcast", 23, 17)
+        var homeVisible = true
         val timer = FakeTimer()
         val sent = ArrayList<BusEnvelope>()
         val reporter = PhoneWeatherReporter(
@@ -175,6 +176,7 @@ class PhoneWeatherTest {
             worker = Executor(Runnable::run),
             isPlaced = { placed },
             isLinked = { linked },
+            isHomeVisible = { homeVisible },
             fetch = {
                 fetches++
                 result
@@ -294,5 +296,67 @@ class PhoneWeatherTest {
         c.placed = false
         c.reporter.refreshNow("settings")
         assertEquals("not even settings fetch for a widget that is not placed", 3, c.fetches)
+    }
+
+    @Test
+    fun `a hidden home neither fetches nor keeps a timer, and the visible edge resends or fetches`() {
+        val c = Cadence()
+        c.reporter.onConditionsChanged("link_up")
+        assertEquals(1, c.fetches)
+
+        c.homeVisible = false
+        c.reporter.onConditionsChanged("home_hidden")
+        assertNull(c.timer.delay)
+        c.advance(3 * PhoneWeatherReporter.INTERVAL_MS)
+        assertEquals(1, c.fetches)
+        assertEquals(1, c.sent.size)
+
+        c.homeVisible = true
+        c.reporter.onConditionsChanged("home_visible")
+        assertEquals("due while hidden: fetched on the visible edge", 2, c.fetches)
+        assertEquals(2, c.sent.size)
+        assertEquals(PhoneWeatherReporter.INTERVAL_MS, c.timer.delay)
+    }
+
+    @Test
+    fun `the visible edge resends the cached reading when nothing is due`() {
+        val c = Cadence()
+        c.reporter.onConditionsChanged("link_up")
+        c.homeVisible = false
+        c.reporter.onConditionsChanged("home_hidden")
+        c.advance(5 * 60_000L)
+        c.homeVisible = true
+        c.reporter.onConditionsChanged("home_visible")
+        assertEquals(1, c.fetches)
+        assertEquals(2, c.sent.size)
+        assertEquals(5 * 60_000L, c.sent[1].payload.getLong(WeatherContract.KEY_AGE_MS))
+        assertEquals(25 * 60_000L, c.timer.delay)
+    }
+
+    @Test
+    fun `a fetch that finishes while the home is hidden is kept but not sent`() {
+        val c = Cadence()
+        var release: Runnable? = null
+        val deferred = PhoneWeatherReporter(
+            clock = { c.now },
+            timer = c.timer,
+            worker = Executor { release = it },
+            isPlaced = { true },
+            isLinked = { true },
+            isHomeVisible = { c.homeVisible },
+            fetch = { c.result },
+            store = settings,
+            send = {
+                c.sent += it
+                null
+            },
+            log = {},
+        )
+        deferred.onConditionsChanged("link_up")
+        c.homeVisible = false
+        release!!.run()
+        assertTrue(c.sent.isEmpty())
+        assertNull(c.timer.delay)
+        assertTrue(settings.lastReading() != null)
     }
 }

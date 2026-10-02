@@ -1,6 +1,7 @@
 package com.anezium.rokidbus.shared.plugin
 
 import com.anezium.rokidbus.shared.BusPaths
+import com.anezium.rokidbus.shared.HomeVisibilityContract
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -37,6 +38,8 @@ class PathRulesTest {
         assertTrue(PathRules.isReserved("/core/remote-input/command"))
         assertTrue(PathRules.isReserved("/core/navigation/request"))
         assertTrue(PathRules.isReserved("/core/pointer/command"))
+        assertTrue(PathRules.isReserved(HomeVisibilityContract.PATH))
+        assertFalse(PathRules.isAllowedReceivePrefix(HomeVisibilityContract.PATH, "lens", PluginCapability.entries.toSet()))
         assertTrue(PathRules.isHubOnly("/tts/cancel"))
         assertTrue(PathRules.isReserved("/tts/cancel"))
         assertFalse(PathRules.isReserved("/launcherish"))

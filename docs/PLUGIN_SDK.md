@@ -1284,7 +1284,10 @@ state now": re-read your source of truth and publish unconditionally, even if
 it matches your last publish, because that publish may have been lost in transit.
 Do not de-duplicate a refresh against what you last sent. A lease whose bind or
 registration failed is retried by the hub, so a service may be started again at
-any time. Never schedule a refresh of your own. Both callbacks have no-op defaults, so a plugin that only
+any time. Never schedule a refresh of your own.
+The hub may also end the lease while the glasses display is off, and grants it again
+when the display returns, so do not assume a lease lasts: do no work outside it, and
+expect a fresh `onNexusTileActive(true)` and refresh afterwards. Both callbacks have no-op defaults, so a plugin that only
 publishes from an open surface needs neither.
 
 ```kotlin

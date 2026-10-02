@@ -895,6 +895,16 @@ glasses' 5 and one per 12 s). A publish past it is held rather than dropped; a
 newer one replaces the held one, which is sent as soon as the budget refills, so
 the latest state always reaches the glasses while the link is up.
 
+While the glasses report the home hidden (`/core/home/visibility`, `homeVisible`
+false), the phone hub sends no tile at all: a publish, or a held one that comes due,
+leaves the plugin *pending* and the plugin is told nothing. A send that fails
+(for example `NO_LINK`) also leaves it pending, and a successful send clears it.
+When the home becomes visible, and on glasses link-up while it is not reported
+hidden, each pending plugin's latest snapshot goes out as a fresh publish through
+the same pacing, so the glasses catch up at once. Pending state is dropped with the
+phone's copy of the plugin's last tile (uninstall, loss of `widget_tile`, leaving
+the launcher). A glasses hub that never reports leaves the phone sending as before.
+
 A tile is shown as stale once it is as old as its own `staleAfterMs`. A snapshot
 cached before a glasses reboot is reported at exactly that age. Each launcher
 list the phone sends prunes the glasses' cache to the plugins in it, and the
@@ -925,7 +935,18 @@ owner-scoped lifecycle messages (`version`, `type`, `id`, `pluginId`):
   the foreground plugin closing), and by a timer while the lease lasts. Those
   delivery and home-visible refreshes are sent only when the plugin's last refresh
   is at least 5 minutes old; the timer fires every 15 minutes, counted from the last
-  refresh of any kind.
+  refresh of any kind. While the glasses report the home hidden no refresh is
+  sent: it stays due, and the home becoming visible delivers it under the same
+  5-minute rule. Those link-up, mode, layout and foreground-close guesses do not count
+  as the home becoming visible while the glasses explicitly report it hidden.
+
+When the glasses report the display off (`screenOn` false) continuously for 10
+minutes, every lease ends (`active:false`, then unbind) so Android can reclaim the
+plugin processes. The display coming back on grants the leases again; each plugin
+registers afresh and gets the delivery refresh. Only the display state ends leases,
+not a hidden home: a wearer using a plugin surface for a long time keeps the tiles
+warm. Link loss ends leases as before, and a report that was never received (or was
+dropped with the link) never ends them.
 
 A plugin that does not register within 5 s of the bind (15 s when the wait follows
 a binder death, since Android restarts a bound service with its own growing
@@ -2177,7 +2198,14 @@ never a plugin capability.
   once it is 2 hours old, or when it was received in an earlier boot.
 - The phone sends only while the stored layout places `sys:weather` and the link
   is up: after a fetch (about every 30 minutes) and, with its current age, on
-  link-up and on the glasses' capabilities announce.
+  link-up and on the glasses' capabilities announce. While the glasses report the
+  home hidden (`/core/home/visibility`) it neither fetches nor sends; the home
+  becoming visible resends the cached reading and fetches if one is due.
+
+The phone's battery badge (`/phone/battery`) is likewise withheld while the glasses
+report the display off, readings being tracked meanwhile; the display coming back
+on sends the current reading, or the hidden state if the wearer turned the badge off.
+The badge shows outside the home, so only `screenOn` matters to it.
 
 ## Transport selection (hub-side routing)
 
@@ -2471,6 +2499,27 @@ current readable window, clicks the focused node or a clickable ancestor, and
 uses Android's global BACK action. It does not inject shell or ADB commands.
 Results are kept in a bounded replay cache, so a transport retry with the same
 request id returns the prior result instead of performing the action twice.
+
+### Home visibility
+
+- Glasses → phone `/core/home/visibility`, one-way, `{"version":1,"screenOn":true,
+  "homeVisible":true}`. `screenOn` is whether the glasses display is interactive;
+  `homeVisible` is whether the HUD currently shows the home (grid or list) and implies
+  `screenOn` (the phone reads `homeVisible` on a dark display as false). Both booleans
+  are required and `version` must be 1; anything else is rejected (journaled
+  `INVALID_HOME_VISIBILITY`, no reply).
+- The glasses send it when either value changes, debounced by about 300 ms so a flap
+  sends only its settled value, and nothing when that is the value the phone already
+  has; and again on every transport-up right after the `/hub/capabilities` announce,
+  whether or not anything changed. While the link is down nothing is sent or queued.
+- The phone hub consumes it and never delivers it to plugins. It forgets the report
+  when the link goes down. Until a report arrives (an older glasses hub never sends
+  one) the home counts as visible and the display as on, so everything behaves as it
+  did before the report existed. It gates tile publishes, tile refreshes, tile leases,
+  the weather widget and the phone battery badge as described under "Tile lease",
+  tile pacing, "Phone weather" and the battery badge there.
+- Like every `/core` route it is a trusted hub-to-hub control: `PathRules` reserves
+  it, so no plugin may send it or declare it as a receive prefix.
 
 ### Remote pointer
 

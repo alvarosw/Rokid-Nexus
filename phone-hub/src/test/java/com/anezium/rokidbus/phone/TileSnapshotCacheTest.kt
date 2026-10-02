@@ -61,4 +61,17 @@ class TileSnapshotCacheTest {
         assertNull(TileSnapshotCache.get("a"))
         assertNotNull(TileSnapshotCache.get("b"))
     }
+
+    @Test
+    fun `a cached snapshot rebuilds a publish payload that keeps its artwork key`() {
+        val music = TileSnapshot(
+            pluginId = "media",
+            contentKey = "k",
+            content = TileContent.Music(title = "Song", playing = true, artworkKey = "cover-1"),
+        )
+        TileSnapshotCache.record("media", WidgetTileContract.toPayload(music))
+        val rebuilt = WidgetTileContract.toPayload(TileSnapshotCache.get("media")!!)
+        assertEquals("cover-1", WidgetTileContract.artworkKeyOf(rebuilt))
+        assertEquals(music, WidgetTileContract.fromPayload(rebuilt))
+    }
 }
