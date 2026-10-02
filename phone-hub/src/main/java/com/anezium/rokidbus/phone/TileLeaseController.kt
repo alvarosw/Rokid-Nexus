@@ -36,9 +36,13 @@ object TileLeasePolicy {
 
 /**
  * Holds each leased plugin bound for as long as its tile is live, the way an open holds the
- * foreground plugin, and tells it when the lease begins and ends. Refreshes are hub-owned: one
- * when the lease is delivered or the glasses home becomes visible, and a timer while the lease
- * lasts, never closer together than [REFRESH_INTERVAL_MS] for one plugin.
+ * foreground plugin, and tells it when the lease begins and ends. Refreshes are hub-owned:
+ * - the periodic timer fires every [REFRESH_INTERVAL_MS] while the lease lasts;
+ * - a delivery (first, after a retry, or after a binder death) and the glasses home becoming
+ *   visible refresh when the plugin's last refresh is at least [HOME_VISIBLE_REFRESH_MIN_MS] old.
+ *
+ * A lease that fails (bind, registration or delivery) stays leased and is retried with the
+ * [RETRY_BACKOFF_MS] schedule, or at once when the home becomes visible, until it ends.
  */
 class TileLeaseController(
     private val runtime: TileLeaseRuntime,
@@ -50,9 +54,10 @@ class TileLeaseController(
     private class Lease(val principal: PhonePluginPrincipal) {
         var delivered = false
 
-        // A plugin that never registered stays leased but unbound until the lease ends, so an
-        // unrelated input change does not rebind it again and again.
+        // A failed lease stays leased but unbound; only the backoff schedule or the home becoming
+        // visible rebinds it, so an unrelated input change does not rebind it again and again.
         var failed = false
+        var failures = 0
     }
 
     private val leases = linkedMapOf<PluginGrantKey, Lease>()
@@ -76,7 +81,8 @@ class TileLeaseController(
             return
         }
         lease.delivered = true
-        refreshIfDue(lease)
+        lease.failures = 0
+        refreshIfDue(lease, HOME_VISIBLE_REFRESH_MIN_MS)
     }
 
     /** The bound plugin's process went away; Android restarts a bound service, so wait for it. */
@@ -85,12 +91,31 @@ class TileLeaseController(
         val lease = leases[key]?.takeIf { it.delivered } ?: return
         lease.delivered = false
         scheduler.cancel(refreshKey(lease.principal))
-        awaitRegistration(lease)
+        awaitRegistration(lease, REBIND_REGISTRATION_TIMEOUT_MS)
+    }
+
+    /**
+     * The hub dropped the plugin's registration because its grant changed. The lease cannot
+     * deliver any more and the still-bound plugin will not register again by itself, so route it
+     * through the retry path: unbind, then rebind so the plugin registers anew. If the new grant
+     * no longer allows a lease, the recomputation that follows ends it.
+     */
+    @Synchronized
+    fun onRegistrationRevoked(key: PluginGrantKey) {
+        val lease = leases[key]?.takeIf { !it.failed } ?: return
+        fail(lease, "AUTHORIZATION_CHANGED")
     }
 
     @Synchronized
     fun onHomeVisible() {
-        leases.values.toList().forEach(::refreshIfDue)
+        leases.values.toList().forEach { lease ->
+            if (lease.failed) {
+                scheduler.cancel(retryKey(lease.principal))
+                rebind(lease)
+            } else {
+                refreshIfDue(lease, HOME_VISIBLE_REFRESH_MIN_MS)
+            }
+        }
     }
 
     @Synchronized
@@ -107,13 +132,23 @@ class TileLeaseController(
     private fun grant(principal: PhonePluginPrincipal) {
         val lease = Lease(principal)
         leases[principal.grantKey()] = lease
+        bindAndAwait(lease, "LEASE_GRANTED")
+    }
+
+    private fun rebind(lease: Lease) {
+        lease.failed = false
+        bindAndAwait(lease, "LEASE_RETRY")
+    }
+
+    private fun bindAndAwait(lease: Lease, reason: String) {
+        val principal = lease.principal
         if (!runtime.bind(principal)) {
             fail(lease, "BIND_FAILED")
             return
         }
-        record(principal, BusPaths.PLUGIN_TILE_ACTIVE, PluginBusJournal.Verdict.OK, "LEASE_GRANTED")
-        logger("tile lease granted plugin=${principal.descriptor.id}")
-        awaitRegistration(lease)
+        record(principal, BusPaths.PLUGIN_TILE_ACTIVE, PluginBusJournal.Verdict.OK, reason)
+        logger("tile lease ${reason.removePrefix("LEASE_").lowercase()} plugin=${principal.descriptor.id}")
+        awaitRegistration(lease, REGISTRATION_TIMEOUT_MS)
         if (runtime.isRegistered(principal)) onRegistered(principal)
     }
 
@@ -122,6 +157,7 @@ class TileLeaseController(
         leases.remove(principal.grantKey())
         scheduler.cancel(registrationKey(principal))
         scheduler.cancel(refreshKey(principal))
+        scheduler.cancel(retryKey(principal))
         if (lease.delivered) deliverActive(lease, active = false)
         lease.delivered = false
         runtime.unbind(principal)
@@ -137,11 +173,18 @@ class TileLeaseController(
         scheduler.cancel(refreshKey(principal))
         runtime.unbind(principal)
         record(principal, BusPaths.PLUGIN_TILE_ACTIVE, PluginBusJournal.Verdict.REJECTED, reason)
-        logger("tile lease failed plugin=${principal.descriptor.id} reason=$reason")
+        val delayMs = RETRY_BACKOFF_MS[minOf(lease.failures, RETRY_BACKOFF_MS.size - 1)]
+        lease.failures++
+        logger("tile lease failed plugin=${principal.descriptor.id} reason=$reason retryInMs=$delayMs")
+        scheduler.schedule(retryKey(principal), delayMs) {
+            synchronized(this) {
+                if (leases[principal.grantKey()] === lease && lease.failed) rebind(lease)
+            }
+        }
     }
 
-    private fun awaitRegistration(lease: Lease) {
-        scheduler.schedule(registrationKey(lease.principal), REGISTRATION_TIMEOUT_MS) {
+    private fun awaitRegistration(lease: Lease, timeoutMs: Long) {
+        scheduler.schedule(registrationKey(lease.principal), timeoutMs) {
             synchronized(this) {
                 if (leases[lease.principal.grantKey()] === lease && !lease.delivered && !lease.failed) {
                     fail(lease, "REGISTRATION_TIMEOUT")
@@ -150,12 +193,12 @@ class TileLeaseController(
         }
     }
 
-    private fun refreshIfDue(lease: Lease) {
+    private fun refreshIfDue(lease: Lease, minIntervalMs: Long) {
         if (!lease.delivered) return
         val principal = lease.principal
         val now = nowMs()
         val last = lastRefreshAtMs[principal.descriptor.id]
-        if (last != null && now - last < REFRESH_INTERVAL_MS) {
+        if (last != null && now - last < minIntervalMs) {
             scheduleRefresh(lease, last + REFRESH_INTERVAL_MS - now)
             return
         }
@@ -171,7 +214,7 @@ class TileLeaseController(
     private fun scheduleRefresh(lease: Lease, delayMs: Long) {
         scheduler.schedule(refreshKey(lease.principal), delayMs) {
             synchronized(this) {
-                if (leases[lease.principal.grantKey()] === lease) refreshIfDue(lease)
+                if (leases[lease.principal.grantKey()] === lease) refreshIfDue(lease, REFRESH_INTERVAL_MS)
             }
         }
     }
@@ -225,11 +268,17 @@ class TileLeaseController(
     private fun registrationKey(principal: PhonePluginPrincipal): String =
         "tile-registration:${principal.packageName}:${principal.descriptor.id}"
 
+    private fun retryKey(principal: PhonePluginPrincipal): String =
+        "tile-retry:${principal.packageName}:${principal.descriptor.id}"
+
     private fun refreshKey(principal: PhonePluginPrincipal): String =
         "tile-refresh:${principal.packageName}:${principal.descriptor.id}"
 
     companion object {
         const val REGISTRATION_TIMEOUT_MS = 5_000L
+        const val REBIND_REGISTRATION_TIMEOUT_MS = 15_000L
         const val REFRESH_INTERVAL_MS = 15 * 60_000L
+        const val HOME_VISIBLE_REFRESH_MIN_MS = 5 * 60_000L
+        val RETRY_BACKOFF_MS = longArrayOf(5_000L, 30_000L, 120_000L, 600_000L)
     }
 }

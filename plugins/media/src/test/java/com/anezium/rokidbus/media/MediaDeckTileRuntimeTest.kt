@@ -131,6 +131,46 @@ class MediaDeckTileRuntimeTest {
     }
 
     @Test
+    fun `a refresh republishes an unchanged track`() {
+        runtime.start()
+        watcher.onSnapshot(track(positionMs = 102_000))
+        watcher.onSnapshot(track(positionMs = 102_000))
+        assertEquals(1, published.size)
+
+        runtime.refresh()
+        assertEquals(1, watcher.refreshes)
+        watcher.onSnapshot(track(positionMs = 102_000))
+
+        assertEquals(2, published.size)
+        assertEquals(published[0].first, published[1].first)
+        assertArrayEquals(cover!!.bytes, published[1].second)
+    }
+
+    @Test
+    fun `a refresh republishes an unchanged idle state`() {
+        runtime.start()
+        watcher.onStatus(MediaDeckMonitorStatus.NO_SESSION)
+        watcher.onStatus(MediaDeckMonitorStatus.NO_SESSION)
+        assertEquals(1, published.size)
+
+        runtime.refresh()
+        watcher.onStatus(MediaDeckMonitorStatus.NO_SESSION)
+
+        assertEquals(2, published.size)
+    }
+
+    @Test
+    fun `a refresh outside the lease does nothing`() {
+        runtime.refresh()
+        assertEquals(0, watcher.refreshes)
+        runtime.start()
+        runtime.stop()
+        runtime.refresh()
+        assertEquals(0, watcher.refreshes)
+        assertTrue(published.isEmpty())
+    }
+
+    @Test
     fun `missing notification access says so on the tile`() {
         runtime.start()
         watcher.onStatus(MediaDeckMonitorStatus.ACCESS_REQUIRED)
@@ -172,6 +212,7 @@ class MediaDeckTileRuntimeTest {
 
     private class FakeWatcher : MediaSessionWatcher {
         var started = false
+        var refreshes = 0
         var onSnapshot: (MediaDeckSnapshot?) -> Unit = {}
         var onStatus: (MediaDeckMonitorStatus) -> Unit = {}
 
@@ -181,6 +222,10 @@ class MediaDeckTileRuntimeTest {
 
         override fun stop() {
             started = false
+        }
+
+        override fun refresh() {
+            refreshes++
         }
     }
 }

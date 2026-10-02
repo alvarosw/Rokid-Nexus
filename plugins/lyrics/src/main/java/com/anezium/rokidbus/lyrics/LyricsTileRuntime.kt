@@ -23,6 +23,7 @@ internal class LyricsTileRuntime(
     private var active = false
     private var unsubscribe: (() -> Unit)? = null
     private var lastSent: SentTile? = null
+    private var latestState: LyricsPhoneViewState? = null
 
     fun start() {
         if (active) return
@@ -37,10 +38,19 @@ internal class LyricsTileRuntime(
         unsubscribe?.invoke()
         unsubscribe = null
         lastSent = null
+        latestState = null
+    }
+
+    /** The hub asked for the current state: publish the latest one even though it is unchanged. */
+    fun refresh() {
+        if (!active) return
+        lastSent = null
+        latestState?.let(::handleState)
     }
 
     private fun handleState(state: LyricsPhoneViewState) {
         if (!active) return
+        latestState = state
         val lyrics = state.lyrics
         val now = clock()
         val timed = lyrics.synced && lyrics.lines.isNotEmpty()

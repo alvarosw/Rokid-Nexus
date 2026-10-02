@@ -1268,7 +1268,7 @@ override fun onNexusTileActive(active: Boolean) {
 }
 
 override fun onNexusTileRefresh() {
-    // Poll-based plugins: fetch once, publish, and go dormant again.
+    // Poll-based plugins: re-read your source and publish, even if nothing changed since the last publish.
     runtime.fetchOnceAndPublishTile()
 }
 ```
@@ -1277,9 +1277,14 @@ The hub binds your service for as long as the lease lasts, as it does for an
 open plugin, and calls `onNexusTileActive(true)` once you have registered.
 `onNexusTileActive` is called only on a change, and `false` also arrives when
 your registration is lost or the client closes. `onNexusTileRefresh` arrives only
-while the lease is active: when it begins, when the glasses home comes back into
-view, and on a hub timer, never more than once per 15 minutes. Never schedule a
-refresh of your own. Both callbacks have no-op defaults, so a plugin that only
+while the lease is active: when it begins or is re-delivered (after a retry or a
+process restart), when the glasses home comes back into view (at most once every
+5 minutes), and on a hub timer every 15 minutes. It means "publish your current
+state now": re-read your source of truth and publish unconditionally, even if
+it matches your last publish, because that publish may have been lost in transit.
+Do not de-duplicate a refresh against what you last sent. A lease whose bind or
+registration failed is retried by the hub, so a service may be started again at
+any time. Never schedule a refresh of your own. Both callbacks have no-op defaults, so a plugin that only
 publishes from an open surface needs neither.
 
 ```kotlin

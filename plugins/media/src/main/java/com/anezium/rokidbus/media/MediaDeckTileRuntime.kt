@@ -61,6 +61,17 @@ internal class MediaDeckTileRuntime(
         artworkUriAttempt = null
     }
 
+    /**
+     * The hub asked for the current state: forget what was sent, so the watcher's answer is
+     * published even when nothing changed. The encoded cover for the current track is kept.
+     */
+    fun refresh() {
+        if (!active) return
+        lastPublishedIdle = null
+        lastSent = null
+        watcher.refresh()
+    }
+
     private fun handleStatus(status: MediaDeckMonitorStatus) {
         if (!active) return
         monitorStatus = status

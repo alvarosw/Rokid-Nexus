@@ -2449,6 +2449,8 @@ class BusHubService : Service() {
 
     private fun authorizationChanged(key: PluginGrantKey) {
         revokePrincipal(key)
+        // Runs with no hub lock held; the controller takes only its own monitor.
+        if (::tileLeaseController.isInitialized) tileLeaseController.onRegistrationRevoked(key)
         cameraConsumerReadiness.recompute()
         refreshMediaSyncConsent()
         if (key.pluginId !in tilePluginIds()) {
