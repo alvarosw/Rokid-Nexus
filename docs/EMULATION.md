@@ -346,7 +346,7 @@ the previous step. The script is pushed to `/data/local/tmp/nexus-fake-glasses/`
 
 Things to know when asserting:
 
-- The hub paces `/tile/publish` per plugin (burst of 4, one more per 60 s) and holds publishes while the
+- The hub paces `/tile/publish` per plugin (a bucket of 4 refilled over 60 s: a burst of 4, then one per 15 s) and holds publishes while the
   glasses report the home hidden or the display off. Poll `outbound` for a few seconds instead of
   sleeping once.
 - The fake media session is activated after its metadata is set, as a real player does: Media Deck attaches

@@ -7,9 +7,9 @@ import com.anezium.rokidbus.shared.HomeVisibility
  * report: an older glasses hub never does, and unknown behaves exactly as visible did before the
  * report existed. The report is dropped when the link goes down.
  *
- * Also owns the screen-off grace: after [graceMs] (default [SCREEN_OFF_LEASE_GRACE_MS]) of the display reported off,
- * [screenOffLong] turns true and [onScreenOffGraceElapsed] runs once so the leases can end. It
- * clears with the next report of the display on, or when the link drops.
+ * Also owns the screen-off grace: after [graceMs] (default [SCREEN_OFF_LEASE_GRACE_MS]) of the
+ * display reported off, [screenOffLong] turns true and [onScreenOffGraceElapsed] runs once so the
+ * leases can end. It clears with the next report of the display on, or when the link drops.
  *
  * Thread-safe: reports arrive on the remote-route thread, the grace timer on the main thread, and
  * readers anywhere; state changes under the lock, reads go through volatile fields, and the
