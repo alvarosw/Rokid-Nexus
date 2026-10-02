@@ -120,11 +120,11 @@ class TileLeaseControllerTest {
     fun `refreshes are never closer together than the interval`() {
         runtime.registered += "media"
         controller.update(listOf(principal()))
-        now = 60_000L
+        now = 30_000L
         controller.onHomeVisible()
         assertEquals(1, runtime.events().count { it == "media:refresh" })
         assertEquals(
-            TileLeaseController.REFRESH_INTERVAL_MS - 60_000L,
+            TileLeaseController.REFRESH_INTERVAL_MS - 30_000L,
             scheduler.delays.getValue("tile-refresh:dev.example.media:media"),
         )
 
@@ -157,7 +157,7 @@ class TileLeaseControllerTest {
     }
 
     @Test
-    fun `a plugin that never registers is unbound and not rebound until the lease ends`() {
+    fun `a plugin that never registers is unbound and not rebound by an unchanged input set`() {
         val media = principal()
         controller.update(listOf(media))
         scheduler.run("tile-registration:")
@@ -170,7 +170,7 @@ class TileLeaseControllerTest {
     }
 
     @Test
-    fun `a bind failure is recorded and not retried while the lease stands`() {
+    fun `a bind failure is recorded and not rebound by an unchanged input set`() {
         runtime.bindResult = false
         controller.update(listOf(principal()))
         controller.update(listOf(principal()))
@@ -189,6 +189,151 @@ class TileLeaseControllerTest {
         assertEquals(
             listOf("media:active=true", "media:refresh", "media:active=true"),
             runtime.events(),
+        )
+    }
+
+    @Test
+    fun `a restarted plugin is refreshed when its last refresh is old enough`() {
+        val media = principal()
+        runtime.registered += "media"
+        controller.update(listOf(media))
+        now = TileLeaseController.HOME_VISIBLE_REFRESH_MIN_MS
+        controller.onBinderDied(media.grantKey())
+        controller.onRegistered(media)
+        assertEquals(
+            listOf("media:active=true", "media:refresh", "media:active=true", "media:refresh"),
+            runtime.events(),
+        )
+        assertEquals(
+            TileLeaseController.REFRESH_INTERVAL_MS,
+            scheduler.delays.getValue("tile-refresh:dev.example.media:media"),
+        )
+    }
+
+    @Test
+    fun `re-registration after a binder death gets the longer window`() {
+        val media = principal()
+        runtime.registered += "media"
+        controller.update(listOf(media))
+        controller.onBinderDied(media.grantKey())
+        assertEquals(
+            TileLeaseController.REBIND_REGISTRATION_TIMEOUT_MS,
+            scheduler.delays.getValue("tile-registration:dev.example.media:media"),
+        )
+    }
+
+    @Test
+    fun `a fresh grant gets the short registration window`() {
+        controller.update(listOf(principal()))
+        assertEquals(
+            TileLeaseController.REGISTRATION_TIMEOUT_MS,
+            scheduler.delays.getValue("tile-registration:dev.example.media:media"),
+        )
+    }
+
+    @Test
+    fun `a lease that missed registration is retried with growing backoff`() {
+        val media = principal()
+        controller.update(listOf(media))
+        val delays = mutableListOf<Long>()
+        repeat(6) {
+            scheduler.run("tile-registration:")
+            delays += scheduler.delays.getValue("tile-retry:dev.example.media:media")
+            scheduler.run("tile-retry:")
+        }
+        assertEquals(listOf(5_000L, 30_000L, 120_000L, 600_000L, 600_000L, 600_000L), delays)
+        assertEquals(7, runtime.bound.size)
+        assertEquals(
+            6,
+            journal.snapshot().count { it.path == BusPaths.PLUGIN_TILE_ACTIVE && it.reason == "LEASE_RETRY" },
+        )
+    }
+
+    @Test
+    fun `a retry that registers delivers the lease and resets the backoff`() {
+        val media = principal()
+        controller.update(listOf(media))
+        scheduler.run("tile-registration:")
+        scheduler.run("tile-retry:")
+        scheduler.run("tile-registration:")
+        scheduler.run("tile-retry:")
+        runtime.registered += "media"
+        controller.onRegistered(media)
+        assertEquals(setOf("media"), controller.activePluginIds())
+
+        controller.onBinderDied(media.grantKey())
+        scheduler.run("tile-registration:")
+        assertEquals(5_000L, scheduler.delays.getValue("tile-retry:dev.example.media:media"))
+    }
+
+    @Test
+    fun `a bind failure is retried`() {
+        runtime.bindResult = false
+        controller.update(listOf(principal()))
+        assertEquals(5_000L, scheduler.delays.getValue("tile-retry:dev.example.media:media"))
+        runtime.bindResult = true
+        runtime.registered += "media"
+        scheduler.run("tile-retry:")
+        assertEquals(setOf("media"), controller.activePluginIds())
+    }
+
+    @Test
+    fun `the home becoming visible retries a failed lease at once and keeps the backoff`() {
+        val media = principal()
+        controller.update(listOf(media))
+        scheduler.run("tile-registration:")
+        controller.onHomeVisible()
+        assertEquals(2, runtime.bound.size)
+        assertTrue(scheduler.actions.keys.none { it.startsWith("tile-retry:") })
+
+        // A second visibility edge while the retry still awaits registration does nothing.
+        controller.onHomeVisible()
+        assertEquals(2, runtime.bound.size)
+
+        scheduler.run("tile-registration:")
+        assertEquals(30_000L, scheduler.delays.getValue("tile-retry:dev.example.media:media"))
+    }
+
+    @Test
+    fun `no retry survives the end of the lease`() {
+        val media = principal()
+        controller.update(listOf(media))
+        scheduler.run("tile-registration:")
+        controller.update(emptyList())
+        assertTrue(scheduler.actions.isEmpty())
+        controller.onHomeVisible()
+        assertEquals(listOf("media"), runtime.bound)
+    }
+
+    @Test
+    fun `no retry survives close`() {
+        controller.update(listOf(principal()))
+        scheduler.run("tile-registration:")
+        controller.close()
+        assertTrue(scheduler.actions.isEmpty())
+        assertEquals(listOf("media"), runtime.bound)
+    }
+
+    @Test
+    fun `the home becoming visible refreshes after the shorter minimum but the timer waits`() {
+        runtime.registered += "media"
+        controller.update(listOf(principal()))
+        now = TileLeaseController.HOME_VISIBLE_REFRESH_MIN_MS
+        controller.onHomeVisible()
+        assertEquals(2, runtime.events().count { it == "media:refresh" })
+        assertEquals(
+            TileLeaseController.REFRESH_INTERVAL_MS,
+            scheduler.delays.getValue("tile-refresh:dev.example.media:media"),
+        )
+        assertEquals(1, scheduler.actions.keys.count { it.startsWith("tile-refresh:") })
+
+        // The timer still honors the 15 minute interval.
+        now += 60_000L
+        scheduler.run("tile-refresh:")
+        assertEquals(2, runtime.events().count { it == "media:refresh" })
+        assertEquals(
+            TileLeaseController.REFRESH_INTERVAL_MS - 60_000L,
+            scheduler.delays.getValue("tile-refresh:dev.example.media:media"),
         )
     }
 
