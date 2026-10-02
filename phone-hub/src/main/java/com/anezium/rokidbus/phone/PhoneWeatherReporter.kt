@@ -34,12 +34,14 @@ internal class HandlerWeatherTimer(private val handler: Handler = Handler(Looper
  * Keeps the glasses' weather widget fed, and does nothing at all while it is not wanted.
  *
  * It works only while all hold: the stored tile layout places `sys:weather`, the glasses link is
- * up, and the glasses have not reported the home hidden (unknown counts as visible). Then it fetches when the last reading is [INTERVAL_MS] old (at once if there is none),
- * and schedules one timer for the next fetch; a failed fetch is retried after [RETRY_MS]. When
- * a condition drops the timer is cancelled, and nothing is fetched or sent until the home is
- * visible again, when the hub's `home_visible` call resends the cached reading and fetches if due.
- * The hub calls [onConditionsChanged] on link, layout and home-visibility changes, [resend] when the glasses announce (a restarted glasses hub may have lost
- * nothing, but costs one small message to be sure) and [refreshNow] when the settings change.
+ * up, and the glasses have not reported the home hidden (unknown counts as visible). Then it
+ * fetches when the last reading is [INTERVAL_MS] old (at once if there is none), and schedules one
+ * timer for the next fetch; a failed fetch is retried after [RETRY_MS]. When a condition drops the
+ * timer is cancelled, and nothing is fetched or sent until the home is visible again, when the
+ * hub's `home_visible` call resends the cached reading and fetches if due. The hub calls
+ * [onConditionsChanged] on link, layout and home-visibility changes, [resend] when the glasses
+ * announce (a restarted glasses hub may have lost nothing, but costs one small message to be sure)
+ * and [refreshNow] when the settings change.
  *
  * The last reading is kept by [store] with its fetch time, so a hub restart neither refetches
  * early nor leaves the glasses without data; its age travels with every send.
