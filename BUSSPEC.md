@@ -915,16 +915,28 @@ owner-scoped lifecycle messages (`version`, `type`, `id`, `pluginId`):
   `active`. Sent once the bound plugin has registered and again after a binder
   restart; `active:false` is sent when the lease ends, after which the hub
   unbinds.
-- `/system/plugin/tile/refresh`, `type` `refresh`: fetch once, publish, return to
-  dormant. Sent when the lease is delivered, when the glasses home becomes
+- `/system/plugin/tile/refresh`, `type` `refresh`: publish the plugin's current
+  state now, even if it has not changed since its last publish (re-read the
+  source of truth, then publish unconditionally; a publish may have been lost in
+  transit, so a plugin must not de-duplicate against what it last sent).
+  Sent when the lease is delivered (including after a retry or a binder
+  restart, where the plugin process is fresh), when the glasses home becomes
   visible again (the phone uses glasses link-up, a grid mode or layout change, and
-  the foreground plugin closing), and by a timer while the lease lasts, never
-  more than once per 15 minutes per plugin.
+  the foreground plugin closing), and by a timer while the lease lasts. Those
+  delivery and home-visible refreshes are sent only when the plugin's last refresh
+  is at least 60 s old; the timer fires every 15 minutes, counted from the last
+  refresh of any kind.
 
-A plugin that does not register within 5 s of the bind is unbound and is not
-bound again until its lease ends and is granted anew. Grants, ends, failures and
-refreshes are recorded in the plugin bus journal (`LEASE_GRANTED`,
-`LEASE_ENDED`, `REFRESH`, `BIND_FAILED`, `REGISTRATION_TIMEOUT`,
+A plugin that does not register within 5 s of the bind (15 s when the wait follows
+a binder death, since Android restarts a bound service with its own growing
+backoff), cannot be bound, or cannot be delivered to is unbound and its lease is
+marked failed, but the lease stays. The hub binds it again after 5 s, 30 s,
+2 min and then every 10 min after consecutive failures, and at once when the
+glasses home becomes visible (without resetting that schedule); a retry that is
+still awaiting registration is not repeated. The schedule restarts once the lease
+is delivered, and every retry stops when the lease ends. Grants, ends, retries,
+failures and refreshes are recorded in the plugin bus journal (`LEASE_GRANTED`,
+`LEASE_RETRY`, `LEASE_ENDED`, `REFRESH`, `BIND_FAILED`, `REGISTRATION_TIMEOUT`,
 `DELIVERY_FAILED`). A hub that predates the lease never sends these paths; an
 SDK that predates them hands them to the raw `onNexusMessage` hook.
 
