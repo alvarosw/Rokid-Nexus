@@ -5,7 +5,9 @@
 #   fake-phone.sh my-envelope.json             # any envelope / envelope array / scenario file
 #   fake-phone.sh --envelope /launcher/list '{"plugins":[]}'
 #   fake-phone.sh --hud grid | --hud list      # launcher mode, through /glasses/hud-mode/config
-#   fake-phone.sh --reset                      # forget the /launcher/open rules
+#   fake-phone.sh --reset                      # forget the /launcher/open rules and the link simulation
+#   fake-phone.sh link up|down                 # simulate the phone link: real onCxrState path, outbound consumed (sent)
+#   fake-phone.sh outbound [--clear] [substr]  # captured "FAKE_PHONE outbound" lines (epoch timestamps) / clear the log
 # Needs the debug APK (DebugFakePhoneReceiver); see docs/EMULATION.md.
 set -euo pipefail
 . "$(dirname "$0")/env.sh"
@@ -17,7 +19,19 @@ REMOTE_DIR=/data/local/tmp/nexus-fake-phone
 
 broadcast() { adb_ shell am broadcast -a "$ACTION" -n "$RECEIVER" "$@" | grep -E "result=|Exception|Error" || true; }
 
-[ "$#" -gt 0 ] || { sed -n '2,9p' "$0" >&2; exit 2; }
+case "${1:-}" in
+  link)
+    case "${2:-}" in up|down) broadcast --es link "$2" ;; *) echo "usage: $0 link up|down" >&2; exit 2 ;; esac
+    exit 0 ;;
+  outbound)
+    shift
+    if [ "${1:-}" = "--clear" ]; then adb_ logcat -c; echo "cleared"; exit 0; fi
+    # -v epoch so a tour can order and time the lines; the optional argument is a plain substring of the path.
+    adb_ logcat -d -v epoch -s ROKIDBUS:I | tr -d '\r' | grep -F "FAKE_PHONE outbound ${1:-}" || true
+    exit 0 ;;
+esac
+
+[ "$#" -gt 0 ] || { sed -n '2,11p' "$0" >&2; exit 2; }
 n=0
 while [ "$#" -gt 0 ]; do
   case "$1" in

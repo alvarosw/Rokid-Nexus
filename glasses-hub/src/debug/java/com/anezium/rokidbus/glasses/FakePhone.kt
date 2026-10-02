@@ -38,6 +38,9 @@ internal class FakePhone(
 ) {
     @Volatile private var onOpen: Map<String, OpenRule> = emptyMap()
 
+    /** While true every outbound envelope is logged and consumed (sent), as if a phone were linked. */
+    @Volatile var consumeOutbound: Boolean = false
+
     fun parse(text: String): FakeScript {
         val trimmed = text.trim()
         if (trimmed.startsWith("[")) return FakeScript(parseSteps(JSONArray(trimmed)), null)
@@ -82,7 +85,7 @@ internal class FakePhone(
         if (envelope.path != BusPaths.LAUNCHER_OPEN) {
             // What the plugin would have heard: a tour asserts on this line (e.g. no BACK after a cancelled open).
             log("FAKE_PHONE outbound ${envelope.path} ${envelope.payload}")
-            return false
+            return consumeOutbound
         }
         val pluginId = envelope.payload.optString("pluginId")
         val rule = onOpen[pluginId]

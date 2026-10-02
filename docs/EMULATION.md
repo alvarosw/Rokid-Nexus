@@ -207,6 +207,26 @@ plugin's rule after its delay. A plugin without a rule, or with `"never": true`,
 answered, which exercises the open-timeout path. Every other outbound envelope still meets the real
 (absent) link (`NO_LINK`), e.g. `Ink event send failed type=ready code=NO_LINK` in the log.
 
+### Link simulation and the home visibility tour
+
+The glasses hub reports `/core/home/visibility` only while its link is up, and the fake phone has no link.
+`fake-phone.sh link up` installs the outbound interceptor so that every outbound envelope is logged as
+`FAKE_PHONE outbound <path> <payload>` and consumed (reported as sent), then runs the real `GlassesHub.onCxrState(true)`
+path (capabilities announce, then `HomeVisibilityReporter.onTransportUp()`); `link down` runs `onCxrState(false)` and
+stops consuming. `--reset` also ends the simulation. `fake-phone.sh outbound [--clear] [path-substring]` prints the
+captured lines with epoch timestamps (or clears logcat). With the x86 CXR stub the real link-up path runs without crashing.
+
+```
+tools/emulator/fake-phone.sh link up
+tools/emulator/fake-phone.sh outbound /core/home/visibility
+```
+
+`tools/emulator/scenarios/home-visibility-tour.sh [--install] [G1 ...]` (run with `EMU_TARGET=api32` against the glasses
+emulator) covers the reporter end to end: transport-up report, home open and close, screen off and wake with the home
+open, the 300 ms debounce (three launcher toggles inside it collapse to one report), de-dup and resend after a link
+bounce, and a plugin surface opened from home. It polls the captured lines, prints PASS/FAIL/SKIP per scenario and exits
+non-zero on a FAIL. The launcher state it uses for "what the HUD shows" is the hub's `Launcher overlay opened|closed` log.
+
 ### Fixtures
 
 `plugins8.json` uses built-in icon keys (`music`, `disc`, `map`, `bus`, `send`, `terminal`, `lens`,

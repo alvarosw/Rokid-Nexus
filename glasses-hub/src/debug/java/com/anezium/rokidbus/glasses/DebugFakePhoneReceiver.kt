@@ -17,7 +17,9 @@ import java.util.concurrent.atomic.AtomicLong
  * exactly as phone traffic arrives. See docs/EMULATION.md and tools/emulator/fake-phone.sh.
  *
  * Extras: `file` (script path readable by the app), or `path` + `payload` (inline envelope),
- * `hudMode` (`list`|`grid`), `reset` (drop the `/launcher/open` rules).
+ * `hudMode` (`list`|`grid`), `link` (`up`|`down`: simulate the phone link, running the real
+ * `onCxrState` path while outbound envelopes are logged and consumed), `reset` (drop the
+ * `/launcher/open` rules and the link simulation).
  */
 class DebugFakePhoneReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -27,8 +29,25 @@ class DebugFakePhoneReceiver : BroadcastReceiver() {
         try {
             if (intent.getBooleanExtra(EXTRA_RESET, false)) {
                 fake.reset()
+                fake.consumeOutbound = false
                 GlassesHub.outboundInterceptor = null
                 log("FAKE_PHONE reset")
+            }
+            when (val link = intent.getStringExtra(EXTRA_LINK)) {
+                null -> Unit
+                "up" -> {
+                    // Same interceptor the open rules use, now consuming everything so the policy records lastSent.
+                    fake.consumeOutbound = true
+                    GlassesHub.outboundInterceptor = { envelope -> fake.onOutbound(envelope) }
+                    log("FAKE_PHONE link up")
+                    GlassesHub.onCxrState(true)
+                }
+                "down" -> {
+                    log("FAKE_PHONE link down")
+                    GlassesHub.onCxrState(false)
+                    fake.consumeOutbound = false
+                }
+                else -> log("FAKE_PHONE rejected link='$link'")
             }
             val hudMode = intent.getStringExtra(EXTRA_HUD_MODE)
             if (hudMode != null) {
@@ -80,6 +99,7 @@ class DebugFakePhoneReceiver : BroadcastReceiver() {
         const val EXTRA_PATH = "path"
         const val EXTRA_PAYLOAD = "payload"
         const val EXTRA_HUD_MODE = "hudMode"
+        const val EXTRA_LINK = "link"
         const val EXTRA_RESET = "reset"
         const val MAX_SCRIPT_BYTES = 4L * 1024 * 1024
         val sequence = AtomicLong(System.currentTimeMillis())
