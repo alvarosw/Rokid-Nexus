@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Produce $OUT_DIR/glasses-hub-debug-x86_64.apk: the debug APK plus a no-op x86_64
+# Produce $OUT_DIR/<module>-debug-x86_64.apk (STUB_MODULE: glasses-hub by default, phone-hub for the
+# fake-glasses harness): the debug APK plus a no-op x86_64
 # libcxr-bridge-jni.so, re-signed with the local debug keystore. The vendor CXR library ships
 # only arm64/armv7 .so files and the Cuttlefish image has no ARM translation, so without this
 # the hub dies with UnsatisfiedLinkError in CXRServiceBridge.<clinit>. Emulation only.
@@ -8,8 +9,9 @@ set -euo pipefail
 
 BT="${BUILD_TOOLS:-$(ls -d "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"/build-tools/* | sort -V | tail -1)}"
 KEYSTORE="${KEYSTORE:-$HOME/.android/debug.keystore}"
-SRC="$REPO_ROOT/glasses-hub/build/outputs/apk/debug/glasses-hub-debug.apk"
-OUT="$OUT_DIR/glasses-hub-debug-x86_64.apk"
+STUB_MODULE="${STUB_MODULE:-glasses-hub}"
+SRC="$REPO_ROOT/$STUB_MODULE/build/outputs/apk/debug/$STUB_MODULE-debug.apk"
+OUT="$OUT_DIR/$STUB_MODULE-debug-x86_64.apk"
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
 mkdir -p "$OUT_DIR" "$work/lib/x86_64"
 

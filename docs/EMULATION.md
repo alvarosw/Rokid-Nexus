@@ -278,3 +278,105 @@ The pointer stream id needs 16+ characters and a rising `sequence`; change `stre
 `adb shell dumpsys window windows` lists the overlays top to bottom (all named after the package); tell
 them apart by frame and `fl=` flags: the host has no `NOT_FOCUSABLE`, the pointer has
 `LAYOUT_NO_LIMITS`, the notice `KEEP_SCREEN_ON`, the pin is a small frame.
+
+## Fake glasses (phone hub)
+
+The mirror of the fake phone: phone-hub features (tiles, leases, launcher pushes, capability gating)
+are validated on a plain Android 12L emulator with no Rokid glasses, no Bluetooth and no CXR link.
+`DebugFakeGlassesReceiver` (phone-hub debug source set only, `android.permission.DUMP`-protected,
+action `com.anezium.rokidbus.phone.DEBUG_GLASSES`, log tag `FAKE_GLASSES`) does two things: it forces
+the hub's link state up, and it captures every envelope the hub would have sent to the glasses; and it
+injects the envelopes the glasses would send, through the same router SPP and CXR traffic use.
+
+Seams in main code, all null by default and settable only through `BusHubService.debug*` functions that
+return unless the build is debuggable: an outbound interceptor consulted in `sendRemote` (the same idea as
+`GlassesHub.outboundInterceptor`), a forced link-state value read by `linkState()` and `isCxrUp()`, an
+inbound injector that runs `routeRemote` on a serial lane of the service executor (the SPP and CXR paths
+run on their own background threads, never main), and a debug override of the screen-off lease grace.
+Nothing in a release build references the debug classes.
+
+### Safety
+
+- `env.sh` adds `PHONE_SERIAL` (default `emulator-5572`) and `adbp_`, which always passes `-s` and, like
+  `SERIAL`, refuses anything that is not an emulator serial. Every phone script goes through it, so a
+  physical phone or glasses attached over USB or Wi-Fi are never touched. Never run a bare `adb install`.
+- Only one emulator at a time fits in 11 GB. `start-phone.sh` refuses to start next to another emulator
+  (for example the glasses AVD on 5570) or a Cuttlefish instance. Run `./gradlew --stop` before booting and do
+  not build while memory is short. Stop it when done: `tools/emulator/start-phone.sh stop`.
+
+### Setup
+
+```
+tools/emulator/start-phone.sh create          # once: AVD "phone32", 1080x2400 @ 420, 2 GB, same AVD home as glasses32
+tools/emulator/start-phone.sh                 # headless, serial emulator-5572, then adb root
+tools/emulator/install-phone.sh --build       # build hub (no -PskipCxrGlobal) + plugin-media, install, start the hub
+tools/emulator/install-phone.sh               # same without building; extra args are plugin APKs
+```
+
+The vendor CXR `.so` files are ARM-only, so `install-phone.sh` installs the hub through
+`repack-x86-stub.sh` (`STUB_MODULE=phone-hub`, the same no-op stub the glasses hub needs); `X86_STUB=0`
+skips it. The hub then sees no CXR link, which is what the harness wants. The script also grants the
+hub's runtime permissions, allows Media Deck's notification listener (toggled once so the system binds it)
+and starts the foreground service.
+
+### Commands
+
+```
+tools/emulator/fake-glasses.sh link up                 # link bits CXR|SPP|bonded; outbound is captured, nothing reaches a real stack
+tools/emulator/fake-glasses.sh handshake               # /system/hub/capabilities (built by GlassesHubCapabilitiesContract) + home visible
+tools/emulator/fake-glasses.sh visibility on|hidden|off
+tools/emulator/fake-glasses.sh grid on|off             # HudModeSettingsStore + the settings UI's hook
+tools/emulator/fake-glasses.sh approve com.anezium.rokidbus.plugin.media   # real PluginGrantStore.approve + onPluginAuthorizationChanged
+tools/emulator/fake-glasses.sh grace 5000              # screen-off lease grace in ms (default 10 min)
+tools/emulator/fake-glasses.sh media play "Song A" "Artist A" 200000   # one MediaSession; pause | stop
+tools/emulator/fake-glasses.sh script file.json        # inbound envelopes, see below
+tools/emulator/fake-glasses.sh outbound [--clear]      # captured "FAKE_GLASSES outbound <path> <payload>" lines
+tools/emulator/fake-glasses.sh link down | link release | reset
+```
+
+`link down` forces the bits to 0 and keeps the interceptor; `link release` and `reset` restore the real link
+state and remove the interceptor and the debug grace; `reset` also releases the media session. Binary
+outbound envelopes are logged with ` binary=<bytes>`. The wrapper is only a thin layer over
+`am broadcast` extras (`link`, `release`, `handshake`, `visibility`, `grid`, `approve`, `screenOffGraceMs`,
+`media`/`title`/`artist`/`durationMs`, `file`, `reset`, `start`), so an agent can also broadcast directly.
+
+Script format: one envelope, an array, or `{"envelopes": [...]}`, each
+`{"path": "...", "payload": {...}, "id": "...", "delayMs": 0, "binaryBase64": "..."}`; `delayMs` is relative to
+the previous step. The script is pushed to `/data/local/tmp/nexus-fake-glasses/`.
+
+Things to know when asserting:
+
+- The hub paces `/tile/publish` per plugin (burst of 4, one more per 60 s) and holds publishes while the
+  glasses report the home hidden or the display off. Poll `outbound` for a few seconds instead of
+  sleeping once.
+- The fake media session is activated after its metadata is set, as a real player does: Media Deck attaches
+  on the activation edge and ignores a session without a title.
+
+### Smoke chain
+
+```
+tools/emulator/fake-glasses.sh outbound --clear
+tools/emulator/fake-glasses.sh link up
+tools/emulator/fake-glasses.sh handshake
+tools/emulator/fake-glasses.sh grid on
+tools/emulator/fake-glasses.sh approve com.anezium.rokidbus.plugin.media
+tools/emulator/fake-glasses.sh media play "Song A" "Artist A" 200000
+tools/emulator/fake-glasses.sh outbound | grep tile/publish          # a "template":"music" publish carrying "Song A"
+adb -s emulator-5572 logcat -b crash -d                              # empty: the hub service survived
+```
+
+### Unit test
+
+`phone-hub/src/testDebug/.../FakeGlassesTest.kt` covers the script parser and player and checks that the
+handshake and visibility envelopes parse through their real contracts (`:phone-hub:testDebugUnitTest`).
+
+### What it cannot validate
+
+- Real Bluetooth, the CXR link and SPP framing, authentication or throughput: the link is forced and the
+  transport bypassed at `sendRemote`, so size limits and `NO_DATA_PLANE` paths are not exercised.
+- The Rokid ROM, the glasses hub itself (the handshake is built from the same contracts but is a snapshot of
+  what `announceRendererCapabilities` sends today; keep it in step), and real glasses timing.
+- Real battery and Doze behavior on a phone, vendor background restrictions, and notification behavior of
+  OEM builds. The emulator is stock AOSP API 32 and reports a fake charging battery.
+- Code that reads the CXR link directly (camera, snapshot, audio, brightness, native pointer, glasses app
+  install) takes its link-down branches, because `cxrLink` stays null.

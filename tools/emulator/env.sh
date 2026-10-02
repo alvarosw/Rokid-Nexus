@@ -27,3 +27,13 @@ case "$SERIAL" in
 esac
 
 adb_() { "$ADB_BIN" -s "$SERIAL" "$@"; }
+
+# Phone-hub role (fake glasses, see fake-glasses.sh): a second emulator, started by start-phone.sh. The glasses
+# variables above keep their meaning; adbp_ uses the SDK adb (ADB_BIN_PHONE overrides). adbp_ is bound to PHONE_SERIAL with the same safety check.
+PHONE_SERIAL="${PHONE_SERIAL:-emulator-5572}"
+PHONE_PKG="${PHONE_PKG:-com.anezium.rokidbus.phone}"
+case "$PHONE_SERIAL" in
+  emulator-*|0.0.0.0:*|127.0.0.1:*|localhost:*) ;;
+  *) echo "env.sh: refusing PHONE_SERIAL=$PHONE_SERIAL (not an emulator serial)" >&2; exit 1 ;;
+esac
+adbp_() { "${ADB_BIN_PHONE:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}/platform-tools/adb}" -s "$PHONE_SERIAL" "$@"; }
