@@ -93,7 +93,7 @@ wait_bucket_refill() {
 }
 
 # reset, then approval and grid mode, then link up and the handshake, and wait for the lease to be live. The
-# approval comes first on purpose: approving a plugin that already holds a lease drops its registration (see S9).
+# approval comes first on purpose: approving a plugin that already holds a lease rebinds it through the retry path (see S9).
 base_setup() {
   fg reset || return 1
   MARK="$(now)"
@@ -274,25 +274,18 @@ if begin S8 "refresh contract: a visible edge past the 5 minute minimum republis
 fi
 
 # ---- S9 -----------------------------------------------------------------------------------------------------
-# Known product issue, reported but not counted as a failure (STRICT_KNOWN=1 makes it fatal): a grant change for
-# a plugin that holds a live lease removes its hub registration while the lease stays "delivered".
-if begin S9 "known issue: re-approving a leased plugin silently stops its tile publishes"; then
+if begin S9 "a grant change on a leased plugin rebinds it and its tile publishes resume"; then
   if setup_or_fail; then
     fg media play "S9 Before" "S9 Artist" 200000
     expect 'precondition: tile with "S9 Before"' "$(tile_re 'S9 Before')" "$TILE_WAIT"
     t0="$(now)"; fg approve "$MEDIA"
-    t1="$(now)"; fg media play "S9 After" "S9 Artist" 200000
-    if wait_for "$(tile_re 'S9 After')" "$TILE_WAIT" "$t1"; then
-      echo "    ok   tile with \"S9 After\" after the re-approval (issue not present)"; show "$MATCH"
-    else
-      echo "    BUG  no tile within $TILE_WAIT s after re-approval; hub log since the approval:"
-      logs_since "$t0" | grep -E 'ROKIDBUS-PHONE' | grep -v 'SPP loop\|battery' | head -5 | while IFS= read -r l; do show "$l"; done
-      [ "${STRICT_KNOWN:-0}" = 1 ] && scenario_fail=1
-      known=1
-    fi
+    expect 'lease fails with AUTHORIZATION_CHANGED' 'tile lease failed plugin=media reason=AUTHORIZATION_CHANGED' 15 "$t0"
+    expect 'lease retried' 'tile lease retry plugin=media' 20 "$t0"
+    expect 'plugin registers again' 'plugin registered package=com.anezium.rokidbus.plugin.media' 20 "$t0"
+    t1="$(now)"; fg media play "S9 Song" "S9 Artist" 200000
+    expect 'tile with "S9 Song" after the rebind' "$(tile_re 'S9 Song')" "$TILE_WAIT" "$t1"
   fi
-  if [ "${known:-0}" = 1 ]; then RESULTS+=("KNOWN S9 re-approval of a leased plugin"); echo "  KNOWN S9 (product issue, not counted)"
-  else finish "re-approval"; fi
+  finish "grant change"
 fi
 
 echo; echo "=== summary"

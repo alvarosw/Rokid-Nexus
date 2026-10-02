@@ -356,9 +356,10 @@ Things to know when asserting:
 
 `tools/emulator/scenarios/tile-power-tour.sh [--install] [--slow] [S1 ...]` runs the tile-lease and
 home-visibility scenarios (baseline, plugin killed, plugin force-stopped, home hidden, legacy glasses, screen
-off, phone battery badge, refresh with `--slow`, and a known-issue probe) against a booted phone emulator with
+off, phone battery badge, refresh with `--slow`, and a grant change on a leased plugin) against a booted phone emulator with
 the debug APKs built. It polls logcat with timeouts, prints PASS/FAIL per scenario and exits non-zero on a FAIL.
-Approve the plugin before the link comes up: approving one that holds a lease drops its registration.
+Approving a plugin that holds a lease rebinds it through the retry path (about 5 s), so the scenarios
+approve it before the link comes up.
 
 ### Smoke chain
 
