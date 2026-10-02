@@ -102,6 +102,26 @@ class LyricsTileRuntimeTest {
     }
 
     @Test
+    fun aRefreshRepublishesTheUnchangedStateAndIsIgnoredOutsideTheLease() {
+        runtime.refresh()
+        assertTrue(published.isEmpty())
+
+        runtime.start()
+        emit(synced(progressMs = 9_000, index = 1))
+        val count = published.size
+        emit(synced(progressMs = 9_000, index = 1))
+        assertEquals(count, published.size)
+
+        runtime.refresh()
+        assertEquals(count + 1, published.size)
+        assertEquals(published[count - 1], published.last())
+
+        runtime.stop()
+        runtime.refresh()
+        assertEquals(count + 1, published.size)
+    }
+
+    @Test
     fun plainLyricsPublishUntimedLinesFromTheTop() {
         runtime.start()
         emit(

@@ -97,6 +97,10 @@ class MediaDeckPluginService : NexusPluginService() {
         }
     }
 
+    override fun onNexusTileRefresh() {
+        tileRuntime?.refresh()
+    }
+
     override fun onDestroy() {
         tileRuntime?.stop()
         tileRuntime = null

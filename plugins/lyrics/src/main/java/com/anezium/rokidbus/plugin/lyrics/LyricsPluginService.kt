@@ -96,6 +96,10 @@ class LyricsPluginService : NexusPluginService() {
         }
     }
 
+    override fun onNexusTileRefresh() {
+        tileRuntime.refresh()
+    }
+
     override fun onDestroy() {
         tileRuntime.stop()
         tileSession = null

@@ -12,8 +12,8 @@ android {
         applicationId = "com.anezium.rokidbus.plugin.lyrics"
         minSdk = 30
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.1.0"
+        versionCode = 6
+        versionName = "1.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

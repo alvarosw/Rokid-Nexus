@@ -38,6 +38,9 @@ internal enum class MediaDeckMonitorStatus {
 internal interface MediaSessionWatcher {
     fun start()
     fun stop()
+
+    /** Re-queries the active sessions and re-attaches the best controller. */
+    fun refresh()
 }
 
 internal class MediaSessionMonitor(
@@ -91,7 +94,7 @@ internal class MediaSessionMonitor(
         currentController = null
     }
 
-    fun refresh() = runOnMain { refreshOnMain() }
+    override fun refresh() = runOnMain { refreshOnMain() }
 
     fun togglePlayback() = runOnMain {
         val controller = resolveControllerForControl() ?: return@runOnMain
