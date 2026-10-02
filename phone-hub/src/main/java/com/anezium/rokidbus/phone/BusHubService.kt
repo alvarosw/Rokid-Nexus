@@ -56,6 +56,7 @@ import com.anezium.rokidbus.shared.NoticeSurfaceValidationResult
 import com.anezium.rokidbus.shared.PhoneHubCapabilitiesContract
 import com.anezium.rokidbus.shared.PinSurfaceContract
 import com.anezium.rokidbus.shared.RemoteInputContract
+import com.anezium.rokidbus.shared.HomeVisibilityContract
 import com.anezium.rokidbus.shared.RemoteNavigationContract
 import com.anezium.rokidbus.shared.RemotePointerContract
 import com.anezium.rokidbus.shared.SppAuthProtocol
@@ -230,6 +231,11 @@ class BusHubService : Service() {
     private val tilePublishHandler = Handler(Looper.getMainLooper())
     private val tilePublishCoalescer = TilePublishCoalescer<BusEnvelope>(nowMs = SystemClock::elapsedRealtime)
     private val tilePublishFlush = Runnable { flushHeldTilePublishes() }
+    private val pendingTilePublishes = PendingTilePublishes()
+    private val glassesHomeVisibility = GlassesHomeVisibility(
+        scheduler = MainThreadExternalPluginScheduler(),
+        onScreenOffGraceElapsed = { recomputeTileLeases() },
+    )
     @Volatile private var updateCheckLoopStopped = true
     private val updateCheckTick = object : Runnable {
         override fun run() {
@@ -963,6 +969,7 @@ class BusHubService : Service() {
             send = ::sendRemote,
             log = ::log,
             initiallyEnabled = PhoneBatteryBadgeStore(this).isEnabled(),
+            isScreenOn = { !glassesHomeVisibility.screenOff },
         ).also { it.start() }
         phoneBatteryBadgeSubscription = PhoneBatteryBadgeStore(this).addChangeListener { enabled ->
             phoneBatteryReporter?.setEnabled(enabled)
@@ -984,6 +991,7 @@ class BusHubService : Service() {
                 TileLayoutSettingsStore(applicationContext).getEntries().any { it.pluginId == SystemWidgets.WEATHER.id }
             },
             isLinked = { linkState() and (LinkStateBits.CXR_CONTROL_UP or LinkStateBits.SPP_DATA_UP) != 0 },
+            isHomeVisible = { !glassesHomeVisibility.hidden },
             fetch = weatherSource::fetch,
             store = weatherSettings,
             send = ::sendRemote,
@@ -1434,7 +1442,13 @@ class BusHubService : Service() {
             // still land on reconnect.
             executor.execute { pushTileLayoutConfig() }
             TileArtworkCache.forgetDelivered()
+            // Tiles that never reached the glasses go out now, unless they report the home hidden.
+            if (!glassesHomeVisibility.hidden) executor.execute { flushPendingTiles() }
             recomputeTileLeases(homeVisible = true)
+            return
+        }
+        if (envelope.path == HomeVisibilityContract.PATH) {
+            handleHomeVisibility(envelope)
             return
         }
         if (envelope.path == RemoteInputContract.SESSION_PATH ||
@@ -2457,6 +2471,7 @@ class BusHubService : Service() {
             TileSnapshotCache.remove(key.pluginId)
             TileArtworkCache.remove(key.pluginId)
             tilePublishCoalescer.remove(key.pluginId)
+            pendingTilePublishes.remove(key.pluginId)
         }
         notifyLinkState()
     }
@@ -2541,6 +2556,7 @@ class BusHubService : Service() {
         TileSnapshotCache.retainOnly(tilePluginIds)
         TileArtworkCache.retainOnly(tilePluginIds)
         tilePublishCoalescer.retainOnly(tilePluginIds)
+        pendingTilePublishes.retainOnly(tilePluginIds)
         notifyLinkState()
         if (::pluginRegistry.isInitialized && isCxrUp()) pluginRegistry.syncLauncherList()
     }
@@ -3390,6 +3406,12 @@ class BusHubService : Service() {
     }
 
     private fun publishTile(pluginId: String, envelope: BusEnvelope, replyBinder: IBinder?) {
+        if (glassesHomeVisibility.hidden) {
+            // Nobody can see the tile: the latest snapshot is already in TileSnapshotCache and goes
+            // out on the next visible edge. The plugin is not told anything went differently.
+            holdTileWhileHidden(pluginId)
+            return
+        }
         when (val decision = tilePublishCoalescer.offer(pluginId, envelope)) {
             is TilePublishCoalescer.Decision.Send -> {
                 val errorCode = sendTile(pluginId, decision.item)
@@ -3399,12 +3421,62 @@ class BusHubService : Service() {
         }
     }
 
+    private fun holdTileWhileHidden(pluginId: String) {
+        pendingTilePublishes.mark(pluginId)
+        // The home may have turned visible between the check and the mark, after its flush ran.
+        if (!glassesHomeVisibility.hidden) executor.execute { flushPendingTiles() }
+    }
+
     private fun flushHeldTilePublishes() {
         tilePublishCoalescer.drainDue().forEach { (pluginId, envelope) ->
+            if (glassesHomeVisibility.hidden) {
+                holdTileWhileHidden(pluginId)
+                return@forEach
+            }
             val errorCode = sendTile(pluginId, envelope)
             if (errorCode != null) log("tile publish flush failed plugin=$pluginId code=$errorCode")
         }
         scheduleTilePublishFlush()
+    }
+
+    /**
+     * Offers each pending plugin's latest snapshot through the normal pacing path, as a fresh
+     * publish. The snapshot cache holds what the plugin last published; a plugin whose snapshot is
+     * gone has nothing to send.
+     */
+    private fun flushPendingTiles() {
+        pendingTilePublishes.drain().forEach { pluginId ->
+            val snapshot = TileSnapshotCache.get(pluginId) ?: return@forEach
+            val envelope = BusEnvelope(
+                path = BusPaths.TILE_PUBLISH,
+                id = UUID.randomUUID().toString(),
+                payload = WidgetTileContract.toPayload(snapshot),
+            )
+            publishTile(pluginId, envelope, null)
+        }
+    }
+
+    private fun handleHomeVisibility(envelope: BusEnvelope) {
+        val report = HomeVisibilityContract.parse(envelope.payload)
+        if (report == null) {
+            // A one-way report: there is no request on the glasses to answer with an error.
+            recordRemoteRoute(envelope, PluginBusJournal.Verdict.REJECTED, "INVALID_HOME_VISIBILITY")
+            return
+        }
+        recordRemoteRoute(envelope, PluginBusJournal.Verdict.OK)
+        val transition = glassesHomeVisibility.onReport(report)
+        if (::tileLeaseController.isInitialized) tileLeaseController.setHomeVisible(!glassesHomeVisibility.hidden)
+        log("glasses home visibility screenOn=${report.screenOn} homeVisible=${report.homeVisible}")
+        if (transition.homeBecameVisible) executor.execute { flushPendingTiles() }
+        if (transition.screenBecameOn) {
+            phoneBatteryReporter?.let { reporter -> executor.execute { reporter.resend("screen_on") } }
+        }
+        if (transition.homeBecameVisible || transition.screenBecameOn) {
+            recomputeTileLeases(homeVisible = report.homeVisible)
+        }
+        if (transition.before != transition.after) {
+            phoneWeatherReporter?.onConditionsChanged(if (transition.homeBecameVisible) "home_visible" else "home_hidden")
+        }
     }
 
     /**
@@ -3413,6 +3485,13 @@ class BusHubService : Service() {
      * rides a later publish.
      */
     private fun sendTile(pluginId: String, envelope: BusEnvelope): String? {
+        val errorCode = sendTileOnce(pluginId, envelope)
+        // A tile that did not cross the link is retried on the next visible edge or link-up.
+        if (errorCode != null) pendingTilePublishes.mark(pluginId) else pendingTilePublishes.clear(pluginId)
+        return errorCode
+    }
+
+    private fun sendTileOnce(pluginId: String, envelope: BusEnvelope): String? {
         val withCover = TileArtworkCache.forDelivery(pluginId, envelope)
         if (withCover !== envelope && sendRemote(withCover) == null) {
             TileArtworkCache.markDelivered(pluginId, WidgetTileContract.artworkKeyOf(envelope.payload))
@@ -5017,6 +5096,9 @@ class BusHubService : Service() {
             phoneWeatherReporter?.onConditionsChanged("link_up")
         } else {
             lastAnnouncedPhoneCapabilities = null
+            // What the glasses reported about their display no longer holds; unknown is legacy.
+            glassesHomeVisibility.onLinkDown()
+            if (::tileLeaseController.isInitialized) tileLeaseController.setHomeVisible(true)
             phoneWeatherReporter?.onConditionsChanged("link_down")
         }
         recomputeTileLeases()
@@ -5025,8 +5107,10 @@ class BusHubService : Service() {
     /**
      * Re-derives which plugins hold a tile lease from every input, on one serial lane so an older
      * computation never lands after a newer one. [homeVisible] marks an edge where the glasses
-     * home has just become visible; the phone has no direct signal for it, so link-up, a mode or
-     * layout change, and the foreground plugin closing stand in.
+     * home has just become visible. The glasses report that on `/core/home/visibility`; a glasses
+     * hub that does not (or has not yet) leaves the phone to guess, so link-up, a mode or layout
+     * change, and the foreground plugin closing stand in. Those guesses never refresh tiles while
+     * the glasses explicitly report the home hidden.
      */
     private fun recomputeTileLeases(homeVisible: Boolean = false) {
         if (!::tileLeaseController.isInitialized || !::pluginRegistry.isInitialized) return
@@ -5043,9 +5127,10 @@ class BusHubService : Service() {
                         ?.capabilities
                         ?.contains(PluginCapability.WIDGET_TILE) == true
                 },
+                screenOffLong = glassesHomeVisibility.screenOffLong,
             )
             tileLeaseController.update(leased)
-            if (homeVisible) tileLeaseController.onHomeVisible()
+            if (homeVisible && !glassesHomeVisibility.hidden) tileLeaseController.onHomeVisible()
         }
     }
 

@@ -29,12 +29,17 @@ import java.util.UUID
  * readings never expire glasses-side, so silence would leave the last
  * percentage on the HUD forever. The battery keeps being tracked while
  * disabled, which is what lets re-enabling show a current number immediately.
+ *
+ * While the glasses report their display off ([isScreenOn] false) nothing is sent: the badge shows
+ * outside the home, so it keys on the display, not on the home. Readings keep being tracked, and
+ * the display coming back on is wired to [resend], which sends the current reading or hidden state.
  */
 internal class PhoneBatteryReporter(
     private val context: Context,
     private val send: (BusEnvelope) -> String?,
     private val log: (String) -> Unit,
     initiallyEnabled: Boolean,
+    private val isScreenOn: () -> Boolean = { true },
 ) {
 
     private val receiver = object : BroadcastReceiver() {
@@ -88,6 +93,7 @@ internal class PhoneBatteryReporter(
         synchronized(sendLock) {
             if (this.enabled == enabled) return
             this.enabled = enabled
+            if (!isScreenOn()) return
             if (enabled) {
                 last?.let { transmit(it, "enabled") }
             } else {
@@ -99,6 +105,7 @@ internal class PhoneBatteryReporter(
     /** Re-announce the current state — reading or hidden — to freshly-started glasses. */
     fun resend(reason: String) {
         synchronized(sendLock) {
+            if (!isScreenOn()) return
             if (!enabled) {
                 // The glasses may hold a reading from before the wearer opted out.
                 transmitHidden(reason)
@@ -112,7 +119,7 @@ internal class PhoneBatteryReporter(
         synchronized(sendLock) {
             if (reading == null || reading == last) return
             last = reading
-            if (enabled) transmit(reading, reason)
+            if (enabled && isScreenOn()) transmit(reading, reason)
         }
     }
 

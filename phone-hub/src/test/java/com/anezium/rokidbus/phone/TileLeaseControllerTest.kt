@@ -442,7 +442,64 @@ class TileLeaseControllerTest {
         val stored = listOf(TileLayoutEntry(pluginId = "other", size = TileSize.LARGE, col = 0, row = 0))
         assertEquals(
             listOf(media),
-            TileLeasePolicy.leasedPlugins(true, true, listOf(media), stored) { true },
+            TileLeasePolicy.leasedPlugins(true, true, listOf(media), stored, hasWidgetTile = { true }),
         )
+    }
+
+    @Test
+    fun `policy leases nothing after a long screen off`() {
+        val media = principal("media")
+        assertTrue(TileLeasePolicy.leasedPlugins(true, true, listOf(media), emptyList(), { true }, screenOffLong = true).isEmpty())
+        assertEquals(
+            listOf(media),
+            TileLeasePolicy.leasedPlugins(true, true, listOf(media), emptyList(), { true }, screenOffLong = false),
+        )
+    }
+
+    @Test
+    fun `the timer leaves a refresh due while the home is hidden and the visible edge delivers it`() {
+        runtime.registered += "media"
+        controller.update(listOf(principal()))
+        controller.setHomeVisible(false)
+
+        now = TileLeaseController.REFRESH_INTERVAL_MS
+        scheduler.run("tile-refresh:")
+        assertEquals(1, runtime.events().count { it == "media:refresh" })
+        assertTrue(scheduler.actions.keys.none { it.startsWith("tile-refresh:") })
+
+        now += TileLeaseController.REFRESH_INTERVAL_MS
+        controller.onHomeVisible()
+        assertEquals("still hidden: nothing", 1, runtime.events().count { it == "media:refresh" })
+
+        controller.setHomeVisible(true)
+        controller.onHomeVisible()
+        assertEquals(2, runtime.events().count { it == "media:refresh" })
+        assertEquals(
+            TileLeaseController.REFRESH_INTERVAL_MS,
+            scheduler.delays.getValue("tile-refresh:dev.example.media:media"),
+        )
+    }
+
+    @Test
+    fun `a lease granted while the home is hidden refreshes on the visible edge`() {
+        controller.setHomeVisible(false)
+        runtime.registered += "media"
+        controller.update(listOf(principal()))
+        assertEquals(listOf("media:active=true"), runtime.events())
+
+        controller.setHomeVisible(true)
+        controller.onHomeVisible()
+        assertEquals(listOf("media:active=true", "media:refresh"), runtime.events())
+    }
+
+    @Test
+    fun `a hidden home does not stop a failed lease from being retried`() {
+        runtime.bindResult = false
+        controller.setHomeVisible(false)
+        controller.update(listOf(principal()))
+        runtime.bindResult = true
+        runtime.registered += "media"
+        scheduler.run("tile-retry:")
+        assertEquals(setOf("media"), controller.activePluginIds())
     }
 }

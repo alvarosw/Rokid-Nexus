@@ -18,7 +18,8 @@ object TileLeasePolicy {
      * The plugins whose grid tile is live: grid mode on, the glasses linked, the tile placed, and
      * `widget_tile` granted. Placement is the glasses' own resolution of [storedLayout] over the
      * launcher list, so the phone leases exactly the tiles the wearer can see; with no stored
-     * layout that is every launchable plugin.
+     * layout that is every launchable plugin. Nothing is leased once the glasses display has been
+     * off for the whole grace period ([screenOffLong]), so Android can reclaim the plugins.
      */
     fun leasedPlugins(
         gridMode: Boolean,
@@ -26,8 +27,9 @@ object TileLeasePolicy {
         launchable: List<PhonePluginPrincipal>,
         storedLayout: List<TileLayoutEntry>,
         hasWidgetTile: (PhonePluginPrincipal) -> Boolean,
+        screenOffLong: Boolean = false,
     ): List<PhonePluginPrincipal> {
-        if (!gridMode || !linkUp) return emptyList()
+        if (!gridMode || !linkUp || screenOffLong) return emptyList()
         val placed = TileGridLayout.resolve(launchable.map { it.descriptor.id to null }, storedLayout)
             .mapTo(mutableSetOf()) { it.pluginId }
         return launchable.filter { it.descriptor.id in placed && hasWidgetTile(it) }
@@ -37,7 +39,8 @@ object TileLeasePolicy {
 /**
  * Holds each leased plugin bound for as long as its tile is live, the way an open holds the
  * foreground plugin, and tells it when the lease begins and ends. Refreshes are hub-owned:
- * - the periodic timer fires every [REFRESH_INTERVAL_MS] while the lease lasts;
+ * - the periodic timer fires every [REFRESH_INTERVAL_MS] while the lease lasts, except while the
+ *   glasses report the home hidden, when the refresh is left due for the next visible edge;
  * - a delivery (first, after a retry, or after a binder death) and the glasses home becoming
  *   visible refresh when the plugin's last refresh is at least [HOME_VISIBLE_REFRESH_MIN_MS] old.
  *
@@ -63,6 +66,10 @@ class TileLeaseController(
     private val leases = linkedMapOf<PluginGrantKey, Lease>()
     private val lastRefreshAtMs = mutableMapOf<String, Long>()
     private var closed = false
+
+    // The glasses report the home as not visible: a refresh would publish a tile nobody sees, so
+    // it stays due and the next onHomeVisible delivers it.
+    private var homeVisible = true
 
     @Synchronized
     fun update(leased: List<PhonePluginPrincipal>) {
@@ -104,6 +111,12 @@ class TileLeaseController(
     fun onRegistrationRevoked(key: PluginGrantKey) {
         val lease = leases[key]?.takeIf { !it.failed } ?: return
         fail(lease, "AUTHORIZATION_CHANGED")
+    }
+
+    /** What the glasses report; true while unknown. A hidden home defers every refresh. */
+    @Synchronized
+    fun setHomeVisible(visible: Boolean) {
+        homeVisible = visible
     }
 
     @Synchronized
@@ -194,7 +207,7 @@ class TileLeaseController(
     }
 
     private fun refreshIfDue(lease: Lease, minIntervalMs: Long) {
-        if (!lease.delivered) return
+        if (!lease.delivered || !homeVisible) return
         val principal = lease.principal
         val now = nowMs()
         val last = lastRefreshAtMs[principal.descriptor.id]
